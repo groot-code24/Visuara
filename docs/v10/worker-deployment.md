@@ -15,7 +15,7 @@ With an empty queue the poll interval doubles from 0.5 s to `CC_WORKER_MAX_IDLE_
 
 Why not 60 s: Neon suspends compute after **5 minutes** without activity. A 60 s poll would keep it awake permanently and use about 182 CU-hours a month at 0.25 CU, beyond the Free plan's 100. At 900 s the compute wakes for about 5 minutes per poll, roughly a third of the time (~60 CU-hours a month). Set `CC_WORKER_MAX_IDLE_SECONDS=1800` to halve that. The cost is that jobs queued by an API on **another host** (without the shared volume) wait up to that long. On the recommended single VM, the wake-up file makes it immediate.
 
-**Not verified:** the actual suspend/resume pattern in a Neon dashboard. Do it after go-live: leave the system idle for 30 minutes and check **Neon → Monitoring → Compute**.
+**Measured locally** (PostgreSQL 16, `qa/idle_db_activity.py`): 6 app sessions in 32 idle minutes, each connection closed about 90 s after use, then no connection for the last ~13.5 minutes. **Not verified:** the actual suspend/resume pattern in a Neon dashboard. Do it after go-live: leave the system idle for 30 minutes and check **Neon → Monitoring → Compute**.
 
 ## Housekeeping run by the worker
 | Task | Interval | Database? |

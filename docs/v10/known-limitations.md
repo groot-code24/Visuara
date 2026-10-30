@@ -9,7 +9,7 @@ V9 and V8 limitations still apply unless listed as resolved in [repository-audit
   - Mailpit (real SMTP) for the provider;
   - a stubbed token exchange plus local RSA keys for Google;
   - a router emulator for Vercel.
-- **Neon scale-to-zero:** measured as database activity on local PostgreSQL, not in a Neon dashboard.
+- **Neon scale-to-zero:** measured as app sessions on local PostgreSQL (6 sessions in 32 idle minutes; no connection for the last ~13.5 min), not in a Neon dashboard.
 - **No real creator footage evaluated.** All visual-quality and 3D accuracy numbers are synthetic.
 - **No independent penetration test.**
 - **CI never ran on GitHub** (no remote); the workflow was written and its steps run locally.
@@ -32,5 +32,6 @@ V9 and V8 limitations still apply unless listed as resolved in [repository-audit
 - CSP allows inline scripts.
 - Rate limits live in the database (fine for 10 organizations; Redis or a gateway for more).
 - API and workers share credentials (no least-privilege split for workers).
+- A database that hangs **without** dropping connections (simulated with `docker pause`) holds requests until the reverse proxy times out. A database crash or restart fails requests in about 10 s (measured). Network partitions are bounded by TCP keepalives and a 20 s TCP user timeout (configured, not tested).
 - The worker heartbeat count can over-report for up to 2 minutes after a crash (a clean stop removes the heartbeat).
 - MinIO images could not be pulled here, so the local S3 stand-in is SeaweedFS. R2's exact behaviour (CORS and lifecycle API support, error codes) is unverified until a real bucket is used.

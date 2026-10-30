@@ -1,3 +1,5 @@
+> **Superseded (V10, 30 Oct 2026):** this is the V9 report. Several items it lists as open were addressed in V10 (Neon idle polling, cache cleanup, Docker build, 3D tolerance). See [README.md](README.md) and [docs/v10/release-readiness.md](docs/v10/release-readiness.md).
+
 # Context Commerce — Project Report (V9)
 
 **Date:** 30 October 2026  

@@ -38,7 +38,7 @@ services:
     image: postgres:16-alpine
     environment: { POSTGRES_USER: cc, POSTGRES_PASSWORD: cc-local-only, POSTGRES_DB: context_commerce }
     volumes: [ "pg-data:/var/lib/postgresql/data" ]
-    healthcheck: { test: ["CMD-SHELL", "pg_isready -U cc -d context_commerce"], interval: 3s, timeout: 3s, retries: 30 }
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U cc -d postgres"], interval: 3s, timeout: 3s, retries: 30 }
     ports: [ "127.0.0.1:5433:5432" ]
   s3:
     image: chrislusf/seaweedfs:latest
