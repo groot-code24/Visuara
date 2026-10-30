@@ -1,0 +1,33 @@
+# Deploys the backend (API + workers) to the production VM after CI succeeds on main.
+# Requires repository secrets DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (and the server prepared as described in
+# docs/v10/backend-deployment.md). The server runs scripts/deploy.sh, which migrates, rolls out and health-checks,
+# and rolls back automatically if the new version is not healthy.
+name: deploy-backend
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          install -m 600 /dev/null key && printf '%s\n' "$SSH_KEY" > key
+          ssh -i key -o StrictHostKeyChecking=accept-new "$USER@$HOST" "cd ~/context-commerce && git fetch --quiet origin && ./scripts/deploy.sh $SHA"
+          rm -f key

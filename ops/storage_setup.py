@@ -39,11 +39,12 @@ def main():
         urllib.request.urlopen(f'{endpoint}/{b}/{key}', timeout=10); report['anonymous_read_refused'] = False
     except urllib.error.HTTPError as e: report['anonymous_read_refused'] = e.code in (400, 401, 403, 404)
     except Exception as e: report['anonymous_read_refused'] = f'unknown: {str(e)[:80]}'
-    url = storage.public_client().generate_presigned_url('get_object', Params={'Bucket': b, 'Key': key}, ExpiresIn=2)
+    url = storage.public_client().generate_presigned_url('get_object', Params={'Bucket': b, 'Key': key}, ExpiresIn=60)
     try: report['presigned_get'] = urllib.request.urlopen(url, timeout=10).read() == b'ok'
     except Exception as e: report['presigned_get'] = f'failed: {str(e)[:80]}'
-    time.sleep(4)
-    try: urllib.request.urlopen(url, timeout=10); report['presigned_expiry_enforced'] = False
+    short = storage.public_client().generate_presigned_url('get_object', Params={'Bucket': b, 'Key': key}, ExpiresIn=1)
+    time.sleep(3)
+    try: urllib.request.urlopen(short, timeout=10); report['presigned_expiry_enforced'] = False
     except urllib.error.HTTPError as e: report['presigned_expiry_enforced'] = e.code in (400, 401, 403)
     s3.delete_object(Bucket=b, Key=key)
     print(json.dumps(report, indent=2))

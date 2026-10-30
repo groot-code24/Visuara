@@ -293,8 +293,17 @@ def _object_depth(plan, idx, shape):
     return _fill(shape, uv[F[order]], Xc[F[order]][:, :, 2].min(axis=1))
 
 
+def plane_tolerance(reproj_i, reproj_j, plane_px=1.0, cap_px=2.0):
+    """Pixel tolerance for 'flow agrees with the pose-derived plane homography' between two frames.
+
+    The prediction carries the error of both solved poses (their surface-corner reprojection RMS) on top of the
+    flow noise allowed by plane_px. Independent errors add in quadrature. The cap equals the threshold above which a
+    point counts as clearly off the plane, so the tolerance can never absorb a candidate occluder. V9 used plane_px alone."""
+    return float(min(cap_px, np.sqrt(plane_px ** 2 + reproj_i ** 2 + reproj_j ** 2)))
+
+
 def scene_consistency(source, plan, start_idx, end_idx, gap=3, diff_threshold=30, plane_px=1.0, fb_px=1.0, ep_px=1.5,
-                      min_parallax_deg=0.25, depth_margin=0.03, occluder_plane_px=2.0, occluder_height_m=0.01):
+                      min_parallax_deg=0.25, depth_margin=0.03, occluder_plane_px=2.0, occluder_height_m=0.01, pose_aware_plane=True):
     """Parallax- and occlusion-aware check of the space around the 3D object, using the solved camera.
 
     For frame i and a partner frame j (i + gap, else i - gap), dense forward/backward flow gives correspondences
@@ -317,7 +326,7 @@ def scene_consistency(source, plan, start_idx, end_idx, gap=3, diff_threshold=30
     w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     rois = plan.object_rois(w, h)
     dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_MEDIUM)
-    moving, occluded, breakdown, done = {}, {}, {}, set()
+    moving, occluded, breakdown, done, tolerances = {}, {}, {}, set(), []
 
     def analyse(i, gi, j, gj, k=None, gk=None):
         pi, pj = poses[i], poses[j]
@@ -338,7 +347,9 @@ def scene_consistency(source, plan, start_idx, end_idx, gap=3, diff_threshold=30
         # Plane: pose-derived homography i -> j (exact for the tracked surface, whatever else dominates the view).
         Hij = h_of(pj) @ np.linalg.inv(h_of(pi))
         hp = cv2.perspectiveTransform(px.reshape(-1, 1, 2).astype(np.float64), Hij).reshape(-1, 2)
-        on_plane = reliable & (np.linalg.norm(q - hp, axis=1) < plane_px)
+        tol = plane_tolerance(pi.get('reproj_px', 0.0), pj.get('reproj_px', 0.0), plane_px, occluder_plane_px) if pose_aware_plane else plane_px
+        tolerances.append(tol)
+        on_plane = reliable & (np.linalg.norm(q - hp, axis=1) < tol)
         # Photometric change after compensating the plane (frame j sampled at H(p)).
         warped = cv2.warpPerspective(gj, Hij, (w, h), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
         resid = cv2.GaussianBlur(cv2.absdiff(gi, warped), (5, 5), 0)[y0:y1, x0:x1].ravel() > diff_threshold
@@ -412,7 +423,8 @@ def scene_consistency(source, plan, start_idx, end_idx, gap=3, diff_threshold=30
             if i in cache and i - gap in cache:
                 third = i - 2 * gap if (i - 2 * gap) in cache and (i - 2 * gap) in poses else None
                 analyse(i, cache[i], i - gap, cache[i - gap], third, cache.get(third))
-    return {'moving': moving, 'occluded': occluded, 'breakdown': breakdown, 'frames_analysed': len(moving), 'method': 'pose-epipolar-depth-3view-v1',
-            'params': {'gap': gap, 'diff_threshold': diff_threshold, 'plane_px': plane_px, 'fb_px': fb_px, 'ep_px': ep_px,
+    return {'moving': moving, 'occluded': occluded, 'breakdown': breakdown, 'frames_analysed': len(moving), 'method': 'pose-epipolar-depth-3view-v2' + ('-pose-aware-plane' if pose_aware_plane else '-fixed-plane'),
+            'plane_tolerance_px': {'min': round(min(tolerances), 3), 'max': round(max(tolerances), 3)} if tolerances else None,
+            'params': {'gap': gap, 'diff_threshold': diff_threshold, 'plane_px': plane_px, 'pose_aware_plane': pose_aware_plane, 'fb_px': fb_px, 'ep_px': ep_px,
                        'min_parallax_deg': min_parallax_deg, 'depth_margin': depth_margin, 'occluder_plane_px': occluder_plane_px,
                        'occluder_height_m': occluder_height_m}}

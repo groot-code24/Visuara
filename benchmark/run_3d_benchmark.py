@@ -2,7 +2,8 @@
 
 Usage: python -m benchmark.run_3d_benchmark [--seeds 5 6 7] [--kinds ...] [--out benchmark/results_3d_v9.json]
 
-Seeds: 0-1 dev (design), 2-4 V8 held-out (since inspected), 5-7 V9 held-out (first used for the V9 freeze).
+Seeds: 0-1 dev (design), 2-4 V8 held-out (since inspected), 5-7 V9 held-out (since inspected), 8-10 V10 held-out
+(first used after the V10 pose-aware plane tolerance was frozen).
 """
 import argparse, json, sys, tempfile, time
 from pathlib import Path
@@ -33,8 +34,12 @@ def run_clip(kind, seed, work, model, render=True):
     plan, cam, poses, mo = prepare_3d(track, model, opts, s, e)
     fg = scene_consistency(meta['path'], plan, s, e) if plan else {}
     report = evaluate_3d(track, plan, cam, poses, mo, fg)
+    # V9 fixed 1 px plane tolerance on the same clip, for comparison only (not used for the decision)
+    fixed = evaluate_3d(track, plan, cam, poses, mo, scene_consistency(meta['path'], plan, s, e, pose_aware_plane=False)) if plan else report
     row = {'kind': kind, 'seed': seed, 'suitable': meta['suitable'], 'expected_code': meta['expected_code'], 'decision': report['status'],
-           'codes': [f['code'] for f in report['failures']], 'camera': report['camera'], 'analysis_seconds': round(time.perf_counter() - t0, 2)}
+           'codes': [f['code'] for f in report['failures']], 'camera': report['camera'], 'analysis_seconds': round(time.perf_counter() - t0, 2),
+           'v9_fixed_tolerance_decision': fixed['status'], 'v9_fixed_tolerance_codes': [f['code'] for f in fixed['failures']],
+           'plane_tolerance_px': fg.get('plane_tolerance_px') if fg else None}
     if plan is not None:   # V8 check, for comparison only (not used for the decision)
         legacy = foreground_motion(meta['path'], plan.object_rois(track['width'], track['height']), s, e)
         row['scene'] = {'moving_max': max(fg['moving'].values(), default=0), 'occluded_max': max(fg['occluded'].values(), default=0),
@@ -81,7 +86,7 @@ def run_clip(kind, seed, work, model, render=True):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--seeds', nargs='+', type=int, default=[5, 6, 7])
     ap.add_argument('--kinds', nargs='+', default=list(KINDS3D))
-    ap.add_argument('--out', default=str(ROOT / 'benchmark' / 'results_3d_v9.json')); ap.add_argument('--no-render', action='store_true')
+    ap.add_argument('--out', default=str(ROOT / 'benchmark' / 'results_3d_v10.json')); ap.add_argument('--no-render', action='store_true')
     args = ap.parse_args(); rows = []
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as work:
         model = bottle_glb(Path(work) / 'bottle.glb')
@@ -105,6 +110,9 @@ def main():
         'accepted_silhouette_iou_min': min((r['silhouette_iou']['min'] for r in acc), default=None),
         'output_validation_passed': f"{sum(1 for r in acc if r.get('output_validation') == 'PASSED')}/{sum(1 for r in acc if 'output_validation' in r)}",
         'legacy_v8_check_false_rejects': sum(1 for r in rows if r['suitable'] and r.get('scene', {}).get('legacy_v8_would_reject')),
+        'v9_fixed_tolerance_false_accept': sum(1 for r in rows if not r['suitable'] and r['v9_fixed_tolerance_decision'] == 'PASSED'),
+        'v9_fixed_tolerance_false_reject': sum(1 for r in rows if r['suitable'] and r['v9_fixed_tolerance_decision'] != 'PASSED'),
+        'decisions_changed_vs_v9': [f"{r['kind']} s{r['seed']}: {r['v9_fixed_tolerance_decision']} -> {r['decision']}" for r in rows if r['v9_fixed_tolerance_decision'] != r['decision']],
         'median_analysis_seconds': round(float(np.median([r['analysis_seconds'] for r in rows])), 2),
     }
     Path(args.out).write_text(json.dumps({'seeds': args.seeds, 'summary': summary, 'rows': rows}, indent=1, default=float))

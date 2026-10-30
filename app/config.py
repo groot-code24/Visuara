@@ -23,3 +23,32 @@ def load_dotenv(path=None):
         if key and key not in os.environ:
             os.environ[key] = value; loaded.append(key)
     return loaded
+
+
+def production_problems(env=None):
+    """Settings that are acceptable in development but unsafe in production (CC_ENV=production).
+
+    Development stand-ins (SQLite, local disk, the email file outbox, a generated signing key, plain-HTTP cookies)
+    must never serve real customers by accident, so the app refuses to start in production while any is active.
+    """
+    env = os.environ if env is None else env
+    get = lambda k, default='': (env.get(k) or default).strip()
+    problems = []
+    if not (get('DATABASE_URL') or get('CC_DATABASE_URL')): problems.append('DATABASE_URL is not set (SQLite is development-only)')
+    if not get('CC_S3_BUCKET'): problems.append('CC_S3_BUCKET is not set (local-disk media storage is single-host development only)')
+    if get('CC_MAIL_BACKEND').lower() == 'outbox': problems.append('CC_MAIL_BACKEND=outbox writes sign-in emails to disk (development only)')
+    if len(get('CC_SIGNING_KEY')) < 32: problems.append('CC_SIGNING_KEY must be set to at least 32 random characters, identical on every host')
+    if get('CC_SECURE_COOKIES') != '1': problems.append('CC_SECURE_COOKIES must be 1 (HTTPS-only cookies)')
+    if not get('CC_PUBLIC_URL').startswith('https://'): problems.append('CC_PUBLIC_URL must be the https:// address of the API')
+    if get('CC_APP_URL') and not get('CC_APP_URL').startswith('https://'): problems.append('CC_APP_URL must use https://')
+    if any(o.strip().startswith('http://') for o in get('CC_CORS_ORIGINS').split(',') if o.strip()): problems.append('CC_CORS_ORIGINS must list https:// origins only')
+    if get('CC_OPS_TOKEN') and len(get('CC_OPS_TOKEN')) < 32: problems.append('CC_OPS_TOKEN must be at least 32 characters')
+    if get('CC_INLINE_WORKER', '1') == '1': problems.append('CC_INLINE_WORKER must be 0 in production (run worker.py as its own process)')
+    return problems
+
+
+def check_production():
+    if os.getenv('CC_ENV', '').lower() != 'production': return
+    problems = production_problems()
+    if problems:
+        raise RuntimeError('Refusing to start with CC_ENV=production:\n  - ' + '\n  - '.join(problems))

@@ -1,0 +1,8 @@
+# Lint for real defects only (undefined names, unused imports in new code, syntax); the codebase's compact style is kept.
+target-version = "py311"
+line-length = 240
+[lint]
+select = ["F", "E9"]
+ignore = ["F401", "F841", "E701", "E702", "E731", "F811"]
+[lint.per-file-ignores]
+"tests/*" = ["F811"]

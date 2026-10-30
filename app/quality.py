@@ -204,7 +204,7 @@ def evaluate_overlay(quad, width, height, fps, start_idx, end_idx, policy=POLICY
 
 
 # ------------------------------------------------------------------ TRACKED_3D
-POLICY_3D_VERSION = 'tracked3d-v0.2-geometric'
+POLICY_3D_VERSION = 'tracked3d-v0.3-pose-aware-plane'   # V10: plane tolerance scales with pose error (render3d.plane_tolerance)
 POLICY_3D = {
     'max_pose_reproj_px': 1.5,         # surface corners re-projected through the estimated pose
     'max_pose_step_deg': 15.0,         # larger frame-to-frame rotation = planar pose ambiguity flip

@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "cc-local",
+      "credentials": [{ "accessKey": "cc-local", "secretKey": "cc-local-secret-only" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

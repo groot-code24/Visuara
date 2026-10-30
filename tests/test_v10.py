@@ -300,3 +300,15 @@ def test_google_id_token_signature_verification():
 def test_log_redaction():
     line = obs.redact('GET /api/media/abc.def?x=1 /auth/email/tok123 code=123456 for alice@example.com X-Amz-Signature=deadbeef')
     for secret in ('abc.def', 'tok123', '123456', 'alice@example.com', 'deadbeef'): assert secret not in line
+
+
+def test_production_refuses_development_stand_ins():
+    from app.config import production_problems
+    dev = production_problems({'CC_ENV': 'production', 'CC_MAIL_BACKEND': 'outbox', 'CC_PUBLIC_URL': 'http://x', 'CC_CORS_ORIGINS': 'http://app.example.com'})
+    joined = ' '.join(dev)
+    for needle in ('DATABASE_URL', 'CC_S3_BUCKET', 'outbox', 'CC_SIGNING_KEY', 'CC_SECURE_COOKIES', 'CC_PUBLIC_URL', 'CC_CORS_ORIGINS', 'CC_INLINE_WORKER'):
+        assert needle in joined, needle
+    good = {'DATABASE_URL': 'postgresql://u:p@ep-x.neon.tech/db', 'CC_S3_BUCKET': 'b', 'CC_SMTP_HOST': 'smtp.resend.com', 'CC_SIGNING_KEY': 'k' * 40,
+            'CC_SECURE_COOKIES': '1', 'CC_PUBLIC_URL': 'https://api.example.com', 'CC_APP_URL': 'https://app.example.com',
+            'CC_CORS_ORIGINS': 'https://app.example.com', 'CC_INLINE_WORKER': '0'}
+    assert production_problems(good) == []

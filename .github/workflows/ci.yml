@@ -1,0 +1,93 @@
+# Every push and pull request: lint, tests on SQLite and PostgreSQL 16, dependency and secret scans, frontend
+# build checks, and the production Docker image (built and smoke-tested). Branch protection on `main` should require
+# all of these jobs; deploy-backend.yml only runs after this workflow succeeds on main, and Vercel production
+# deployments should be limited to `main` (see docs/v10/vercel-deployment.md).
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12', cache: pip }
+      - run: pip install "ruff>=0.6"
+      - run: ruff check app ops worker.py benchmark qa tests
+      - run: python -m compileall -q app ops worker.py
+
+  test-sqlite:
+    needs: lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12', cache: pip }
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q -p no:cacheprovider
+        env: { PYTHONPATH: ".:tests" }
+
+  test-postgres:
+    needs: lint
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12', cache: pip }
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q -p no:cacheprovider
+        env:
+          PYTHONPATH: ".:tests"
+          CC_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+  security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12', cache: pip }
+      - run: pip install "pip-audit>=2.7"
+      - run: pip-audit -r requirements.txt
+      - run: python qa/secret_scan.py
+
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: node frontend/build.mjs
+        env: { CC_API_ORIGIN: 'https://api.example.com', VERCEL_ENV: production }
+      - run: node frontend/check.mjs
+
+  docker:
+    needs: [test-sqlite, test-postgres, security, frontend]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t context-commerce:ci .
+      - name: smoke test (liveness, readiness, non-root, ffmpeg)
+        run: |
+          docker run -d --name cc -p 8000:8000 -e CC_SIGNING_KEY=ci-only-signing-key-0123456789abcdef context-commerce:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/api/health/live && break; sleep 2; done
+          curl -fsS http://127.0.0.1:8000/api/health/ready
+          test "$(docker exec cc id -u)" != "0"
+          docker exec cc ffprobe -version > /dev/null
+          docker rm -f cc

@@ -8,8 +8,9 @@ from contextlib import asynccontextmanager
 import secrets, hashlib, hmac, os, json, shutil, subprocess, time, mimetypes, threading, socket, struct, base64, urllib.request, urllib.parse, logging, re
 
 ROOT = Path(__file__).resolve().parent.parent
-from .config import load_dotenv
+from .config import load_dotenv, check_production
 load_dotenv()
+check_production()
 
 class _RedactSignedLinks(logging.Filter):
     """Signed download tokens are bearer credentials: redact them from access logs."""

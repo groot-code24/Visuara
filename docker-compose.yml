@@ -1,19 +1,20 @@
-# Local, production-shaped stack: PostgreSQL 16 (stands in for Neon), MinIO (stands in for Cloudflare R2),
-# Mailpit (a real SMTP server with a web inbox), the API and two independent render workers.
-#   docker compose up --build        app: http://localhost:8000   inbox: http://localhost:8025   storage console: http://localhost:9001
+# Local, production-shaped stack: PostgreSQL 16 (stands in for Neon), SeaweedFS's S3 gateway with access keys
+# (stands in for Cloudflare R2; anonymous access refused), Mailpit (a real SMTP server with a web inbox), the API and
+# two independent render workers.
+#   docker compose up --build        app: http://localhost:8000   inbox: http://localhost:8025
 # Development credentials below are for this local stack only. Production uses deploy/docker-compose.prod.yml + .env.
 x-backend: &backend
   build: .
   image: context-commerce:local
   depends_on:
     postgres: { condition: service_healthy }
-    minio-init: { condition: service_completed_successfully }
+    s3-init: { condition: service_completed_successfully }
   environment: &backend-env
     CC_ENV: development
     DATABASE_URL: postgresql://cc:cc-local-only@postgres:5432/context_commerce
     CC_S3_BUCKET: context-commerce-dev
-    CC_S3_ENDPOINT_URL: http://minio:9000
-    CC_S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+    CC_S3_ENDPOINT_URL: http://s3:8333
+    CC_S3_PUBLIC_ENDPOINT_URL: http://localhost:8333
     CC_S3_REGION: us-east-1
     CC_S3_ADDRESSING: path
     CC_S3_SSE: ""
@@ -39,17 +40,19 @@ services:
     volumes: [ "pg-data:/var/lib/postgresql/data" ]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U cc -d context_commerce"], interval: 3s, timeout: 3s, retries: 30 }
     ports: [ "127.0.0.1:5433:5432" ]
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address :9001
-    environment: { MINIO_ROOT_USER: cc-local, MINIO_ROOT_PASSWORD: cc-local-secret-only }
-    volumes: [ "minio-data:/data" ]
-    ports: [ "127.0.0.1:9000:9000", "127.0.0.1:9001:9001" ]
-    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 3s, timeout: 3s, retries: 30 }
-  minio-init:   # private bucket (no anonymous access)
-    image: minio/mc:latest
-    depends_on: { minio: { condition: service_healthy } }
-    entrypoint: ["/bin/sh", "-c", "mc alias set local http://minio:9000 cc-local cc-local-secret-only && mc mb -p local/context-commerce-dev && mc anonymous set none local/context-commerce-dev"]
+  s3:
+    image: chrislusf/seaweedfs:latest
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -volume.max=0 -master.volumeSizeLimitMB=1024
+    volumes: [ "s3-data:/data", "./deploy/local/s3.json:/etc/seaweedfs/s3.json:ro" ]
+    ports: [ "127.0.0.1:8333:8333" ]
+    healthcheck: { test: ["CMD-SHELL", "wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q 'HTTP/'"], interval: 3s, timeout: 3s, retries: 40 }
+  s3-init:   # private bucket, created with the app's own image and credentials
+    image: context-commerce:local
+    build: .
+    depends_on: { s3: { condition: service_healthy } }
+    environment: { AWS_ACCESS_KEY_ID: cc-local, AWS_SECRET_ACCESS_KEY: cc-local-secret-only }
+    volumes: [ "./deploy/local/create_bucket.py:/init/create_bucket.py:ro" ]
+    entrypoint: ["python", "/init/create_bucket.py"]
   mailpit:
     image: axllent/mailpit:latest
     ports: [ "127.0.0.1:8025:8025" ]
@@ -65,4 +68,4 @@ services:
 volumes:
   cc-data:
   pg-data:
-  minio-data:
+  s3-data:
