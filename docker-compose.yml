@@ -1,0 +1,31 @@
+# Production-shaped stack: API + worker sharing Neon (DATABASE_URL) and a private S3-compatible bucket (CC_S3_*).
+# Put the secrets in .env (never commit it). Without DATABASE_URL / CC_S3_BUCKET both services fall back to
+# SQLite and local disk on the shared volume.
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CC_DATA_DIR: /data
+      CC_INLINE_WORKER: "0"
+    volumes:
+      - cc-data:/data
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["python", "worker.py"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CC_DATA_DIR: /data
+      CC_INLINE_WORKER: "0"
+    volumes:
+      - cc-data:/data
+    restart: unless-stopped
+volumes:
+  cc-data:

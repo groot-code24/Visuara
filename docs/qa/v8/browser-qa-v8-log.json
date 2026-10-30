@@ -1,0 +1,38 @@
+{
+ "steps": [
+  {
+   "step": "Creator (own organization) uploads, analyses and lists a video",
+   "ok": true,
+   "seconds": 4.4
+  },
+  {
+   "step": "Separate brand organization: product + 3D model, campaign, marketplace match, offer",
+   "ok": true,
+   "seconds": 5.9
+  },
+  {
+   "step": "Creator accepts the offer, creating a licence",
+   "ok": true,
+   "seconds": 2.2
+  },
+  {
+   "step": "Brand builds a 3D placement on the licensed video; quality PASSED; exact-renderer preview",
+   "ok": true,
+   "seconds": 24.3
+  },
+  {
+   "step": "Consent, approvals, 3D render validated, download, signed share link",
+   "ok": true,
+   "seconds": 29.0
+  },
+  {
+   "step": "Campaign report separates measured and unmeasured; marketplace fits 390 px",
+   "ok": true,
+   "seconds": 2.2
+  },
+  {
+   "step": "No console errors or uncaught exceptions",
+   "ok": true
+  }
+ ]
+}

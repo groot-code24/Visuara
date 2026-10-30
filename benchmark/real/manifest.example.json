@@ -1,0 +1,36 @@
+{
+  "split_salt": "choose-once-and-never-change",
+  "clips": [
+    {
+      "clip_id": "c001_kitchen_counter",
+      "file": "clips/c001.mp4",
+      "sha256": "<sha256 of the file>",
+      "creator_id": "creator-017",
+      "device": "iPhone 15 Pro, 4K30, Instagram export",
+      "consent": {"granted_by": "Creator legal name", "date": "2026-11-02", "reference": "consent/c001.pdf", "scope": ["benchmark", "product-placement"]},
+      "license": "internal evaluation only, delete by 2027-11-02",
+      "label": {
+        "mode": "3d", "suitable": true, "expected_code": null,
+        "quad_norm": [[0.31, 0.58], [0.66, 0.57], [0.71, 0.82], [0.27, 0.84]],
+        "ref_second": 1.0, "start_second": 1.0, "end_second": 4.5,
+        "model": "assets/bottle.glb",
+        "model3d": {"surface_size_m": [0.60, 0.40], "anchor_uv": [0.5, 0.6], "yaw_deg": 0, "scale": 1.0}
+      }
+    },
+    {
+      "clip_id": "c002_desk_hand_crosses",
+      "file": "clips/c002.mp4",
+      "sha256": "<sha256 of the file>",
+      "creator_id": "creator-004",
+      "device": "Pixel 8, 1080p30",
+      "consent": {"granted_by": "Creator legal name", "date": "2026-11-02", "reference": "consent/c002.pdf", "scope": ["benchmark"]},
+      "license": "internal evaluation only",
+      "label": {
+        "mode": "2d", "suitable": false, "expected_code": "PARTIAL_OCCLUSION_UNSUPPORTED",
+        "quad_norm": [[0.20, 0.55], [0.48, 0.55], [0.50, 0.75], [0.18, 0.76]],
+        "ref_second": 0.5, "start_second": 0.5, "end_second": 3.0,
+        "product_image": "assets/mug.png"
+      }
+    }
+  ]
+}

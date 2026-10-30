@@ -1,0 +1,5098 @@
+{
+ "policy_version": "planar-v0.1-heuristic",
+ "dataset": "synthetic-planar-v1",
+ "kinds": {
+  "static": {
+   "suitable": true,
+   "expected_code": null,
+   "description": "Static camera, textured planar surface (class A)"
+  },
+  "pan_zoom": {
+   "suitable": true,
+   "expected_code": null,
+   "description": "Smooth pan and zoom (class B)"
+  },
+  "perspective": {
+   "suitable": true,
+   "expected_code": null,
+   "description": "Changing viewing angle on a planar surface (class B)"
+  },
+  "handheld": {
+   "suitable": true,
+   "expected_code": null,
+   "description": "Pan with handheld-style jitter (class B)"
+  },
+  "sensor_noise": {
+   "suitable": true,
+   "expected_code": null,
+   "description": "Pan with heavy sensor noise (class B)"
+  },
+  "mild_lighting": {
+   "suitable": true,
+   "expected_code": null,
+   "description": "+/-8% global brightness drift (class B)"
+  },
+  "cut_after": {
+   "suitable": true,
+   "expected_code": null,
+   "description": "Scene cut after the placement interval ends"
+  },
+  "cut_inside": {
+   "suitable": false,
+   "expected_code": "SCENE_CUT_IN_INTERVAL",
+   "description": "Scene cut inside the placement interval"
+  },
+  "occluder": {
+   "suitable": false,
+   "expected_code": "PARTIAL_OCCLUSION_UNSUPPORTED",
+   "description": "Opaque object crosses the surface (class C)"
+  },
+  "low_texture": {
+   "suitable": false,
+   "expected_code": "LOW_TEXTURE",
+   "description": "Flat, untextured surface"
+  },
+  "deforming": {
+   "suitable": false,
+   "expected_code": "NON_PLANAR_OR_UNSTABLE",
+   "description": "Surface ripples non-rigidly (class D)"
+  },
+  "exits_frame": {
+   "suitable": false,
+   "expected_code": "PRODUCT_OUT_OF_FRAME",
+   "description": "Surface leaves the frame during the interval"
+  },
+  "motion_blur": {
+   "suitable": false,
+   "expected_code": "MOTION_BLUR_UNSUPPORTED",
+   "description": "Strong motion blur during the interval"
+  },
+  "lighting_change": {
+   "suitable": false,
+   "expected_code": "LIGHTING_CHANGE_UNSUPPORTED",
+   "description": "Brightness falls to ~50% during the interval"
+  }
+ },
+ "splits": {
+  "dev": {
+   "seeds": [
+    0,
+    1
+   ],
+   "summary": {
+    "clips": 28,
+    "suitable": 14,
+    "unsuitable": 14,
+    "true_accept": 14,
+    "false_reject": 0,
+    "true_reject": 14,
+    "false_accept": 0,
+    "false_acceptance_rate": 0.0,
+    "false_rejection_rate": 0.0,
+    "rejections_with_expected_reason_code": "12/14",
+    "accepted_corner_error_px_mean": 0.402,
+    "accepted_corner_error_px_max": 3.464,
+    "accepted_temporal_jitter_px_max": 0.194,
+    "output_validation_passed": "14/14",
+    "median_analysis_seconds": 3.588
+   },
+   "rows": [
+    {
+     "kind": "static",
+     "seed": 0,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 1.19,
+     "measurements": {
+      "reference_features": 93,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 93.0,
+       "median": 93.0,
+       "max": 93.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.0005,
+       "max": 0.0005
+      },
+      "ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.001,
+       "max": 0.0031
+      },
+      "sharpness_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "luminance_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": 0.0,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.001,
+      "max": 0.001
+     },
+     "temporal_jitter_px": 0.0,
+     "render_seconds": 0.773,
+     "validation_seconds": 0.852,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 33.72,
+       "median": 35.45
+      },
+      "scene_psnr_db": {
+       "min": 40.34,
+       "median": 40.77
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "pan_zoom",
+     "seed": 0,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.008,
+     "measurements": {
+      "reference_features": 126,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 116.0,
+       "median": 126.0,
+       "max": 126.0
+      },
+      "inlier_ratio": {
+       "min": 0.9355,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3544,
+       "max": 0.6633
+      },
+      "ncc": {
+       "min": 0.9624,
+       "median": 0.9784,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8715,
+       "median": 0.95,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1585,
+       "max": 0.1739
+      },
+      "sharpness_ratio": {
+       "min": 0.8677,
+       "median": 1.1194,
+       "max": 1.4617
+      },
+      "luminance_ratio": {
+       "min": 0.9931,
+       "median": 1.0012,
+       "max": 1.0115
+      },
+      "max_product_motion_px": 67.77,
+      "camera_shake_px": 1.07,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.177,
+      "p95": 0.378,
+      "max": 1.245
+     },
+     "temporal_jitter_px": 0.107,
+     "render_seconds": 0.652,
+     "validation_seconds": 0.782,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.38,
+       "median": 36.33
+      },
+      "scene_psnr_db": {
+       "min": 38.69,
+       "median": 39.39
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "perspective",
+     "seed": 0,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.994,
+     "measurements": {
+      "reference_features": 122,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 119.0,
+       "median": 121.0,
+       "max": 122.0
+      },
+      "inlier_ratio": {
+       "min": 0.9835,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1576,
+       "max": 0.2161
+      },
+      "ncc": {
+       "min": 0.9425,
+       "median": 0.9754,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.711,
+       "median": 0.9449,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1331,
+       "max": 0.1654
+      },
+      "sharpness_ratio": {
+       "min": 0.8145,
+       "median": 0.9372,
+       "max": 1.12
+      },
+      "luminance_ratio": {
+       "min": 0.9941,
+       "median": 1.0002,
+       "max": 1.006
+      },
+      "max_product_motion_px": 30.54,
+      "camera_shake_px": 1.05,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 1.98,
+      "p95": 2.862,
+      "max": 3.063
+     },
+     "temporal_jitter_px": 0.113,
+     "render_seconds": 0.603,
+     "validation_seconds": 0.795,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.59,
+       "median": 36.08
+      },
+      "scene_psnr_db": {
+       "min": 38.7,
+       "median": 39.4
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "handheld",
+     "seed": 0,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.231,
+     "measurements": {
+      "reference_features": 118,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 110.0,
+       "median": 118.0,
+       "max": 118.0
+      },
+      "inlier_ratio": {
+       "min": 0.9573,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.317,
+       "max": 0.5515
+      },
+      "ncc": {
+       "min": 0.9102,
+       "median": 0.9729,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.5707,
+       "median": 0.9522,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.17,
+       "max": 0.1885
+      },
+      "sharpness_ratio": {
+       "min": 0.9207,
+       "median": 1.0896,
+       "max": 1.3104
+      },
+      "luminance_ratio": {
+       "min": 0.9917,
+       "median": 1.0003,
+       "max": 1.0072
+      },
+      "max_product_motion_px": 66.62,
+      "camera_shake_px": 2.535,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.198,
+      "p95": 0.514,
+      "max": 1.461
+     },
+     "temporal_jitter_px": 0.194,
+     "render_seconds": 0.68,
+     "validation_seconds": 0.823,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.25,
+       "median": 35.92
+      },
+      "scene_psnr_db": {
+       "min": 37.72,
+       "median": 38.73
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "sensor_noise",
+     "seed": 0,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.555,
+     "measurements": {
+      "reference_features": 113,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 89.0,
+       "median": 108.0,
+       "max": 113.0
+      },
+      "inlier_ratio": {
+       "min": 0.8725,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2883,
+       "max": 0.513
+      },
+      "ncc": {
+       "min": 0.9574,
+       "median": 0.9742,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.892,
+       "median": 0.9504,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1565,
+       "max": 0.17
+      },
+      "sharpness_ratio": {
+       "min": 0.9353,
+       "median": 1.1401,
+       "max": 1.4697
+      },
+      "luminance_ratio": {
+       "min": 0.9914,
+       "median": 1.0005,
+       "max": 1.0092
+      },
+      "max_product_motion_px": 67.6,
+      "camera_shake_px": 0.521,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.197,
+      "p95": 0.469,
+      "max": 0.708
+     },
+     "temporal_jitter_px": 0.112,
+     "render_seconds": 0.685,
+     "validation_seconds": 0.74,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.74,
+       "median": 36.28
+      },
+      "scene_psnr_db": {
+       "min": 35.11,
+       "median": 35.62
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "mild_lighting",
+     "seed": 0,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.403,
+     "measurements": {
+      "reference_features": 115,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 91.0,
+       "median": 111.0,
+       "max": 115.0
+      },
+      "inlier_ratio": {
+       "min": 0.9479,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3863,
+       "max": 0.5555
+      },
+      "ncc": {
+       "min": 0.9563,
+       "median": 0.9772,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8296,
+       "median": 0.955,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1637,
+       "max": 0.2342
+      },
+      "sharpness_ratio": {
+       "min": 0.7609,
+       "median": 0.9761,
+       "max": 1.2452
+      },
+      "luminance_ratio": {
+       "min": 0.8623,
+       "median": 0.9364,
+       "max": 1.0204
+      },
+      "max_product_motion_px": 67.97,
+      "camera_shake_px": 0.565,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.18,
+      "p95": 0.487,
+      "max": 0.786
+     },
+     "temporal_jitter_px": 0.115,
+     "render_seconds": 0.6,
+     "validation_seconds": 0.689,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.1,
+       "median": 36.3
+      },
+      "scene_psnr_db": {
+       "min": 38.16,
+       "median": 39.23
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_after",
+     "seed": 0,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.688,
+     "measurements": {
+      "reference_features": 104,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 102.0,
+       "median": 102.0,
+       "max": 104.0
+      },
+      "inlier_ratio": {
+       "min": 0.9808,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2805,
+       "max": 0.5362
+      },
+      "ncc": {
+       "min": 0.9666,
+       "median": 0.9788,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.9063,
+       "median": 0.9654,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1528,
+       "max": 0.1665
+      },
+      "sharpness_ratio": {
+       "min": 0.9011,
+       "median": 1.1077,
+       "max": 1.3634
+      },
+      "luminance_ratio": {
+       "min": 0.9935,
+       "median": 1.0024,
+       "max": 1.0118
+      },
+      "max_product_motion_px": 67.59,
+      "camera_shake_px": 0.466,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.133,
+      "p95": 0.376,
+      "max": 0.68
+     },
+     "temporal_jitter_px": 0.088,
+     "render_seconds": 0.58,
+     "validation_seconds": 0.707,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.78,
+       "median": 36.43
+      },
+      "scene_psnr_db": {
+       "min": 38.75,
+       "median": 39.4
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_inside",
+     "seed": 0,
+     "suitable": false,
+     "expected_code": "SCENE_CUT_IN_INTERVAL",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "SCENE_CUT_IN_INTERVAL"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 1.954,
+     "measurements": {
+      "reference_features": 110,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 108.0,
+       "median": 108.0,
+       "max": 110.0
+      },
+      "inlier_ratio": {
+       "min": 0.9818,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2219,
+       "max": 0.3619
+      },
+      "ncc": {
+       "min": 0.9229,
+       "median": 0.9752,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.6476,
+       "median": 0.9468,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1541,
+       "max": 0.5564
+      },
+      "sharpness_ratio": {
+       "min": 0.9146,
+       "median": 1.0695,
+       "max": 1.3962
+      },
+      "luminance_ratio": {
+       "min": 0.9956,
+       "median": 1.0023,
+       "max": 1.0121
+      },
+      "max_product_motion_px": 33.1,
+      "camera_shake_px": 0.753,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.19,
+      "p95": 0.49,
+      "max": 1.185
+     },
+     "temporal_jitter_px": 0.172
+    },
+    {
+     "kind": "occluder",
+     "seed": 0,
+     "suitable": false,
+     "expected_code": "PARTIAL_OCCLUSION_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 2.822,
+     "measurements": {
+      "reference_features": 128,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 48.0,
+       "median": 74.0,
+       "max": 128.0
+      },
+      "inlier_ratio": {
+       "min": 0.7115,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2063,
+       "max": 1.2505
+      },
+      "ncc": {
+       "min": -0.0294,
+       "median": 0.5174,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.3187,
+       "median": -0.1239,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1598,
+       "max": 0.1967
+      },
+      "sharpness_ratio": {
+       "min": 0.7502,
+       "median": 0.9896,
+       "max": 1.3867
+      },
+      "luminance_ratio": {
+       "min": 0.9962,
+       "median": 1.0307,
+       "max": 1.0825
+      },
+      "max_product_motion_px": 82.75,
+      "camera_shake_px": 9.452,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 28.084,
+      "p95": 112.476,
+      "max": 132.986
+     },
+     "temporal_jitter_px": 3.054
+    },
+    {
+     "kind": "low_texture",
+     "seed": 0,
+     "suitable": false,
+     "expected_code": "LOW_TEXTURE",
+     "decision": "FAILED",
+     "codes": [
+      "LOW_TEXTURE",
+      "TRACKING_LOST",
+      "INCOMPLETE_VALIDATION"
+     ],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.031,
+     "measurements": {
+      "reference_features": 5,
+      "textured_cells": 12,
+      "inliers": null,
+      "inlier_ratio": null,
+      "rmse_px": null,
+      "ncc": null,
+      "min_cell_ncc": null,
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.0
+      },
+      "sharpness_ratio": null,
+      "luminance_ratio": null,
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": null,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": null
+    },
+    {
+     "kind": "deforming",
+     "seed": 0,
+     "suitable": false,
+     "expected_code": "NON_PLANAR_OR_UNSTABLE",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.866,
+     "measurements": {
+      "reference_features": 111,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 30.0,
+       "median": 55.0,
+       "max": 111.0
+      },
+      "inlier_ratio": {
+       "min": 0.5093,
+       "median": 0.7284,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 1.332,
+       "max": 1.7556
+      },
+      "ncc": {
+       "min": 0.0398,
+       "median": 0.0992,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.4576,
+       "median": -0.2576,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.156,
+       "max": 0.1787
+      },
+      "sharpness_ratio": {
+       "min": 0.7381,
+       "median": 0.9663,
+       "max": 1.2467
+      },
+      "luminance_ratio": {
+       "min": 0.976,
+       "median": 0.9994,
+       "max": 1.0192
+      },
+      "max_product_motion_px": 72.21,
+      "camera_shake_px": 14.432,
+      "tracker_reseeds": 18
+     },
+     "corner_error_px": {
+      "mean": 16.565,
+      "p95": 36.079,
+      "max": 38.889
+     },
+     "temporal_jitter_px": 1.713
+    },
+    {
+     "kind": "exits_frame",
+     "seed": 0,
+     "suitable": false,
+     "expected_code": "PRODUCT_OUT_OF_FRAME",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED",
+      "PRODUCT_OUT_OF_FRAME"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 4.567,
+     "measurements": {
+      "reference_features": 116,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 18.0,
+       "median": 116.0,
+       "max": 116.0
+      },
+      "inlier_ratio": {
+       "min": 0.9355,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.191,
+       "max": 0.5599
+      },
+      "ncc": {
+       "min": 0.0166,
+       "median": 0.9486,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.1514,
+       "median": 0.9015,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1534,
+       "max": 0.1658
+      },
+      "sharpness_ratio": {
+       "min": 0.1186,
+       "median": 0.8575,
+       "max": 1.0779
+      },
+      "luminance_ratio": {
+       "min": 0.0452,
+       "median": 0.9995,
+       "max": 1.0064
+      },
+      "max_product_motion_px": 277.51,
+      "camera_shake_px": 12.659,
+      "tracker_reseeds": 9
+     },
+     "corner_error_px": {
+      "mean": 1.153,
+      "p95": 5.54,
+      "max": 19.504
+     },
+     "temporal_jitter_px": 2.374
+    },
+    {
+     "kind": "motion_blur",
+     "seed": 0,
+     "suitable": false,
+     "expected_code": "MOTION_BLUR_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 5.551,
+     "measurements": {
+      "reference_features": 116,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 30.0,
+       "median": 113.0,
+       "max": 157.0
+      },
+      "inlier_ratio": {
+       "min": 0.8947,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.5918,
+       "max": 1.4485
+      },
+      "ncc": {
+       "min": 0.5591,
+       "median": 0.7004,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.0495,
+       "median": 0.3602,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1256,
+       "max": 0.2942
+      },
+      "sharpness_ratio": {
+       "min": 0.1383,
+       "median": 0.4151,
+       "max": 1.239
+      },
+      "luminance_ratio": {
+       "min": 0.9959,
+       "median": 1.0123,
+       "max": 1.0234
+      },
+      "max_product_motion_px": 183.68,
+      "camera_shake_px": 2.979,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 1.021,
+      "p95": 3.143,
+      "max": 6.509
+     },
+     "temporal_jitter_px": 0.452
+    },
+    {
+     "kind": "lighting_change",
+     "seed": 0,
+     "suitable": false,
+     "expected_code": "LIGHTING_CHANGE_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.134,
+     "measurements": {
+      "reference_features": 118,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 66.0,
+       "median": 111.0,
+       "max": 118.0
+      },
+      "inlier_ratio": {
+       "min": 0.8624,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.5706,
+       "max": 0.8074
+      },
+      "ncc": {
+       "min": 0.9669,
+       "median": 0.9787,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.9016,
+       "median": 0.9564,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1506,
+       "max": 0.2794
+      },
+      "sharpness_ratio": {
+       "min": 0.2561,
+       "median": 0.6128,
+       "max": 1.1623
+      },
+      "luminance_ratio": {
+       "min": 0.4885,
+       "median": 0.7253,
+       "max": 1.0094
+      },
+      "max_product_motion_px": 67.53,
+      "camera_shake_px": 0.413,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.145,
+      "p95": 0.34,
+      "max": 0.534
+     },
+     "temporal_jitter_px": 0.074
+    },
+    {
+     "kind": "static",
+     "seed": 1,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.73,
+     "measurements": {
+      "reference_features": 121,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 121.0,
+       "median": 121.0,
+       "max": 121.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.0003,
+       "max": 0.0003
+      },
+      "ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.011
+      },
+      "sharpness_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "luminance_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": 0.0,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": 0.0,
+     "render_seconds": 0.723,
+     "validation_seconds": 0.647,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.7,
+       "median": 35.53
+      },
+      "scene_psnr_db": {
+       "min": 40.76,
+       "median": 41.09
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "pan_zoom",
+     "seed": 1,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 2.8,
+     "measurements": {
+      "reference_features": 125,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 116.0,
+       "median": 125.0,
+       "max": 125.0
+      },
+      "inlier_ratio": {
+       "min": 0.9508,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3277,
+       "max": 0.5805
+      },
+      "ncc": {
+       "min": 0.966,
+       "median": 0.9803,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8128,
+       "median": 0.9596,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1615,
+       "max": 0.183
+      },
+      "sharpness_ratio": {
+       "min": 0.8761,
+       "median": 1.0541,
+       "max": 1.2605
+      },
+      "luminance_ratio": {
+       "min": 0.9929,
+       "median": 1.0009,
+       "max": 1.0095
+      },
+      "max_product_motion_px": 67.81,
+      "camera_shake_px": 0.528,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.157,
+      "p95": 0.369,
+      "max": 0.596
+     },
+     "temporal_jitter_px": 0.075,
+     "render_seconds": 0.685,
+     "validation_seconds": 0.725,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.78,
+       "median": 36.48
+      },
+      "scene_psnr_db": {
+       "min": 38.29,
+       "median": 38.88
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "perspective",
+     "seed": 1,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 6.184,
+     "measurements": {
+      "reference_features": 113,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 113.0,
+       "median": 113.0,
+       "max": 113.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1735,
+       "max": 0.2221
+      },
+      "ncc": {
+       "min": 0.9285,
+       "median": 0.9725,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.7097,
+       "median": 0.9446,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.144,
+       "max": 0.1713
+      },
+      "sharpness_ratio": {
+       "min": 0.8112,
+       "median": 0.9789,
+       "max": 1.2092
+      },
+      "luminance_ratio": {
+       "min": 0.9946,
+       "median": 0.999,
+       "max": 1.0042
+      },
+      "max_product_motion_px": 30.85,
+      "camera_shake_px": 1.129,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 1.905,
+      "p95": 2.905,
+      "max": 3.464
+     },
+     "temporal_jitter_px": 0.102,
+     "render_seconds": 0.581,
+     "validation_seconds": 0.685,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 33.88,
+       "median": 36.26
+      },
+      "scene_psnr_db": {
+       "min": 38.41,
+       "median": 39.48
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "handheld",
+     "seed": 1,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.078,
+     "measurements": {
+      "reference_features": 123,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 103.0,
+       "median": 118.0,
+       "max": 123.0
+      },
+      "inlier_ratio": {
+       "min": 0.9537,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3357,
+       "max": 0.6098
+      },
+      "ncc": {
+       "min": 0.9482,
+       "median": 0.9753,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8695,
+       "median": 0.9503,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.172,
+       "max": 0.1908
+      },
+      "sharpness_ratio": {
+       "min": 0.7992,
+       "median": 1.011,
+       "max": 1.2184
+      },
+      "luminance_ratio": {
+       "min": 0.9883,
+       "median": 1.0012,
+       "max": 1.0074
+      },
+      "max_product_motion_px": 68.83,
+      "camera_shake_px": 2.417,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.218,
+      "p95": 0.593,
+      "max": 0.836
+     },
+     "temporal_jitter_px": 0.122,
+     "render_seconds": 0.588,
+     "validation_seconds": 0.694,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 33.84,
+       "median": 35.85
+      },
+      "scene_psnr_db": {
+       "min": 38.28,
+       "median": 39.03
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "sensor_noise",
+     "seed": 1,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.349,
+     "measurements": {
+      "reference_features": 110,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 109.0,
+       "median": 110.0,
+       "max": 110.0
+      },
+      "inlier_ratio": {
+       "min": 0.9909,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3272,
+       "max": 0.5643
+      },
+      "ncc": {
+       "min": 0.9416,
+       "median": 0.9699,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.7763,
+       "median": 0.9467,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1584,
+       "max": 0.172
+      },
+      "sharpness_ratio": {
+       "min": 0.8966,
+       "median": 1.1245,
+       "max": 1.3631
+      },
+      "luminance_ratio": {
+       "min": 0.9944,
+       "median": 1.0017,
+       "max": 1.0104
+      },
+      "max_product_motion_px": 67.84,
+      "camera_shake_px": 0.721,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.178,
+      "p95": 0.457,
+      "max": 1.356
+     },
+     "temporal_jitter_px": 0.112,
+     "render_seconds": 0.657,
+     "validation_seconds": 0.722,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.61,
+       "median": 36.39
+      },
+      "scene_psnr_db": {
+       "min": 35.31,
+       "median": 35.85
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "mild_lighting",
+     "seed": 1,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.002,
+     "measurements": {
+      "reference_features": 126,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 121.0,
+       "median": 122.0,
+       "max": 126.0
+      },
+      "inlier_ratio": {
+       "min": 0.9839,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3626,
+       "max": 0.5933
+      },
+      "ncc": {
+       "min": 0.9704,
+       "median": 0.9809,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.9069,
+       "median": 0.9525,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1726,
+       "max": 0.2252
+      },
+      "sharpness_ratio": {
+       "min": 0.8139,
+       "median": 0.9829,
+       "max": 1.2963
+      },
+      "luminance_ratio": {
+       "min": 0.86,
+       "median": 0.9332,
+       "max": 1.0184
+      },
+      "max_product_motion_px": 67.73,
+      "camera_shake_px": 0.375,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.152,
+      "p95": 0.409,
+      "max": 0.692
+     },
+     "temporal_jitter_px": 0.102,
+     "render_seconds": 0.573,
+     "validation_seconds": 0.695,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.53,
+       "median": 36.32
+      },
+      "scene_psnr_db": {
+       "min": 37.94,
+       "median": 39.25
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_after",
+     "seed": 1,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.36,
+     "measurements": {
+      "reference_features": 113,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 101.0,
+       "median": 111.0,
+       "max": 113.0
+      },
+      "inlier_ratio": {
+       "min": 0.9099,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3569,
+       "max": 0.6288
+      },
+      "ncc": {
+       "min": 0.9528,
+       "median": 0.9737,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8852,
+       "median": 0.9372,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1569,
+       "max": 0.172
+      },
+      "sharpness_ratio": {
+       "min": 0.9028,
+       "median": 1.1408,
+       "max": 1.3789
+      },
+      "luminance_ratio": {
+       "min": 0.9951,
+       "median": 1.0023,
+       "max": 1.0144
+      },
+      "max_product_motion_px": 67.7,
+      "camera_shake_px": 0.678,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.154,
+      "p95": 0.437,
+      "max": 0.755
+     },
+     "temporal_jitter_px": 0.12,
+     "render_seconds": 0.57,
+     "validation_seconds": 0.667,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.75,
+       "median": 36.29
+      },
+      "scene_psnr_db": {
+       "min": 38.4,
+       "median": 39.07
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_inside",
+     "seed": 1,
+     "suitable": false,
+     "expected_code": "SCENE_CUT_IN_INTERVAL",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "SCENE_CUT_IN_INTERVAL"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 2.336,
+     "measurements": {
+      "reference_features": 108,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 107.0,
+       "median": 108.0,
+       "max": 108.0
+      },
+      "inlier_ratio": {
+       "min": 0.9907,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2699,
+       "max": 0.3942
+      },
+      "ncc": {
+       "min": 0.956,
+       "median": 0.9841,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8396,
+       "median": 0.9579,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1639,
+       "max": 0.5486
+      },
+      "sharpness_ratio": {
+       "min": 0.9149,
+       "median": 1.087,
+       "max": 1.377
+      },
+      "luminance_ratio": {
+       "min": 0.9935,
+       "median": 1.0002,
+       "max": 1.0068
+      },
+      "max_product_motion_px": 32.17,
+      "camera_shake_px": 0.6,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.196,
+      "p95": 0.506,
+      "max": 1.311
+     },
+     "temporal_jitter_px": 0.137
+    },
+    {
+     "kind": "occluder",
+     "seed": 1,
+     "suitable": false,
+     "expected_code": "PARTIAL_OCCLUSION_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 3.459,
+     "measurements": {
+      "reference_features": 124,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 48.0,
+       "median": 79.0,
+       "max": 137.0
+      },
+      "inlier_ratio": {
+       "min": 0.6357,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2101,
+       "max": 1.3184
+      },
+      "ncc": {
+       "min": 0.0634,
+       "median": 0.397,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.4843,
+       "median": -0.1912,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1585,
+       "max": 0.2052
+      },
+      "sharpness_ratio": {
+       "min": 0.8941,
+       "median": 1.2012,
+       "max": 1.8203
+      },
+      "luminance_ratio": {
+       "min": 0.9321,
+       "median": 0.9974,
+       "max": 1.0178
+      },
+      "max_product_motion_px": 93.14,
+      "camera_shake_px": 8.952,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 30.731,
+      "p95": 119.087,
+      "max": 134.63
+     },
+     "temporal_jitter_px": 3.202
+    },
+    {
+     "kind": "low_texture",
+     "seed": 1,
+     "suitable": false,
+     "expected_code": "LOW_TEXTURE",
+     "decision": "FAILED",
+     "codes": [
+      "LOW_TEXTURE",
+      "TRACKING_LOST",
+      "INCOMPLETE_VALIDATION"
+     ],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.032,
+     "measurements": {
+      "reference_features": 4,
+      "textured_cells": 12,
+      "inliers": null,
+      "inlier_ratio": null,
+      "rmse_px": null,
+      "ncc": null,
+      "min_cell_ncc": null,
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.0
+      },
+      "sharpness_ratio": null,
+      "luminance_ratio": null,
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": null,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": null
+    },
+    {
+     "kind": "deforming",
+     "seed": 1,
+     "suitable": false,
+     "expected_code": "NON_PLANAR_OR_UNSTABLE",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_DRIFT",
+      "PRODUCT_OUT_OF_FRAME"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.621,
+     "measurements": {
+      "reference_features": 123,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 35.0,
+       "median": 78.0,
+       "max": 200.0
+      },
+      "inlier_ratio": {
+       "min": 0.6071,
+       "median": 0.7922,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 1.311,
+       "max": 1.6823
+      },
+      "ncc": {
+       "min": -0.0234,
+       "median": 0.0479,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.4735,
+       "median": -0.2713,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1541,
+       "max": 0.1684
+      },
+      "sharpness_ratio": {
+       "min": 0.9622,
+       "median": 1.9379,
+       "max": 2.1394
+      },
+      "luminance_ratio": {
+       "min": 0.9932,
+       "median": 1.0297,
+       "max": 1.0694
+      },
+      "max_product_motion_px": 346.01,
+      "camera_shake_px": 31.924,
+      "tracker_reseeds": 10
+     },
+     "corner_error_px": {
+      "mean": 57.649,
+      "p95": 271.42,
+      "max": 295.391
+     },
+     "temporal_jitter_px": 3.481
+    },
+    {
+     "kind": "exits_frame",
+     "seed": 1,
+     "suitable": false,
+     "expected_code": "PRODUCT_OUT_OF_FRAME",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED",
+      "PRODUCT_OUT_OF_FRAME"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 4.275,
+     "measurements": {
+      "reference_features": 94,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 16.0,
+       "median": 92.0,
+       "max": 94.0
+      },
+      "inlier_ratio": {
+       "min": 0.95,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2569,
+       "max": 0.5543
+      },
+      "ncc": {
+       "min": 0.0315,
+       "median": 0.9503,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.2272,
+       "median": 0.8895,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1527,
+       "max": 0.1708
+      },
+      "sharpness_ratio": {
+       "min": 0.1733,
+       "median": 0.8697,
+       "max": 1.0582
+      },
+      "luminance_ratio": {
+       "min": 0.0448,
+       "median": 1.0003,
+       "max": 1.0069
+      },
+      "max_product_motion_px": 261.89,
+      "camera_shake_px": 8.909,
+      "tracker_reseeds": 9
+     },
+     "corner_error_px": {
+      "mean": 0.697,
+      "p95": 3.085,
+      "max": 11.923
+     },
+     "temporal_jitter_px": 1.1
+    },
+    {
+     "kind": "motion_blur",
+     "seed": 1,
+     "suitable": false,
+     "expected_code": "MOTION_BLUR_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 4.273,
+     "measurements": {
+      "reference_features": 119,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 42.0,
+       "median": 119.0,
+       "max": 148.0
+      },
+      "inlier_ratio": {
+       "min": 0.9127,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.5463,
+       "max": 0.9478
+      },
+      "ncc": {
+       "min": 0.6699,
+       "median": 0.7705,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.1427,
+       "median": 0.4879,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1226,
+       "max": 0.2943
+      },
+      "sharpness_ratio": {
+       "min": 0.1278,
+       "median": 0.3251,
+       "max": 1.3951
+      },
+      "luminance_ratio": {
+       "min": 0.9924,
+       "median": 1.0083,
+       "max": 1.0253
+      },
+      "max_product_motion_px": 182.25,
+      "camera_shake_px": 2.997,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 0.81,
+      "p95": 2.453,
+      "max": 5.162
+     },
+     "temporal_jitter_px": 0.534
+    },
+    {
+     "kind": "lighting_change",
+     "seed": 1,
+     "suitable": false,
+     "expected_code": "LIGHTING_CHANGE_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.832,
+     "measurements": {
+      "reference_features": 115,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 41.0,
+       "median": 115.0,
+       "max": 119.0
+      },
+      "inlier_ratio": {
+       "min": 0.7857,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.7355,
+       "max": 1.0957
+      },
+      "ncc": {
+       "min": 0.9437,
+       "median": 0.9795,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.7442,
+       "median": 0.9573,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1523,
+       "max": 0.2807
+      },
+      "sharpness_ratio": {
+       "min": 0.2517,
+       "median": 0.6066,
+       "max": 1.3461
+      },
+      "luminance_ratio": {
+       "min": 0.4868,
+       "median": 0.726,
+       "max": 1.0099
+      },
+      "max_product_motion_px": 67.8,
+      "camera_shake_px": 1.019,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 0.197,
+      "p95": 0.625,
+      "max": 1.351
+     },
+     "temporal_jitter_px": 0.142
+    }
+   ]
+  },
+  "test": {
+   "seeds": [
+    2,
+    3,
+    4
+   ],
+   "summary": {
+    "clips": 42,
+    "suitable": 21,
+    "unsuitable": 21,
+    "true_accept": 21,
+    "false_reject": 0,
+    "true_reject": 21,
+    "false_accept": 0,
+    "false_acceptance_rate": 0.0,
+    "false_rejection_rate": 0.0,
+    "rejections_with_expected_reason_code": "18/21",
+    "accepted_corner_error_px_mean": 0.389,
+    "accepted_corner_error_px_max": 3.396,
+    "accepted_temporal_jitter_px_max": 0.179,
+    "output_validation_passed": "21/21",
+    "median_analysis_seconds": 3.95
+   },
+   "rows": [
+    {
+     "kind": "static",
+     "seed": 2,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.699,
+     "measurements": {
+      "reference_features": 108,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 108.0,
+       "median": 108.0,
+       "max": 108.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.0001,
+       "max": 0.0001
+      },
+      "ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0009,
+       "max": 0.001
+      },
+      "sharpness_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "luminance_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": 0.0,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": 0.0,
+     "render_seconds": 0.521,
+     "validation_seconds": 0.639,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.8,
+       "median": 35.44
+      },
+      "scene_psnr_db": {
+       "min": 40.52,
+       "median": 40.95
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "pan_zoom",
+     "seed": 2,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.488,
+     "measurements": {
+      "reference_features": 121,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 103.0,
+       "median": 114.0,
+       "max": 121.0
+      },
+      "inlier_ratio": {
+       "min": 0.9464,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3222,
+       "max": 0.578
+      },
+      "ncc": {
+       "min": 0.9661,
+       "median": 0.9811,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8595,
+       "median": 0.9552,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1595,
+       "max": 0.1764
+      },
+      "sharpness_ratio": {
+       "min": 0.8791,
+       "median": 1.0591,
+       "max": 1.3078
+      },
+      "luminance_ratio": {
+       "min": 0.9928,
+       "median": 1.001,
+       "max": 1.0098
+      },
+      "max_product_motion_px": 67.58,
+      "camera_shake_px": 0.561,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.196,
+      "p95": 0.454,
+      "max": 0.866
+     },
+     "temporal_jitter_px": 0.1,
+     "render_seconds": 0.58,
+     "validation_seconds": 0.677,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.67,
+       "median": 36.29
+      },
+      "scene_psnr_db": {
+       "min": 38.12,
+       "median": 38.84
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "perspective",
+     "seed": 2,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.417,
+     "measurements": {
+      "reference_features": 111,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 111.0,
+       "median": 111.0,
+       "max": 111.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2055,
+       "max": 0.2402
+      },
+      "ncc": {
+       "min": 0.9239,
+       "median": 0.9753,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.6828,
+       "median": 0.9442,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1409,
+       "max": 0.1717
+      },
+      "sharpness_ratio": {
+       "min": 0.7764,
+       "median": 0.8751,
+       "max": 1.0315
+      },
+      "luminance_ratio": {
+       "min": 0.9946,
+       "median": 1.0,
+       "max": 1.0044
+      },
+      "max_product_motion_px": 30.08,
+      "camera_shake_px": 1.125,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 1.916,
+      "p95": 2.943,
+      "max": 3.325
+     },
+     "temporal_jitter_px": 0.122,
+     "render_seconds": 0.557,
+     "validation_seconds": 0.683,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.35,
+       "median": 36.01
+      },
+      "scene_psnr_db": {
+       "min": 37.68,
+       "median": 38.71
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "handheld",
+     "seed": 2,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.265,
+     "measurements": {
+      "reference_features": 111,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 95.0,
+       "median": 110.0,
+       "max": 111.0
+      },
+      "inlier_ratio": {
+       "min": 0.9159,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3088,
+       "max": 0.5112
+      },
+      "ncc": {
+       "min": 0.9465,
+       "median": 0.9626,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8423,
+       "median": 0.9265,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1639,
+       "max": 0.1865
+      },
+      "sharpness_ratio": {
+       "min": 0.8296,
+       "median": 1.0289,
+       "max": 1.2876
+      },
+      "luminance_ratio": {
+       "min": 0.9793,
+       "median": 0.9955,
+       "max": 1.0041
+      },
+      "max_product_motion_px": 68.81,
+      "camera_shake_px": 2.548,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.182,
+      "p95": 0.465,
+      "max": 0.938
+     },
+     "temporal_jitter_px": 0.142,
+     "render_seconds": 0.597,
+     "validation_seconds": 0.685,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.42,
+       "median": 36.03
+      },
+      "scene_psnr_db": {
+       "min": 38.0,
+       "median": 39.07
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "sensor_noise",
+     "seed": 2,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.158,
+     "measurements": {
+      "reference_features": 132,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 102.0,
+       "median": 128.0,
+       "max": 132.0
+      },
+      "inlier_ratio": {
+       "min": 0.9291,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3132,
+       "max": 0.5143
+      },
+      "ncc": {
+       "min": 0.9496,
+       "median": 0.9648,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8593,
+       "median": 0.9265,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1651,
+       "max": 0.1776
+      },
+      "sharpness_ratio": {
+       "min": 0.9067,
+       "median": 1.0746,
+       "max": 1.4083
+      },
+      "luminance_ratio": {
+       "min": 0.9936,
+       "median": 1.0012,
+       "max": 1.0101
+      },
+      "max_product_motion_px": 67.6,
+      "camera_shake_px": 0.358,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.115,
+      "p95": 0.326,
+      "max": 0.557
+     },
+     "temporal_jitter_px": 0.089,
+     "render_seconds": 0.646,
+     "validation_seconds": 0.671,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.71,
+       "median": 36.32
+      },
+      "scene_psnr_db": {
+       "min": 35.06,
+       "median": 35.63
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "mild_lighting",
+     "seed": 2,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 2.439,
+     "measurements": {
+      "reference_features": 122,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 116.0,
+       "median": 118.0,
+       "max": 122.0
+      },
+      "inlier_ratio": {
+       "min": 0.9752,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3174,
+       "max": 0.584
+      },
+      "ncc": {
+       "min": 0.9697,
+       "median": 0.9819,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.9384,
+       "median": 0.9606,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1767,
+       "max": 0.2378
+      },
+      "sharpness_ratio": {
+       "min": 0.7967,
+       "median": 0.9706,
+       "max": 1.34
+      },
+      "luminance_ratio": {
+       "min": 0.86,
+       "median": 0.9363,
+       "max": 1.0188
+      },
+      "max_product_motion_px": 67.49,
+      "camera_shake_px": 1.022,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.137,
+      "p95": 0.307,
+      "max": 1.179
+     },
+     "temporal_jitter_px": 0.122,
+     "render_seconds": 0.612,
+     "validation_seconds": 0.664,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.68,
+       "median": 36.26
+      },
+      "scene_psnr_db": {
+       "min": 37.49,
+       "median": 39.03
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_after",
+     "seed": 2,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.056,
+     "measurements": {
+      "reference_features": 106,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 106.0,
+       "median": 106.0,
+       "max": 106.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3106,
+       "max": 0.5798
+      },
+      "ncc": {
+       "min": 0.9688,
+       "median": 0.9786,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8962,
+       "median": 0.9567,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1572,
+       "max": 0.172
+      },
+      "sharpness_ratio": {
+       "min": 0.9,
+       "median": 1.1031,
+       "max": 1.376
+      },
+      "luminance_ratio": {
+       "min": 0.9905,
+       "median": 1.0006,
+       "max": 1.0091
+      },
+      "max_product_motion_px": 67.58,
+      "camera_shake_px": 0.745,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.179,
+      "p95": 0.46,
+      "max": 1.019
+     },
+     "temporal_jitter_px": 0.123,
+     "render_seconds": 0.568,
+     "validation_seconds": 0.654,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.89,
+       "median": 36.4
+      },
+      "scene_psnr_db": {
+       "min": 38.07,
+       "median": 38.74
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_inside",
+     "seed": 2,
+     "suitable": false,
+     "expected_code": "SCENE_CUT_IN_INTERVAL",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "SCENE_CUT_IN_INTERVAL"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 2.463,
+     "measurements": {
+      "reference_features": 112,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 112.0,
+       "median": 112.0,
+       "max": 112.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1692,
+       "max": 0.3466
+      },
+      "ncc": {
+       "min": 0.9552,
+       "median": 0.9779,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8508,
+       "median": 0.9553,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1543,
+       "max": 0.5793
+      },
+      "sharpness_ratio": {
+       "min": 0.88,
+       "median": 1.0835,
+       "max": 1.4008
+      },
+      "luminance_ratio": {
+       "min": 0.9958,
+       "median": 1.0026,
+       "max": 1.0105
+      },
+      "max_product_motion_px": 32.64,
+      "camera_shake_px": 0.935,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.194,
+      "p95": 0.588,
+      "max": 1.138
+     },
+     "temporal_jitter_px": 0.153
+    },
+    {
+     "kind": "occluder",
+     "seed": 2,
+     "suitable": false,
+     "expected_code": "PARTIAL_OCCLUSION_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 2.602,
+     "measurements": {
+      "reference_features": 123,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 47.0,
+       "median": 67.0,
+       "max": 123.0
+      },
+      "inlier_ratio": {
+       "min": 0.7014,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2066,
+       "max": 1.3037
+      },
+      "ncc": {
+       "min": -0.1214,
+       "median": 0.4074,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.388,
+       "median": -0.1332,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1559,
+       "max": 0.2102
+      },
+      "sharpness_ratio": {
+       "min": 0.651,
+       "median": 1.0081,
+       "max": 1.3408
+      },
+      "luminance_ratio": {
+       "min": 0.9,
+       "median": 0.995,
+       "max": 1.0137
+      },
+      "max_product_motion_px": 89.42,
+      "camera_shake_px": 14.962,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 32.296,
+      "p95": 120.274,
+      "max": 139.757
+     },
+     "temporal_jitter_px": 3.569
+    },
+    {
+     "kind": "low_texture",
+     "seed": 2,
+     "suitable": false,
+     "expected_code": "LOW_TEXTURE",
+     "decision": "FAILED",
+     "codes": [
+      "LOW_TEXTURE",
+      "TRACKING_LOST",
+      "INCOMPLETE_VALIDATION"
+     ],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.028,
+     "measurements": {
+      "reference_features": 4,
+      "textured_cells": 12,
+      "inliers": null,
+      "inlier_ratio": null,
+      "rmse_px": null,
+      "ncc": null,
+      "min_cell_ncc": null,
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.0
+      },
+      "sharpness_ratio": null,
+      "luminance_ratio": null,
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": null,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": null
+    },
+    {
+     "kind": "deforming",
+     "seed": 2,
+     "suitable": false,
+     "expected_code": "NON_PLANAR_OR_UNSTABLE",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.533,
+     "measurements": {
+      "reference_features": 133,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 33.0,
+       "median": 73.0,
+       "max": 133.0
+      },
+      "inlier_ratio": {
+       "min": 0.5568,
+       "median": 0.7073,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 1.4449,
+       "max": 1.7703
+      },
+      "ncc": {
+       "min": 0.0212,
+       "median": 0.1032,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.5133,
+       "median": -0.3066,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1455,
+       "max": 0.1639
+      },
+      "sharpness_ratio": {
+       "min": 0.9052,
+       "median": 1.0872,
+       "max": 1.3251
+      },
+      "luminance_ratio": {
+       "min": 1.0,
+       "median": 1.0357,
+       "max": 1.0916
+      },
+      "max_product_motion_px": 98.86,
+      "camera_shake_px": 14.332,
+      "tracker_reseeds": 18
+     },
+     "corner_error_px": {
+      "mean": 15.525,
+      "p95": 35.968,
+      "max": 42.084
+     },
+     "temporal_jitter_px": 0.938
+    },
+    {
+     "kind": "exits_frame",
+     "seed": 2,
+     "suitable": false,
+     "expected_code": "PRODUCT_OUT_OF_FRAME",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "NON_PLANAR_OR_UNSTABLE",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED",
+      "PRODUCT_OUT_OF_FRAME"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 4.447,
+     "measurements": {
+      "reference_features": 102,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 10.0,
+       "median": 102.0,
+       "max": 102.0
+      },
+      "inlier_ratio": {
+       "min": 0.9155,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1128,
+       "max": 0.4658
+      },
+      "ncc": {
+       "min": 0.0752,
+       "median": 0.9511,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.1762,
+       "median": 0.8643,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1527,
+       "max": 0.1701
+      },
+      "sharpness_ratio": {
+       "min": 0.1663,
+       "median": 0.8273,
+       "max": 1.0427
+      },
+      "luminance_ratio": {
+       "min": 0.0827,
+       "median": 1.0009,
+       "max": 1.008
+      },
+      "max_product_motion_px": 255.69,
+      "camera_shake_px": 15.46,
+      "tracker_reseeds": 6
+     },
+     "corner_error_px": {
+      "mean": 0.799,
+      "p95": 4.854,
+      "max": 22.079
+     },
+     "temporal_jitter_px": 1.316
+    },
+    {
+     "kind": "motion_blur",
+     "seed": 2,
+     "suitable": false,
+     "expected_code": "MOTION_BLUR_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 5.407,
+     "measurements": {
+      "reference_features": 113,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 25.0,
+       "median": 113.0,
+       "max": 148.0
+      },
+      "inlier_ratio": {
+       "min": 0.7812,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.4011,
+       "max": 0.6919
+      },
+      "ncc": {
+       "min": 0.5658,
+       "median": 0.757,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.1359,
+       "median": 0.2491,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1178,
+       "max": 0.295
+      },
+      "sharpness_ratio": {
+       "min": 0.1708,
+       "median": 0.4934,
+       "max": 1.3177
+      },
+      "luminance_ratio": {
+       "min": 0.9943,
+       "median": 1.0076,
+       "max": 1.0197
+      },
+      "max_product_motion_px": 182.29,
+      "camera_shake_px": 5.644,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 1.037,
+      "p95": 3.308,
+      "max": 5.692
+     },
+     "temporal_jitter_px": 0.599
+    },
+    {
+     "kind": "lighting_change",
+     "seed": 2,
+     "suitable": false,
+     "expected_code": "LIGHTING_CHANGE_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.133,
+     "measurements": {
+      "reference_features": 129,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 48.0,
+       "median": 108.0,
+       "max": 149.0
+      },
+      "inlier_ratio": {
+       "min": 0.8193,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.5238,
+       "max": 0.9237
+      },
+      "ncc": {
+       "min": 0.9565,
+       "median": 0.9784,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.872,
+       "median": 0.9587,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1538,
+       "max": 0.2662
+      },
+      "sharpness_ratio": {
+       "min": 0.2484,
+       "median": 0.5817,
+       "max": 1.1372
+      },
+      "luminance_ratio": {
+       "min": 0.4871,
+       "median": 0.7245,
+       "max": 1.0097
+      },
+      "max_product_motion_px": 67.51,
+      "camera_shake_px": 0.589,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 0.208,
+      "p95": 0.606,
+      "max": 1.119
+     },
+     "temporal_jitter_px": 0.134
+    },
+    {
+     "kind": "static",
+     "seed": 3,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.742,
+     "measurements": {
+      "reference_features": 125,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 125.0,
+       "median": 125.0,
+       "max": 125.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.0005,
+       "max": 0.0005
+      },
+      "ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.0033
+      },
+      "sharpness_ratio": {
+       "min": 1.0,
+       "median": 1.0001,
+       "max": 1.0001
+      },
+      "luminance_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": 0.001,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.002,
+      "p95": 0.004,
+      "max": 0.004
+     },
+     "temporal_jitter_px": 0.0,
+     "render_seconds": 0.533,
+     "validation_seconds": 0.7,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 33.78,
+       "median": 35.51
+      },
+      "scene_psnr_db": {
+       "min": 40.45,
+       "median": 40.93
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "pan_zoom",
+     "seed": 3,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.371,
+     "measurements": {
+      "reference_features": 125,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 125.0,
+       "median": 125.0,
+       "max": 125.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3129,
+       "max": 0.5739
+      },
+      "ncc": {
+       "min": 0.9611,
+       "median": 0.9773,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8664,
+       "median": 0.9528,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1603,
+       "max": 0.1733
+      },
+      "sharpness_ratio": {
+       "min": 0.9153,
+       "median": 1.0813,
+       "max": 1.2781
+      },
+      "luminance_ratio": {
+       "min": 0.993,
+       "median": 1.0021,
+       "max": 1.0118
+      },
+      "max_product_motion_px": 67.77,
+      "camera_shake_px": 0.91,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.183,
+      "p95": 0.473,
+      "max": 0.971
+     },
+     "temporal_jitter_px": 0.121,
+     "render_seconds": 0.571,
+     "validation_seconds": 0.702,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.83,
+       "median": 36.35
+      },
+      "scene_psnr_db": {
+       "min": 38.22,
+       "median": 39.03
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "perspective",
+     "seed": 3,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.555,
+     "measurements": {
+      "reference_features": 116,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 106.0,
+       "median": 106.0,
+       "max": 116.0
+      },
+      "inlier_ratio": {
+       "min": 0.9298,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1725,
+       "max": 0.2256
+      },
+      "ncc": {
+       "min": 0.9189,
+       "median": 0.9656,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.7954,
+       "median": 0.9348,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1372,
+       "max": 0.1638
+      },
+      "sharpness_ratio": {
+       "min": 0.8446,
+       "median": 0.9775,
+       "max": 1.2798
+      },
+      "luminance_ratio": {
+       "min": 0.9897,
+       "median": 0.9983,
+       "max": 1.0062
+      },
+      "max_product_motion_px": 30.88,
+      "camera_shake_px": 0.896,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 1.866,
+      "p95": 2.738,
+      "max": 3.073
+     },
+     "temporal_jitter_px": 0.12,
+     "render_seconds": 0.568,
+     "validation_seconds": 0.718,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.63,
+       "median": 36.02
+      },
+      "scene_psnr_db": {
+       "min": 38.31,
+       "median": 39.32
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "handheld",
+     "seed": 3,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.976,
+     "measurements": {
+      "reference_features": 135,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 92.0,
+       "median": 133.0,
+       "max": 135.0
+      },
+      "inlier_ratio": {
+       "min": 0.904,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3,
+       "max": 0.5467
+      },
+      "ncc": {
+       "min": 0.9606,
+       "median": 0.9738,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8923,
+       "median": 0.9424,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1629,
+       "max": 0.1826
+      },
+      "sharpness_ratio": {
+       "min": 0.9148,
+       "median": 1.0918,
+       "max": 1.3864
+      },
+      "luminance_ratio": {
+       "min": 0.989,
+       "median": 0.9969,
+       "max": 1.0023
+      },
+      "max_product_motion_px": 68.65,
+      "camera_shake_px": 2.216,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.131,
+      "p95": 0.322,
+      "max": 0.566
+     },
+     "temporal_jitter_px": 0.082,
+     "render_seconds": 0.569,
+     "validation_seconds": 0.71,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 33.18,
+       "median": 35.81
+      },
+      "scene_psnr_db": {
+       "min": 37.93,
+       "median": 38.75
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "sensor_noise",
+     "seed": 3,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.967,
+     "measurements": {
+      "reference_features": 130,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 106.0,
+       "median": 129.0,
+       "max": 130.0
+      },
+      "inlier_ratio": {
+       "min": 0.8898,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3533,
+       "max": 0.6062
+      },
+      "ncc": {
+       "min": 0.9425,
+       "median": 0.97,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.595,
+       "median": 0.9275,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1607,
+       "max": 0.1754
+      },
+      "sharpness_ratio": {
+       "min": 0.9148,
+       "median": 1.0922,
+       "max": 1.3895
+      },
+      "luminance_ratio": {
+       "min": 0.9915,
+       "median": 1.0021,
+       "max": 1.0123
+      },
+      "max_product_motion_px": 67.81,
+      "camera_shake_px": 0.664,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.19,
+      "p95": 0.559,
+      "max": 1.313
+     },
+     "temporal_jitter_px": 0.138,
+     "render_seconds": 0.66,
+     "validation_seconds": 0.767,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.3,
+       "median": 36.24
+      },
+      "scene_psnr_db": {
+       "min": 34.91,
+       "median": 35.49
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "mild_lighting",
+     "seed": 3,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.383,
+     "measurements": {
+      "reference_features": 118,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 110.0,
+       "median": 115.0,
+       "max": 118.0
+      },
+      "inlier_ratio": {
+       "min": 0.9565,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3426,
+       "max": 0.5337
+      },
+      "ncc": {
+       "min": 0.9533,
+       "median": 0.9761,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8459,
+       "median": 0.9522,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1694,
+       "max": 0.2459
+      },
+      "sharpness_ratio": {
+       "min": 0.781,
+       "median": 0.9633,
+       "max": 1.261
+      },
+      "luminance_ratio": {
+       "min": 0.8623,
+       "median": 0.935,
+       "max": 1.0188
+      },
+      "max_product_motion_px": 67.81,
+      "camera_shake_px": 0.744,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.244,
+      "p95": 0.666,
+      "max": 1.146
+     },
+     "temporal_jitter_px": 0.179,
+     "render_seconds": 0.575,
+     "validation_seconds": 0.74,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.82,
+       "median": 36.29
+      },
+      "scene_psnr_db": {
+       "min": 37.75,
+       "median": 39.12
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_after",
+     "seed": 3,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 2.966,
+     "measurements": {
+      "reference_features": 120,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 119.0,
+       "median": 120.0,
+       "max": 120.0
+      },
+      "inlier_ratio": {
+       "min": 0.9917,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.32,
+       "max": 0.6188
+      },
+      "ncc": {
+       "min": 0.9351,
+       "median": 0.9725,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.4902,
+       "median": 0.9209,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1577,
+       "max": 0.1792
+      },
+      "sharpness_ratio": {
+       "min": 0.878,
+       "median": 1.16,
+       "max": 1.5363
+      },
+      "luminance_ratio": {
+       "min": 0.9926,
+       "median": 1.0021,
+       "max": 1.011
+      },
+      "max_product_motion_px": 68.3,
+      "camera_shake_px": 0.783,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.207,
+      "p95": 0.586,
+      "max": 1.003
+     },
+     "temporal_jitter_px": 0.134,
+     "render_seconds": 0.574,
+     "validation_seconds": 0.723,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.73,
+       "median": 36.52
+      },
+      "scene_psnr_db": {
+       "min": 38.22,
+       "median": 38.84
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_inside",
+     "seed": 3,
+     "suitable": false,
+     "expected_code": "SCENE_CUT_IN_INTERVAL",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "SCENE_CUT_IN_INTERVAL"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 2.061,
+     "measurements": {
+      "reference_features": 112,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 109.0,
+       "median": 111.0,
+       "max": 112.0
+      },
+      "inlier_ratio": {
+       "min": 0.9909,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1839,
+       "max": 0.3353
+      },
+      "ncc": {
+       "min": 0.9636,
+       "median": 0.9739,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.9049,
+       "median": 0.9297,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1644,
+       "max": 0.5916
+      },
+      "sharpness_ratio": {
+       "min": 0.8775,
+       "median": 1.0385,
+       "max": 1.432
+      },
+      "luminance_ratio": {
+       "min": 0.9953,
+       "median": 1.0041,
+       "max": 1.0125
+      },
+      "max_product_motion_px": 33.23,
+      "camera_shake_px": 0.295,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.126,
+      "p95": 0.295,
+      "max": 0.425
+     },
+     "temporal_jitter_px": 0.058
+    },
+    {
+     "kind": "occluder",
+     "seed": 3,
+     "suitable": false,
+     "expected_code": "PARTIAL_OCCLUSION_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 4.597,
+     "measurements": {
+      "reference_features": 114,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 45.0,
+       "median": 79.0,
+       "max": 115.0
+      },
+      "inlier_ratio": {
+       "min": 0.7632,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1939,
+       "max": 0.9883
+      },
+      "ncc": {
+       "min": -0.0042,
+       "median": 0.4806,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.559,
+       "median": -0.0596,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1598,
+       "max": 0.2057
+      },
+      "sharpness_ratio": {
+       "min": 0.653,
+       "median": 1.0,
+       "max": 1.4104
+      },
+      "luminance_ratio": {
+       "min": 0.9963,
+       "median": 1.0674,
+       "max": 1.1962
+      },
+      "max_product_motion_px": 91.51,
+      "camera_shake_px": 14.927,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 32.525,
+      "p95": 122.544,
+      "max": 144.042
+     },
+     "temporal_jitter_px": 3.686
+    },
+    {
+     "kind": "low_texture",
+     "seed": 3,
+     "suitable": false,
+     "expected_code": "LOW_TEXTURE",
+     "decision": "FAILED",
+     "codes": [
+      "LOW_TEXTURE",
+      "TRACKING_LOST",
+      "INCOMPLETE_VALIDATION"
+     ],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.026,
+     "measurements": {
+      "reference_features": 4,
+      "textured_cells": 12,
+      "inliers": null,
+      "inlier_ratio": null,
+      "rmse_px": null,
+      "ncc": null,
+      "min_cell_ncc": null,
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.0
+      },
+      "sharpness_ratio": null,
+      "luminance_ratio": null,
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": null,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": null
+    },
+    {
+     "kind": "deforming",
+     "seed": 3,
+     "suitable": false,
+     "expected_code": "NON_PLANAR_OR_UNSTABLE",
+     "decision": "FAILED",
+     "codes": [
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 5.653,
+     "measurements": {
+      "reference_features": 105,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 28.0,
+       "median": 62.0,
+       "max": 135.0
+      },
+      "inlier_ratio": {
+       "min": 0.5517,
+       "median": 0.76,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 1.3694,
+       "max": 1.8006
+      },
+      "ncc": {
+       "min": -0.0809,
+       "median": 0.0177,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.6042,
+       "median": -0.2574,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1502,
+       "max": 0.1676
+      },
+      "sharpness_ratio": {
+       "min": 0.8881,
+       "median": 1.6619,
+       "max": 2.0485
+      },
+      "luminance_ratio": {
+       "min": 0.9984,
+       "median": 1.0461,
+       "max": 1.0753
+      },
+      "max_product_motion_px": 114.85,
+      "camera_shake_px": 14.209,
+      "tracker_reseeds": 14
+     },
+     "corner_error_px": {
+      "mean": 30.271,
+      "p95": 79.053,
+      "max": 86.264
+     },
+     "temporal_jitter_px": 2.06
+    },
+    {
+     "kind": "exits_frame",
+     "seed": 3,
+     "suitable": false,
+     "expected_code": "PRODUCT_OUT_OF_FRAME",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "NON_PLANAR_OR_UNSTABLE",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED",
+      "PRODUCT_OUT_OF_FRAME"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 5.004,
+     "measurements": {
+      "reference_features": 121,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 11.0,
+       "median": 121.0,
+       "max": 121.0
+      },
+      "inlier_ratio": {
+       "min": 0.9322,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.143,
+       "max": 0.4734
+      },
+      "ncc": {
+       "min": 0.0533,
+       "median": 0.9227,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.165,
+       "median": 0.7053,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1564,
+       "max": 0.1704
+      },
+      "sharpness_ratio": {
+       "min": 0.1141,
+       "median": 0.8511,
+       "max": 1.0615
+      },
+      "luminance_ratio": {
+       "min": 0.0475,
+       "median": 1.0004,
+       "max": 1.0085
+      },
+      "max_product_motion_px": 295.96,
+      "camera_shake_px": 7.642,
+      "tracker_reseeds": 7
+     },
+     "corner_error_px": {
+      "mean": 1.448,
+      "p95": 5.496,
+      "max": 39.706
+     },
+     "temporal_jitter_px": 1.425
+    },
+    {
+     "kind": "motion_blur",
+     "seed": 3,
+     "suitable": false,
+     "expected_code": "MOTION_BLUR_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.297,
+     "measurements": {
+      "reference_features": 118,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 23.0,
+       "median": 118.0,
+       "max": 168.0
+      },
+      "inlier_ratio": {
+       "min": 0.7667,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.4851,
+       "max": 1.1572
+      },
+      "ncc": {
+       "min": 0.571,
+       "median": 0.6844,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.1821,
+       "median": 0.142,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1212,
+       "max": 0.2819
+      },
+      "sharpness_ratio": {
+       "min": 0.1372,
+       "median": 0.5132,
+       "max": 1.4733
+      },
+      "luminance_ratio": {
+       "min": 0.9727,
+       "median": 1.0079,
+       "max": 1.0298
+      },
+      "max_product_motion_px": 185.98,
+      "camera_shake_px": 3.162,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 2.129,
+      "p95": 6.912,
+      "max": 11.167
+     },
+     "temporal_jitter_px": 1.019
+    },
+    {
+     "kind": "lighting_change",
+     "seed": 3,
+     "suitable": false,
+     "expected_code": "LIGHTING_CHANGE_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.276,
+     "measurements": {
+      "reference_features": 106,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 62.0,
+       "median": 97.0,
+       "max": 106.0
+      },
+      "inlier_ratio": {
+       "min": 0.8977,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.5886,
+       "max": 1.0179
+      },
+      "ncc": {
+       "min": 0.9666,
+       "median": 0.9795,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8705,
+       "median": 0.9581,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1489,
+       "max": 0.2587
+      },
+      "sharpness_ratio": {
+       "min": 0.266,
+       "median": 0.6136,
+       "max": 1.1953
+      },
+      "luminance_ratio": {
+       "min": 0.486,
+       "median": 0.7252,
+       "max": 1.0097
+      },
+      "max_product_motion_px": 67.72,
+      "camera_shake_px": 0.432,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.165,
+      "p95": 0.379,
+      "max": 0.66
+     },
+     "temporal_jitter_px": 0.085
+    },
+    {
+     "kind": "static",
+     "seed": 4,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.683,
+     "measurements": {
+      "reference_features": 110,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 110.0,
+       "median": 110.0,
+       "max": 110.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.0001,
+       "max": 0.0002
+      },
+      "ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.0026
+      },
+      "sharpness_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "luminance_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": 0.0,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": 0.0,
+     "render_seconds": 0.595,
+     "validation_seconds": 0.763,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 35.29,
+       "median": 35.82
+      },
+      "scene_psnr_db": {
+       "min": 40.22,
+       "median": 40.56
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "pan_zoom",
+     "seed": 4,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.024,
+     "measurements": {
+      "reference_features": 109,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 102.0,
+       "median": 108.0,
+       "max": 109.0
+      },
+      "inlier_ratio": {
+       "min": 0.9808,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3084,
+       "max": 0.5569
+      },
+      "ncc": {
+       "min": 0.9738,
+       "median": 0.9814,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.9411,
+       "median": 0.96,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1578,
+       "max": 0.1727
+      },
+      "sharpness_ratio": {
+       "min": 0.8634,
+       "median": 1.0864,
+       "max": 1.4729
+      },
+      "luminance_ratio": {
+       "min": 0.9931,
+       "median": 1.001,
+       "max": 1.0103
+      },
+      "max_product_motion_px": 67.48,
+      "camera_shake_px": 0.264,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.117,
+      "p95": 0.235,
+      "max": 0.397
+     },
+     "temporal_jitter_px": 0.045,
+     "render_seconds": 0.587,
+     "validation_seconds": 0.725,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.96,
+       "median": 36.49
+      },
+      "scene_psnr_db": {
+       "min": 38.56,
+       "median": 39.24
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "perspective",
+     "seed": 4,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 5.915,
+     "measurements": {
+      "reference_features": 111,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 111.0,
+       "median": 111.0,
+       "max": 111.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.2165,
+       "max": 0.2654
+      },
+      "ncc": {
+       "min": 0.9282,
+       "median": 0.9706,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.5131,
+       "median": 0.93,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.147,
+       "max": 0.1796
+      },
+      "sharpness_ratio": {
+       "min": 0.8246,
+       "median": 0.9798,
+       "max": 1.2104
+      },
+      "luminance_ratio": {
+       "min": 0.994,
+       "median": 1.0011,
+       "max": 1.0092
+      },
+      "max_product_motion_px": 30.67,
+      "camera_shake_px": 1.01,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 1.883,
+      "p95": 2.751,
+      "max": 3.396
+     },
+     "temporal_jitter_px": 0.108,
+     "render_seconds": 0.574,
+     "validation_seconds": 0.721,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.32,
+       "median": 35.97
+      },
+      "scene_psnr_db": {
+       "min": 38.4,
+       "median": 39.33
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "handheld",
+     "seed": 4,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.923,
+     "measurements": {
+      "reference_features": 113,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 110.0,
+       "median": 111.0,
+       "max": 113.0
+      },
+      "inlier_ratio": {
+       "min": 0.9823,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3195,
+       "max": 0.6135
+      },
+      "ncc": {
+       "min": 0.9666,
+       "median": 0.9792,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.9134,
+       "median": 0.9529,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1693,
+       "max": 0.1929
+      },
+      "sharpness_ratio": {
+       "min": 0.8534,
+       "median": 1.0939,
+       "max": 1.2617
+      },
+      "luminance_ratio": {
+       "min": 0.9847,
+       "median": 0.9963,
+       "max": 1.0046
+      },
+      "max_product_motion_px": 66.97,
+      "camera_shake_px": 2.465,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.157,
+      "p95": 0.436,
+      "max": 0.693
+     },
+     "temporal_jitter_px": 0.118,
+     "render_seconds": 0.575,
+     "validation_seconds": 0.725,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.33,
+       "median": 35.84
+      },
+      "scene_psnr_db": {
+       "min": 38.31,
+       "median": 38.99
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "sensor_noise",
+     "seed": 4,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.663,
+     "measurements": {
+      "reference_features": 119,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 119.0,
+       "median": 119.0,
+       "max": 119.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.307,
+       "max": 0.5844
+      },
+      "ncc": {
+       "min": 0.9533,
+       "median": 0.9697,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8457,
+       "median": 0.9342,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.164,
+       "max": 0.1806
+      },
+      "sharpness_ratio": {
+       "min": 0.9558,
+       "median": 1.1159,
+       "max": 1.5083
+      },
+      "luminance_ratio": {
+       "min": 0.9919,
+       "median": 1.001,
+       "max": 1.01
+      },
+      "max_product_motion_px": 67.73,
+      "camera_shake_px": 0.58,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.115,
+      "p95": 0.28,
+      "max": 0.774
+     },
+     "temporal_jitter_px": 0.061,
+     "render_seconds": 0.637,
+     "validation_seconds": 0.753,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.73,
+       "median": 36.41
+      },
+      "scene_psnr_db": {
+       "min": 35.06,
+       "median": 35.64
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "mild_lighting",
+     "seed": 4,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 4.554,
+     "measurements": {
+      "reference_features": 120,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 114.0,
+       "median": 116.0,
+       "max": 120.0
+      },
+      "inlier_ratio": {
+       "min": 0.9833,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.3536,
+       "max": 0.5766
+      },
+      "ncc": {
+       "min": 0.9431,
+       "median": 0.9735,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8305,
+       "median": 0.9542,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1641,
+       "max": 0.2202
+      },
+      "sharpness_ratio": {
+       "min": 0.7856,
+       "median": 0.97,
+       "max": 1.3494
+      },
+      "luminance_ratio": {
+       "min": 0.8627,
+       "median": 0.9354,
+       "max": 1.0197
+      },
+      "max_product_motion_px": 67.68,
+      "camera_shake_px": 0.703,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.172,
+      "p95": 0.541,
+      "max": 1.081
+     },
+     "temporal_jitter_px": 0.163,
+     "render_seconds": 0.581,
+     "validation_seconds": 0.757,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.52,
+       "median": 36.21
+      },
+      "scene_psnr_db": {
+       "min": 37.7,
+       "median": 39.07
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_after",
+     "seed": 4,
+     "suitable": true,
+     "expected_code": null,
+     "decision": "PASSED",
+     "codes": [],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.284,
+     "measurements": {
+      "reference_features": 105,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 105.0,
+       "median": 105.0,
+       "max": 105.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.338,
+       "max": 0.638
+      },
+      "ncc": {
+       "min": 0.9656,
+       "median": 0.9775,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8013,
+       "median": 0.9526,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1561,
+       "max": 0.17
+      },
+      "sharpness_ratio": {
+       "min": 0.8973,
+       "median": 1.1045,
+       "max": 1.5781
+      },
+      "luminance_ratio": {
+       "min": 0.9903,
+       "median": 1.0011,
+       "max": 1.011
+      },
+      "max_product_motion_px": 67.73,
+      "camera_shake_px": 0.496,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.174,
+      "p95": 0.43,
+      "max": 0.693
+     },
+     "temporal_jitter_px": 0.077,
+     "render_seconds": 0.572,
+     "validation_seconds": 0.753,
+     "output_validation": "PASSED",
+     "output_validation_detail": {
+      "failures": [],
+      "product_psnr_db": {
+       "min": 34.73,
+       "median": 36.46
+      },
+      "scene_psnr_db": {
+       "min": 38.64,
+       "median": 39.25
+      },
+      "interval_frames_checked": 61,
+      "interval_frames_expected": 61
+     }
+    },
+    {
+     "kind": "cut_inside",
+     "seed": 4,
+     "suitable": false,
+     "expected_code": "SCENE_CUT_IN_INTERVAL",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "SCENE_CUT_IN_INTERVAL"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 1.422,
+     "measurements": {
+      "reference_features": 119,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 119.0,
+       "median": 119.0,
+       "max": 119.0
+      },
+      "inlier_ratio": {
+       "min": 1.0,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.1703,
+       "max": 0.2789
+      },
+      "ncc": {
+       "min": 0.9699,
+       "median": 0.9795,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.8692,
+       "median": 0.9581,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1618,
+       "max": 0.5481
+      },
+      "sharpness_ratio": {
+       "min": 0.8946,
+       "median": 1.0825,
+       "max": 1.3982
+      },
+      "luminance_ratio": {
+       "min": 0.9928,
+       "median": 1.0017,
+       "max": 1.0104
+      },
+      "max_product_motion_px": 32.79,
+      "camera_shake_px": 0.392,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.165,
+      "p95": 0.343,
+      "max": 0.644
+     },
+     "temporal_jitter_px": 0.076
+    },
+    {
+     "kind": "occluder",
+     "seed": 4,
+     "suitable": false,
+     "expected_code": "PARTIAL_OCCLUSION_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 2.827,
+     "measurements": {
+      "reference_features": 113,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 42.0,
+       "median": 83.0,
+       "max": 113.0
+      },
+      "inlier_ratio": {
+       "min": 0.7083,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.245,
+       "max": 0.8923
+      },
+      "ncc": {
+       "min": -0.082,
+       "median": 0.4439,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.4579,
+       "median": -0.1067,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1608,
+       "max": 0.1936
+      },
+      "sharpness_ratio": {
+       "min": 0.698,
+       "median": 0.9852,
+       "max": 1.2822
+      },
+      "luminance_ratio": {
+       "min": 0.9963,
+       "median": 1.032,
+       "max": 1.0948
+      },
+      "max_product_motion_px": 85.91,
+      "camera_shake_px": 18.992,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 28.994,
+      "p95": 114.21,
+      "max": 137.776
+     },
+     "temporal_jitter_px": 3.154
+    },
+    {
+     "kind": "low_texture",
+     "seed": 4,
+     "suitable": false,
+     "expected_code": "LOW_TEXTURE",
+     "decision": "FAILED",
+     "codes": [
+      "LOW_TEXTURE",
+      "TRACKING_LOST",
+      "INCOMPLETE_VALIDATION"
+     ],
+     "scene_class": "A_STATIC_PLANAR",
+     "analysis_seconds": 0.028,
+     "measurements": {
+      "reference_features": 4,
+      "textured_cells": 12,
+      "inliers": null,
+      "inlier_ratio": null,
+      "rmse_px": null,
+      "ncc": null,
+      "min_cell_ncc": null,
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.0,
+       "max": 0.0
+      },
+      "sharpness_ratio": null,
+      "luminance_ratio": null,
+      "max_product_motion_px": 0.0,
+      "camera_shake_px": null,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+     },
+     "temporal_jitter_px": null
+    },
+    {
+     "kind": "deforming",
+     "seed": 4,
+     "suitable": false,
+     "expected_code": "NON_PLANAR_OR_UNSTABLE",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_DRIFT"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 2.999,
+     "measurements": {
+      "reference_features": 110,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 29.0,
+       "median": 68.0,
+       "max": 154.0
+      },
+      "inlier_ratio": {
+       "min": 0.5417,
+       "median": 0.7397,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 1.4499,
+       "max": 1.8355
+      },
+      "ncc": {
+       "min": 0.0294,
+       "median": 0.1299,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.3031,
+       "median": -0.2308,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1569,
+       "max": 0.1728
+      },
+      "sharpness_ratio": {
+       "min": 0.9015,
+       "median": 1.4233,
+       "max": 1.6265
+      },
+      "luminance_ratio": {
+       "min": 0.9826,
+       "median": 1.0039,
+       "max": 1.0174
+      },
+      "max_product_motion_px": 174.52,
+      "camera_shake_px": 31.588,
+      "tracker_reseeds": 13
+     },
+     "corner_error_px": {
+      "mean": 30.268,
+      "p95": 145.529,
+      "max": 204.317
+     },
+     "temporal_jitter_px": 3.067
+    },
+    {
+     "kind": "exits_frame",
+     "seed": 4,
+     "suitable": false,
+     "expected_code": "PRODUCT_OUT_OF_FRAME",
+     "decision": "FAILED",
+     "codes": [
+      "TRACKING_LOST",
+      "NON_PLANAR_OR_UNSTABLE",
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED",
+      "PRODUCT_OUT_OF_FRAME"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 4.59,
+     "measurements": {
+      "reference_features": 124,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 10.0,
+       "median": 124.0,
+       "max": 124.0
+      },
+      "inlier_ratio": {
+       "min": 0.8889,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.144,
+       "max": 0.4351
+      },
+      "ncc": {
+       "min": -0.0112,
+       "median": 0.9328,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": -0.1683,
+       "median": 0.8248,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1566,
+       "max": 0.1702
+      },
+      "sharpness_ratio": {
+       "min": 0.1262,
+       "median": 0.8406,
+       "max": 1.045
+      },
+      "luminance_ratio": {
+       "min": 0.0435,
+       "median": 1.0009,
+       "max": 1.0098
+      },
+      "max_product_motion_px": 289.65,
+      "camera_shake_px": 11.001,
+      "tracker_reseeds": 8
+     },
+     "corner_error_px": {
+      "mean": 1.537,
+      "p95": 8.703,
+      "max": 31.805
+     },
+     "temporal_jitter_px": 2.163
+    },
+    {
+     "kind": "motion_blur",
+     "seed": 4,
+     "suitable": false,
+     "expected_code": "MOTION_BLUR_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "PARTIAL_OCCLUSION_UNSUPPORTED",
+      "TRACKING_DRIFT",
+      "MOTION_BLUR_UNSUPPORTED"
+     ],
+     "scene_class": "C_PARTIAL_OCCLUSION",
+     "analysis_seconds": 5.7,
+     "measurements": {
+      "reference_features": 115,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 18.0,
+       "median": 115.0,
+       "max": 132.0
+      },
+      "inlier_ratio": {
+       "min": 0.75,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.4372,
+       "max": 1.1569
+      },
+      "ncc": {
+       "min": 0.5984,
+       "median": 0.7383,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.2706,
+       "median": 0.3898,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1171,
+       "max": 0.3126
+      },
+      "sharpness_ratio": {
+       "min": 0.1251,
+       "median": 0.248,
+       "max": 1.5184
+      },
+      "luminance_ratio": {
+       "min": 0.9785,
+       "median": 1.0004,
+       "max": 1.0129
+      },
+      "max_product_motion_px": 188.0,
+      "camera_shake_px": 4.718,
+      "tracker_reseeds": 1
+     },
+     "corner_error_px": {
+      "mean": 2.77,
+      "p95": 8.9,
+      "max": 11.298
+     },
+     "temporal_jitter_px": 0.864
+    },
+    {
+     "kind": "lighting_change",
+     "seed": 4,
+     "suitable": false,
+     "expected_code": "LIGHTING_CHANGE_UNSUPPORTED",
+     "decision": "FAILED",
+     "codes": [
+      "MOTION_BLUR_UNSUPPORTED",
+      "LIGHTING_CHANGE_UNSUPPORTED"
+     ],
+     "scene_class": "B_MOVING_PLANAR",
+     "analysis_seconds": 3.339,
+     "measurements": {
+      "reference_features": 119,
+      "textured_cells": 16,
+      "inliers": {
+       "min": 70.0,
+       "median": 114.0,
+       "max": 119.0
+      },
+      "inlier_ratio": {
+       "min": 0.835,
+       "median": 1.0,
+       "max": 1.0
+      },
+      "rmse_px": {
+       "min": 0.0,
+       "median": 0.5153,
+       "max": 0.9045
+      },
+      "ncc": {
+       "min": 0.9505,
+       "median": 0.9742,
+       "max": 1.0
+      },
+      "min_cell_ncc": {
+       "min": 0.7372,
+       "median": 0.95,
+       "max": 1.0
+      },
+      "cut_score": {
+       "min": 0.0,
+       "median": 0.1595,
+       "max": 0.2617
+      },
+      "sharpness_ratio": {
+       "min": 0.2529,
+       "median": 0.5871,
+       "max": 1.2557
+      },
+      "luminance_ratio": {
+       "min": 0.4874,
+       "median": 0.726,
+       "max": 1.013
+      },
+      "max_product_motion_px": 67.88,
+      "camera_shake_px": 0.427,
+      "tracker_reseeds": 0
+     },
+     "corner_error_px": {
+      "mean": 0.152,
+      "p95": 0.358,
+      "max": 0.613
+     },
+     "temporal_jitter_px": 0.082
+    }
+   ]
+  }
+ }
+}

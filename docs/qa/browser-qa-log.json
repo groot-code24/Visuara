@@ -1,0 +1,59 @@
+{
+ "chrome": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+ "steps": [
+  {
+   "step": "Brand registers through the UI",
+   "ok": true,
+   "seconds": 1.66
+  },
+  {
+   "step": "Brand creates a creator invitation",
+   "ok": true,
+   "seconds": 0.67
+  },
+  {
+   "step": "Creator registers with the invitation, uploads and analyses a video",
+   "ok": true,
+   "seconds": 2.26
+  },
+  {
+   "step": "Brand adds a product image",
+   "ok": true,
+   "seconds": 1.46
+  },
+  {
+   "step": "Brand places the product with the corner editor; quality check passes",
+   "ok": true,
+   "seconds": 7.64
+  },
+  {
+   "step": "Brand accepts fit and proposes",
+   "ok": true,
+   "seconds": 1.94
+  },
+  {
+   "step": "Creator reviews, consents and approves",
+   "ok": true,
+   "seconds": 2.27
+  },
+  {
+   "step": "Brand approves, renders, sees validation, downloads",
+   "ok": true,
+   "seconds": 6.14
+  },
+  {
+   "step": "Audit trail shows the full lifecycle",
+   "ok": true,
+   "seconds": 1.12
+  },
+  {
+   "step": "Phone-width layout (390 px) has no horizontal scroll",
+   "ok": true,
+   "seconds": 1.38
+  },
+  {
+   "step": "No console errors or uncaught exceptions",
+   "ok": true
+  }
+ ]
+}

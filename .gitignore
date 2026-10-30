@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+data/*
+!data/.gitkeep
+# Real-footage benchmark: footage, renders and rating keys stay private
+benchmark/real/clips/
+benchmark/real/runs/
+benchmark/real/manifest.json
+.venv311/
+.venv*/
+.env
+.env.*
+!.env.example
+.claude/
+*.sqlite3
+*.signing_key
+.signing_key
+backups/
+.vercel/
+frontend/dist/
+node_modules/
+*.part.mp4
+*.dl
