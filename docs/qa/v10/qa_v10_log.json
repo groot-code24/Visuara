@@ -1,0 +1,56 @@
+{
+ "steps": [
+  {
+   "step": "landing page served from the app origin with security headers and API origin config",
+   "ok": true,
+   "seconds": 2.2
+  },
+  {
+   "step": "brand signs up by emailed code (real SMTP via Mailpit); session on the API origin, CORS + CSRF",
+   "ok": true,
+   "seconds": 4.5
+  },
+  {
+   "step": "owner invites a read-only viewer; invitation email delivered over SMTP",
+   "ok": true,
+   "seconds": 1.7
+  },
+  {
+   "step": "viewer signs in by magic link (API page) and is redirected to the app origin to accept the invitation",
+   "ok": true,
+   "seconds": 1.9
+  },
+  {
+   "step": "viewer is refused on writes by the server (role check), no team controls shown",
+   "ok": true,
+   "seconds": 1.7
+  },
+  {
+   "step": "owner suspends the viewer from the team panel",
+   "ok": true,
+   "seconds": 2.6
+  },
+  {
+   "step": "creator uploads a video straight to storage from the browser (presigned PUT), server verifies it",
+   "ok": true,
+   "seconds": 7.0
+  },
+  {
+   "step": "scene analysis; keyframe thumbnails load through access-checked presigned redirects",
+   "ok": true,
+   "seconds": 5.3
+  },
+  {
+   "step": "Google sign-in starts on the API origin with PKCE, state, nonce and the API callback URI",
+   "ok": true,
+   "seconds": 0.1
+  },
+  {
+   "step": "mobile landing (390 px) without horizontal scroll",
+   "ok": true,
+   "seconds": 0.6
+  }
+ ],
+ "app_origin": "http://app.cc.localhost:3000",
+ "api_origin": "http://api.cc.localhost:8000"
+}

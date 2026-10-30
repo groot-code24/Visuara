@@ -1,74 +1,86 @@
 # Context Commerce
 
-Authorized product placement in creator videos. Brands and creators join from the landing page with Google or a one-time email code. Creators list their videos at a fixed price. Brands find scenes that fit a campaign and place a product image or 3D model on a surface tracked through the shot. Every frame of the placement is checked, the creator consents to that exact version, both sides approve, and a deterministic renderer produces a video that is validated frame by frame before it can be downloaded.
+Authorised product placement in creator videos. Brands and creators join from the landing page, with Google or an emailed code or magic link. Creators list videos they hold the rights to; brands license them, place a product image or 3D model on a tracked surface, and get the creator's consent to that exact version. A deterministic renderer produces the video, every frame is validated, and only then can it be downloaded through short-lived, access-checked links.
 
 **The system renders only what it can render convincingly, and refuses everything else with a reason.**
 
-**Release status (V9): BLOCKED for pilot and production.** Nothing has been validated on real creator footage, and the Neon, Google, email and object-storage integrations have been tested only against local stand-ins. Suitable for supervised demonstrations on synthetic or self-owned footage. See [docs/v9/release-readiness.md](docs/v9/release-readiness.md).
+**Release status (V10): BLOCKED for public launch; not yet a controlled pilot.** Everything runs locally and in Docker, and is tested, including 10 concurrent organizations. But Neon, Cloudflare R2, the SMTP provider, Google OAuth and Vercel have never been connected (no accounts were available), and no real creator footage has been evaluated. See [docs/v10/release-readiness.md](docs/v10/release-readiness.md).
 
-## What it does today
-| Capability | State |
-|---|---|
-| **Landing page; sign-up and sign-in with Google or an emailed one-time code / magic link; onboarding as brand or creator; joining by invitation** | **New in V9.** Working; tested with a stubbed Google token exchange and a local mail outbox (no live Google or SMTP credentials here) |
-| **Neon PostgreSQL** (`DATABASE_URL`), SQLite fallback; verified SQLite → PostgreSQL migration | **New in V9.** Full test suite passes on PostgreSQL 16 locally; not yet run against a Neon project |
-| **Private S3-compatible object storage**: write-through, restore on any host, presigned delivery | **New in V9.** Tested with an in-process S3 mock |
-| Screen overlay (Tier A) and tracked planar decal (Tier B) with temporal colour matching | Working; validated on the synthetic benchmark |
-| 3D product (GLB) on a tracked surface: estimated camera, shading, cast and contact shadows | Working on the synthetic benchmark; requires the surface's real size |
-| **Parallax- and occlusion-aware 3D scene check** (solved camera + epipolar geometry + triangulated depth) | **New in V9.** Replaces the V8 single-homography check; see [docs/v9/3d-scene-check.md](docs/v9/3d-scene-check.md) |
-| Curved, reflective, motion-blurred and occluded scenes | **Refused with a reason**, not rendered |
-| Real-footage benchmark: consent-checked manifest, creator-level splits, blind human ratings, agreement statistics | **New in V9.** Tooling tested; **no real footage evaluated** |
-| Commerce: listings, campaigns, fixed-price offers, licences, takedown, delivery, earnings records, reports | Working; no payments processed |
-| Generative video editing | Unavailable (no verified provider) |
+## What V10 adds
+- **Deployment:**
+  - frontend on Vercel (static, Build Output API);
+  - API and render workers as separate Docker services on one VM;
+  - Neon PostgreSQL and Cloudflare R2;
+  - cross-domain auth with an exact CORS allowlist and same-site cookies.
+- **Uploads go straight from the browser to private storage** (presigned PUT), then are verified server-side; abandoned uploads are cleaned up.
+- **Workspaces for teams:**
+  - roles: owner, admin, manager, editor and viewer, enforced on the server;
+  - invitations by email (revocable);
+  - suspension, removal and ownership transfer, with an audit log.
+- **Fair, bounded processing:**
+  - per-organization quotas for storage, daily uploads, active renders and analysis rates;
+  - fair job claiming across organizations;
+  - job timeout;
+  - graceful worker shutdown that hands the job back to the queue.
+- **Neon-friendly idle behaviour:**
+  - the worker backs off to a 15-minute poll and wakes at once through a file on the shared volume;
+  - liveness checks never touch the database;
+  - idle connections are closed.
+- **Operations:**
+  - JSON logs with request and job ids, with redaction;
+  - liveness and readiness endpoints;
+  - operator metrics;
+  - alert script;
+  - cache cleanup;
+  - production guard: the app refuses to start in production with any development stand-in active.
+- **Supervised payments:** an invoice, payment and settlement ledger recorded by the operator. There is no card processing.
+- **3D:** the plane tolerance now accounts for pose error (validated on fresh held-out scenes).
+- **Google ID tokens** are verified against Google's signing keys.
+- **CI workflow, deploy and rollback scripts, git history.**
 
-## Setup
-Requirements: **Python 3.11+**, plus FFmpeg and FFprobe on `PATH`.
-
+## Quick start (local, no accounts needed)
 ```bash
-python -m venv .venv
-# Windows: .venv\Scripts\Activate.ps1    macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt          # add -r requirements-dev.txt for tests
-cp .env.example .env                     # then fill in what you use (see below)
-uvicorn app.main:app --reload
+docker compose up --build        # app http://localhost:8000 · email inbox http://localhost:8025
 ```
-Open http://127.0.0.1:8000 for the landing page (the app is at `/app`). The schema is created and migrated on startup. Without any configuration the app uses SQLite and local disk, and offers password sign-in only.
+This runs PostgreSQL 16, an S3-compatible store, a real SMTP inbox (Mailpit), the API and two workers.
 
-### Connect the services (`.env`)
-| Service | Variables | Docs |
-|---|---|---|
-| Neon PostgreSQL | `DATABASE_URL` (Neon console → Connect) | [production-runtime](docs/v9/production-runtime.md) |
-| Sign in with Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CC_PUBLIC_URL`; redirect URI `<CC_PUBLIC_URL>/auth/google/callback` | [authentication](docs/v9/authentication.md) |
-| Email code / magic link | `CC_SMTP_HOST`, `CC_SMTP_PORT`, `CC_SMTP_USER`, `CC_SMTP_PASSWORD`, `CC_MAIL_FROM` (any SMTP provider) | [authentication](docs/v9/authentication.md) |
-| Object storage | `CC_S3_BUCKET`, credentials, `CC_S3_ENDPOINT_URL` for R2, B2 or MinIO | [production-runtime](docs/v9/production-runtime.md) |
-| Multi-host | `CC_SIGNING_KEY` (same on every host), `CC_SECURE_COOKIES=1` behind HTTPS | |
+Without Docker (Python 3.11+ and FFmpeg):
+```bash
+scripts/dev.sh setup && scripts/dev.sh run          # Windows: .\scripts\dev.ps1 setup; .\scripts\dev.ps1 run
+```
+Details: [docs/v10/local-development.md](docs/v10/local-development.md).
 
-Moving an existing SQLite database to Neon: `python -m ops.dbtransfer migrate --sqlite ./data/context_commerce.sqlite3`.
-
-Separate worker process: `CC_INLINE_WORKER=0 uvicorn app.main:app` plus `python worker.py`, or `docker compose up --build` (both read `.env`).
-
-## Workflow
-1. Brand and creator each join from the landing page (Google or email code), choosing their role and workspace, or accepting an invitation.
-2. Creator uploads a video they hold the rights to, analyses scenes, and lists it at a fixed price.
-3. Brand creates a campaign, finds matching videos in the marketplace, and sends an offer. The creator accepts, which creates a licence.
-4. Brand places a product image (2D) or a `.glb` model (3D) on a surface. The quality check runs over every frame and either passes, with a preview from the production renderer, or explains the refusal.
-5. Creator consents to that exact version; both approve; the render is validated frame by frame; delivery uses access-checked, short-lived links. Revoking the licence stops everything.
+## Deploy
+| Part | Guide |
+|---|---|
+| Frontend (Vercel) | [vercel-deployment.md](docs/v10/vercel-deployment.md) |
+| API (VM + Docker + Caddy/Tunnel) | [backend-deployment.md](docs/v10/backend-deployment.md) |
+| Workers | [worker-deployment.md](docs/v10/worker-deployment.md) |
+| Neon | [database-operations.md](docs/v10/database-operations.md) |
+| Cloudflare R2 | [storage-operations.md](docs/v10/storage-operations.md) |
+| Google OAuth and SMTP | [backend-deployment.md](docs/v10/backend-deployment.md), [security-review.md](docs/v10/security-review.md#smtp-sender-authentication-for-the-provider-you-choose) |
+| Backups | [backup-and-recovery.md](docs/v10/backup-and-recovery.md) |
+| Monitoring | [monitoring.md](docs/v10/monitoring.md) |
+| Go-live checklist | [release-readiness.md](docs/v10/release-readiness.md#production-deployment-checklist) |
 
 ## Tests and evidence
 ```bash
-PYTHONPATH=. python -m pytest -q                                   # SQLite
-CC_TEST_DATABASE_URL=postgresql://... PYTHONPATH=. python -m pytest -q   # same suite on PostgreSQL (a fresh schema per test)
-python -m benchmark.run_benchmark --split all                     # planar gate (synthetic)
-python -m benchmark.run_2d_quality --seeds 2 3 4                  # 2D compositing vs ground truth
-python -m benchmark.run_3d_benchmark --seeds 5 6 7                # 3D incl. the V9 scene check (fresh held-out seeds)
-python -m benchmark.real_footage validate --manifest real/manifest.json   # real-footage protocol (needs consented clips)
-python qa/browser_qa.py; python qa/browser_qa_v8.py; python qa/browser_qa_v9.py
+PYTHONPATH=".:tests" python -m pytest -q                         # SQLite (Windows: ".;tests")
+CC_TEST_DATABASE_URL=postgresql://… PYTHONPATH=".:tests" python -m pytest -q
+python qa/browser_qa_v10.py                                      # split-origin browser QA (compose stack)
+python qa/load_10_orgs.py --api http://localhost:8000            # 10 organizations, concurrent, isolation probes
+python -m benchmark.run_3d_benchmark --seeds 8 9 10              # 3D, fresh held-out seeds
+node frontend/build.mjs && node frontend/check.mjs
+python qa/secret_scan.py
 ```
-Observed results: [docs/v9/test-evidence.md](docs/v9/test-evidence.md).
+Observed results: [docs/v10/test-evidence.md](docs/v10/test-evidence.md).
 
-## Engineering documents
-**V9:** [release readiness](docs/v9/release-readiness.md) · [authentication](docs/v9/authentication.md) · [production runtime](docs/v9/production-runtime.md) · [3D scene check](docs/v9/3d-scene-check.md) · [real-footage protocol](docs/v9/real-footage-protocol.md) · [test evidence](docs/v9/test-evidence.md) · [security](docs/v9/security-review.md) · [limitations](docs/v9/known-limitations.md)
+## Documents
+**V10:**
+- [release readiness](docs/v10/release-readiness.md) · [audit](docs/v10/repository-audit.md) · [architecture](docs/v10/architecture.md) · [deployment architecture](docs/v10/deployment-architecture.md)
+- [multi-tenant readiness](docs/v10/multi-tenant-readiness.md) · [3D tolerance](docs/v10/3d-tolerance.md) · [security](docs/v10/security-review.md) · [data protection](docs/v10/data-protection.md) · [incidents](docs/v10/incident-response.md)
+- [limitations](docs/v10/known-limitations.md) · [technical debt](docs/v10/technical-debt.md)
 
-**V8:** [audit](docs/v8/repository-audit.md) · [architecture](docs/v8/architecture.md) · [capabilities](docs/v8/rendering-capability-matrix.md) · [2D/3D compositing](docs/v8/compositing-2d-3d.md) · [benchmarks](docs/v8/benchmark-report.md) · [API & config](docs/v8/api-and-config.md) · [roadmap](docs/v8/implementation-roadmap.md)
-
-**V6:** [Dependency graph](docs/engineering-graph.md) · [ADRs](docs/architecture-decisions.md) · [Contracts](docs/contracts/) · [Security review](docs/security-review.md)
+**Earlier:** [V9](docs/v9/) · [V8](docs/v8/) · [V6](docs/)
 
 Only upload media you own or have explicit permission to process and license.

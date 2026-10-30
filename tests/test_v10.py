@@ -312,3 +312,15 @@ def test_production_refuses_development_stand_ins():
             'CC_SECURE_COOKIES': '1', 'CC_PUBLIC_URL': 'https://api.example.com', 'CC_APP_URL': 'https://app.example.com',
             'CC_CORS_ORIGINS': 'https://app.example.com', 'CC_INLINE_WORKER': '0'}
     assert production_problems(good) == []
+
+
+def test_secret_scanner_detects_credentials_and_allows_placeholders(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('secret_scan', Path(__file__).resolve().parent.parent / 'qa' / 'secret_scan.py')
+    scan = importlib.util.module_from_spec(spec); spec.loader.exec_module(scan)
+    fake = ('AWS_ACCESS_KEY_ID=AKIA' + 'ABCDEFGHIJKLMNOP\n' + 'GOOGLE_CLIENT_SECRET=GOCSPX-' + 'a1B2c3D4e5F6g7H8i9J0k1L2\n'
+            + 'DATABASE_URL=postgresql://neondb_owner:' + 'npg_X9y8Z7w6V5@ep-cool-1.eu-central-1.aws.neon.tech/neondb\n')
+    kinds = {k for _, k, _ in scan.scan_text('x.env', fake)}
+    assert {'aws_access_key', 'google_client_secret', 'postgres_url_with_password'} <= kinds
+    ok = 'DATABASE_URL=postgresql://USER:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/neondb\nCC_SIGNING_KEY=change-me-to-a-long-random-secret\nDATABASE_URL: postgresql://cc:cc-local-only@postgres:5432/x'
+    assert scan.scan_text('ok.env', ok) == []

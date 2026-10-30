@@ -392,7 +392,8 @@ def complete_signup(body: SignupIn, request: Request):
         if p['provider'] == 'google' and p['subject']:
             c.execute('INSERT INTO user_identities(user_id,provider,subject,email) VALUES(?,?,?,?)', (uid, 'google', p['subject'], email))
         c.execute('DELETE FROM pending_signups WHERE token_hash=?', (p['token_hash'],))
-        user = {'id': uid, 'email': email, 'name': body.name.strip(), 'role': role, 'org_id': org_id, 'member_role': member_role}
+        user = {'id': uid, 'email': email, 'name': body.name.strip(), 'role': role, 'org_id': org_id, 'member_role': member_role,
+                'organization': c.execute('SELECT name FROM organizations WHERE id=?', (org_id,)).fetchone()['name']}
         m.event(c, user, 'user.signed_up', 'user', uid, {'method': p['provider'], 'via_invitation': bool(body.invitation_id)})
         token = _start_session(c, uid)
     resp = JSONResponse({'user': user})

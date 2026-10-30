@@ -10,6 +10,8 @@
 //                                            proxy: Vercel rewrites /api, /auth and /r to the API origin so the browser
 //                                            sees one origin (use for *.vercel.app previews). Vercel limits proxied
 //                                            requests to a short timeout, so production should use direct mode.
+//   CC_STORAGE_ORIGIN  optional origin of the object store the browser uploads to and is redirected to, when it is
+//                      not https (production R2 URLs are https and already allowed); e.g. a local S3 stand-in.
 // No secrets are read or written: the output contains only public configuration.
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -21,6 +23,7 @@ const env = process.env;
 const isProd = env.VERCEL_ENV === 'production';
 const mode = (env.CC_API_MODE || 'direct').toLowerCase();
 const apiOrigin = (env.CC_API_ORIGIN || '').replace(/\/+$/, '');
+const storageOrigin = (env.CC_STORAGE_ORIGIN || '').replace(/\/+$/, '');
 
 function fail(msg) { console.error(`frontend build failed: ${msg}`); process.exit(1); }
 if (!['direct', 'proxy'].includes(mode)) fail(`CC_API_MODE must be "direct" or "proxy", not "${mode}"`);
@@ -46,9 +49,10 @@ const apiBase = mode === 'direct' ? apiOrigin : '';
 writeFileSync(join(stat, 'config.js'), `window.CC_CONFIG=${JSON.stringify({ apiBase })};\n`);
 writeFileSync(join(stat, '404.html'), '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not found · Context Commerce</title><body style="font-family:system-ui;display:grid;place-items:center;min-height:100vh;margin:0;background:#f6f7fb;color:#191a2c"><main style="text-align:center"><h1>Page not found</h1><p><a href="/">Back to Context Commerce</a></p></main></body>');
 
-const connect = ["'self'", apiOrigin, 'https:'].filter(Boolean).join(' ');
+const extra = [apiOrigin, storageOrigin].filter(Boolean).join(' ');
+const connect = ["'self'", extra, 'https:'].filter(Boolean).join(' ');
 const csp = ["default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com", `img-src 'self' data: blob: https: ${apiOrigin}`.trim(), `media-src 'self' blob: https: ${apiOrigin}`.trim(),
+  "font-src 'self' data: https://fonts.gstatic.com", `img-src 'self' data: blob: https: ${extra}`.trim(), `media-src 'self' blob: https: ${extra}`.trim(),
   `connect-src ${connect}`, "frame-ancestors 'none'", "base-uri 'self'", `form-action 'self' ${apiOrigin}`.trim(), "object-src 'none'"].join('; ');
 const security = { 'Content-Security-Policy': csp, 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',

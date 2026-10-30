@@ -130,7 +130,8 @@ footer{padding:36px 0 50px;color:var(--muted);font-size:14px}footer .wrap{displa
 </main>
 
 <footer><div class="wrap"><span>© Context Commerce · Early access</span><span><a href="/app">Sign in</a></span></div></footer>
+<script src="/config.js"></script>
 <script>
-fetch('/api/me',{credentials:'same-origin'}).then(function(r){if(!r.ok)return;var c=document.getElementById('navCta'),s=document.getElementById('navSignin');c.textContent='Open workspace';c.href='/app';s.style.display='none'}).catch(function(){});
+(function(){var api=((window.CC_CONFIG||{}).apiBase||'').replace(/\/$/,'');return fetch(api+'/api/me',{credentials:api?'include':'same-origin'})})().then(function(r){if(!r.ok)return;var c=document.getElementById('navCta'),s=document.getElementById('navSignin');c.textContent='Open workspace';c.href='/app';s.style.display='none'}).catch(function(){});
 </script>
 </body></html>

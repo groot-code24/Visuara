@@ -70,6 +70,11 @@ def worker_heartbeat(state='idle'):
     tmp = p.with_suffix('.tmp'); tmp.write_text(json.dumps({'pid': os.getpid(), 'host': socket.gethostname(), 'state': state, 'at': time.time()})); os.replace(tmp, p)
 
 
+def worker_heartbeat_clear():
+    """Remove this worker's heartbeat on a clean stop, so a restart is not counted as an extra live worker."""
+    (run_dir() / f'worker-{socket.gethostname()}-{os.getpid()}.json').unlink(missing_ok=True)
+
+
 def worker_status(max_age=None):
     max_age = max_age or float(os.getenv('CC_WORKER_STALE_SECONDS', '120'))
     now, workers = time.time(), []

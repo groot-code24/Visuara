@@ -145,6 +145,7 @@ def _worker_loop():
             w=obs.wake_mtime()
             if w!=last_wake: last_wake=w; idle=0.5; break
             _WORKER_STOP.wait(min(0.5,max(0.0,deadline-now)))
+    obs.worker_heartbeat_clear()
     obs.info('worker stopped',pid=os.getpid())
 
 @asynccontextmanager
@@ -481,7 +482,8 @@ def register(body:Register, request:Request):
         cur=c.execute('INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,?,?,?,?,?)',(email,hash_password(body.password),body.name.strip(),body.role,orgid,member_role)); uid=cur.lastrowid
         if invitation: c.execute('UPDATE invitations SET accepted_at=CURRENT_TIMESTAMP WHERE id=? AND accepted_at IS NULL',(invitation['id'],))
         token=secrets.token_urlsafe(32); c.execute('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,int(time.time())+86400*7))
-        return JSONResponse({'user':{'id':uid,'email':email,'name':body.name,'role':body.role,'org_id':orgid,'member_role':member_role}},headers={'Set-Cookie':session_cookie(token)})
+        org_name=c.execute('SELECT name FROM organizations WHERE id=?',(orgid,)).fetchone()['name']
+        return JSONResponse({'user':{'id':uid,'email':email,'name':body.name,'role':body.role,'org_id':orgid,'member_role':member_role,'organization':org_name}},headers={'Set-Cookie':session_cookie(token)})
 @app.post('/api/auth/login')
 def login(body:Login):
     with db() as c:

@@ -8,7 +8,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --upgrade "pip>=26.2" && pip install -r requirements.txt
 COPY app ./app
 COPY ops ./ops
 COPY worker.py ./
