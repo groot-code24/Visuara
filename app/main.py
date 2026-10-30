@@ -23,27 +23,69 @@ UPLOADS = DATA / 'uploads'; OUTPUTS = DATA / 'outputs'; FRAMES = DATA / 'frames'
 for p in (DATA, UPLOADS, OUTPUTS, FRAMES): p.mkdir(parents=True, exist_ok=True)
 DB = DATA / 'context_commerce.sqlite3'
 from . import lifecycle, renderers, media
-from . import db as dbm, storage
+from . import db as dbm, storage, limits, obs
+obs.configure_logging()
 from .compositor import RenderCancelled, render_plan
 from .validation import validate_plan
 app = FastAPI(title='Context Commerce MVP', version='0.6.0', description='Authorized creator video product-placement workflow')
 app.mount('/static', StaticFiles(directory=ROOT / 'app' / 'static'), name='static')
 
+def _origin(url):
+    p=urllib.parse.urlsplit(url or ''); return f'{p.scheme}://{p.netloc}'.lower() if p.scheme and p.netloc else ''
+def allowed_origins():
+    """Exact origins allowed to make credentialed browser requests: CC_CORS_ORIGINS plus CC_APP_URL/CC_PUBLIC_URL."""
+    out={_origin(x.strip()) for x in os.getenv('CC_CORS_ORIGINS','').split(',') if x.strip()}
+    out|={_origin(os.getenv(k,'')) for k in ('CC_APP_URL','CC_PUBLIC_URL')}
+    out.discard(''); return out
+def _csp():
+    extra=' '.join(sorted({_origin(os.getenv(k,'')) for k in ('CC_APP_URL','CC_PUBLIC_URL','CC_S3_PUBLIC_ENDPOINT_URL','CC_S3_ENDPOINT_URL')}-{''}))
+    return (f"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; "
+            f"img-src 'self' data: blob: https: {extra}; media-src 'self' blob: https: {extra}; connect-src 'self' https: {extra}; frame-ancestors 'none'; base-uri 'self'; "
+            f"form-action 'self' {extra}; object-src 'none'")
+_MUTATING=('POST','PUT','PATCH','DELETE')
 @app.middleware('http')
 async def security_middleware(request: Request, call_next):
-    path=request.url.path
-    if path in ('/api/auth/login','/api/auth/register','/api/auth/email/start','/api/auth/email/verify') and request.method=='POST':
-        ip=request.client.host if request.client else 'unknown'
-        if not rate_limit('auth:'+ip,12,60): return JSONResponse({'detail':'Too many authentication attempts. Try again in a minute.'},status_code=429)
-    # /auth/* are browser form posts (magic-link confirmation) that check a CSRF form field themselves.
-    if request.method in ('POST','PUT','PATCH','DELETE') and path not in ('/api/auth/login','/api/auth/register') and not path.startswith('/auth/'):
-        csrf=request.cookies.get('cc_csrf'); supplied=request.headers.get('x-csrf-token')
-        if request.cookies.get('cc_session') and (not csrf or not supplied or not hmac.compare_digest(csrf,supplied)):
-            return JSONResponse({'detail':'CSRF token missing or invalid. Refresh the page and retry.'},status_code=403)
-    response=await call_next(request)
-    if path in ('/','/app','/api/auth/login','/api/auth/register') and not request.cookies.get('cc_csrf'):
-        response.set_cookie('cc_csrf',secrets.token_urlsafe(24),httponly=False,samesite='lax',secure=os.getenv('CC_SECURE_COOKIES','0')=='1',path='/')
-    return response
+    path=request.url.path; supplied_rid=request.headers.get('x-request-id','')
+    rid=supplied_rid if re.fullmatch(r'[A-Za-z0-9._-]{8,64}',supplied_rid) else secrets.token_hex(8)
+    rid_token=obs.request_id.set(rid); started=time.perf_counter()
+    try:
+        response=None
+        if path in ('/api/auth/login','/api/auth/register','/api/auth/email/start','/api/auth/email/verify') and request.method=='POST':
+            ip=request.client.host if request.client else 'unknown'
+            if not rate_limit('auth:'+ip,int(os.getenv('CC_AUTH_RATE_PER_MINUTE','12')),60): response=JSONResponse({'detail':'Too many authentication attempts. Try again in a minute.'},status_code=429)
+        if response is None and request.method in _MUTATING:
+            origin=(request.headers.get('origin') or '').lower()
+            # Browsers always send Origin on cross-origin writes; refuse any origin that is not this site or allowlisted.
+            if origin and origin!='null' and origin not in allowed_origins() and origin!=_origin(str(request.base_url)):
+                response=JSONResponse({'detail':'Cross-origin request refused'},status_code=403)
+            # /auth/* are browser form posts (magic-link confirmation) that check a CSRF form field themselves.
+            elif path not in ('/api/auth/login','/api/auth/register') and not path.startswith('/auth/'):
+                csrf=request.cookies.get('cc_csrf'); supplied=request.headers.get('x-csrf-token')
+                if request.cookies.get('cc_session') and (not csrf or not supplied or not hmac.compare_digest(csrf,supplied)):
+                    response=JSONResponse({'detail':'CSRF token missing or invalid. Refresh the page and retry.'},status_code=403)
+        if response is None:
+            try: response=await call_next(request)
+            except Exception:
+                obs.error('unhandled error',exc_info=True,method=request.method,path=path)
+                response=JSONResponse({'detail':'Internal error. Quote this request id to support.','request_id':rid},status_code=500)
+        if path in ('/','/app','/api/auth/login','/api/auth/register') and not request.cookies.get('cc_csrf'):
+            response.set_cookie('cc_csrf',secrets.token_urlsafe(24),httponly=False,samesite='lax',secure=os.getenv('CC_SECURE_COOKIES','0')=='1',path='/')
+        h=response.headers; h['X-Request-ID']=rid
+        h.setdefault('X-Content-Type-Options','nosniff'); h.setdefault('Referrer-Policy','strict-origin-when-cross-origin'); h.setdefault('X-Frame-Options','DENY')
+        h.setdefault('Permissions-Policy','camera=(), microphone=(), geolocation=(), payment=()')
+        if os.getenv('CC_SECURE_COOKIES','0')=='1': h.setdefault('Strict-Transport-Security','max-age=31536000; includeSubDomains')
+        if path.startswith(('/api/','/auth/')) and 'cache-control' not in h: h['Cache-Control']='no-store'
+        if path.startswith(('/api/','/auth/')): h.setdefault('x-vercel-enable-rewrite-caching','0')
+        if h.get('content-type','').startswith('text/html'): h.setdefault('Content-Security-Policy',_csp())
+        if path not in ('/api/health/live',):
+            obs.info('request',method=request.method,path=path,status=response.status_code,ms=round((time.perf_counter()-started)*1000,1))
+        return response
+    finally:
+        obs.request_id.reset(rid_token)
+if os.getenv('CC_CORS_ORIGINS'):
+    from starlette.middleware.cors import CORSMiddleware
+    app.add_middleware(CORSMiddleware,allow_origins=sorted(allowed_origins()),allow_credentials=True,allow_methods=['GET','POST','PUT','PATCH','DELETE'],
+                       allow_headers=['Content-Type','X-CSRF-Token','X-Request-ID'],expose_headers=['X-Request-ID','Content-Disposition'],max_age=600)
 
 LEASE_SECONDS=int(os.getenv('CC_JOB_LEASE_SECONDS','120'))
 MAX_ANALYSIS_SECONDS=float(os.getenv('CC_MAX_ANALYSIS_SECONDS','60'))
@@ -60,28 +102,54 @@ def recover_expired_leases(c):
         if cur.rowcount: c.execute('INSERT INTO queue_events(job_id,event_type,details) VALUES(?,?,?)',(r['id'],kind,'{}'))
 
 def claim_next_job():
-    """Atomically claim the oldest queued job. Returns (job_id, lease_token) or (None, None)."""
+    """Atomically claim a queued job. Returns (job_id, lease_token), (None, None) when the queue is empty, or
+    (None, 'retry') when another worker won the race. Organizations with fewer running jobs go first, so one busy
+    workspace cannot starve the others."""
     with db() as c:
         recover_expired_leases(c)
-        row=c.execute("SELECT id FROM jobs WHERE status='QUEUED' ORDER BY id LIMIT 1").fetchone()
+        row=c.execute("SELECT j.id FROM jobs j WHERE j.status='QUEUED' ORDER BY (SELECT COUNT(*) FROM jobs r WHERE r.org_id=j.org_id AND r.status='RUNNING'), j.id LIMIT 1").fetchone()
         if not row: return None,None
         token=secrets.token_hex(12)
         cur=c.execute("UPDATE jobs SET status='RUNNING',attempts=attempts+1,lease_until=?,lease_token=?,started_at=CURRENT_TIMESTAMP WHERE id=? AND status='QUEUED'",(time.time()+LEASE_SECONDS,token,row['id']))
-        if not cur.rowcount: return None,None
+        if not cur.rowcount: return None,'retry'
         c.execute('INSERT INTO queue_events(job_id,event_type,details) VALUES(?,?,?)',(row['id'],'claimed',json.dumps({'pid':os.getpid()})))
         return row['id'],token
 
+def worker_max_idle(): return float(os.getenv('CC_WORKER_MAX_IDLE_SECONDS','900'))
+
 def _worker_loop():
+    """Claim and render jobs. When the queue is empty the poll interval doubles from 0.5 s up to CC_WORKER_MAX_IDLE_SECONDS
+    (default 900 s, longer than Neon's 5-minute scale-to-zero window). The web process touches a wake-up file on the
+    shared data volume whenever it queues a job, so new work starts within about half a second without database polling."""
+    from . import maintenance
+    idle=0.5; last_wake=obs.wake_mtime(); last_beat=0.0; last_cache=time.time(); last_db_maint=time.time()
+    obs.info('worker started',max_idle_seconds=worker_max_idle(),pid=os.getpid())
     while not _WORKER_STOP.is_set():
         try:
+            obs.worker_heartbeat('polling'); last_beat=time.time()
             job_id,token=claim_next_job()
-            if job_id is not None: render_job(job_id,token)
-            else: _WORKER_STOP.wait(.5)
-        except Exception: _WORKER_STOP.wait(1)
+            if job_id is not None:
+                obs.worker_heartbeat('rendering'); render_job(job_id,token); idle=0.5; continue
+            if token=='retry': continue
+            if time.time()-last_db_maint>maintenance.db_interval():   # piggybacks on a poll that already woke the database
+                maintenance.run_db_maintenance(); last_db_maint=time.time()
+            idle=min(worker_max_idle(),idle*2)
+        except Exception:
+            obs.error('worker loop error',exc_info=True); idle=min(worker_max_idle(),max(idle,5.0))
+        deadline=time.time()+idle
+        while not _WORKER_STOP.is_set() and time.time()<deadline:
+            now=time.time()
+            if now-last_beat>30: obs.worker_heartbeat('idle'); last_beat=now
+            if now-last_cache>maintenance.cache_interval(): maintenance.run_cache_maintenance(); last_cache=now
+            w=obs.wake_mtime()
+            if w!=last_wake: last_wake=w; idle=0.5; break
+            _WORKER_STOP.wait(min(0.5,max(0.0,deadline-now)))
+    obs.info('worker stopped',pid=os.getpid())
 
 @asynccontextmanager
 async def lifespan(_app):
     global _WORKER_THREAD
+    obs.configure_logging()
     _WORKER_STOP.clear()
     if os.getenv('CC_INLINE_WORKER','1')=='1' and (not _WORKER_THREAD or not _WORKER_THREAD.is_alive()):
         _WORKER_THREAD=threading.Thread(target=_worker_loop,name='cc-render-worker',daemon=True); _WORKER_THREAD.start()
@@ -118,7 +186,16 @@ CREATE INDEX IF NOT EXISTS idx_conversions_org ON conversions(org_id,created_at)
 CREATE TABLE IF NOT EXISTS placement_versions(id INTEGER PRIMARY KEY, placement_id INTEGER NOT NULL, version INTEGER NOT NULL, snapshot_json TEXT NOT NULL, content_hash TEXT NOT NULL, created_by INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(placement_id,version));
 CREATE TABLE IF NOT EXISTS placement_analyses(id INTEGER PRIMARY KEY, placement_id INTEGER NOT NULL, placement_version INTEGER NOT NULL, content_hash TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('PASSED','FAILED')), scene_class TEXT NOT NULL, policy_version TEXT NOT NULL, report_json TEXT NOT NULL, track_path TEXT, track_sha256 TEXT, created_by INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS idx_analyses_placement ON placement_analyses(placement_id,placement_version);
+CREATE TABLE IF NOT EXISTS upload_sessions(id INTEGER PRIMARY KEY, org_id INTEGER NOT NULL, user_id INTEGER NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', content_type TEXT NOT NULL, expected_bytes INTEGER NOT NULL, license_expires TEXT, status TEXT NOT NULL DEFAULT 'PENDING', result_id INTEGER, error TEXT, expires_at INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, finished_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_upload_sessions ON upload_sessions(org_id,status);
+CREATE TABLE IF NOT EXISTS payment_records(id INTEGER PRIMARY KEY, offer_id INTEGER NOT NULL, kind TEXT NOT NULL, amount_usd REAL NOT NULL, reference TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', recorded_by TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_payment_records_offer ON payment_records(offer_id,id);
 '''
+_INDEXES=['CREATE INDEX IF NOT EXISTS idx_users_org ON users(org_id)','CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)',
+          'CREATE INDEX IF NOT EXISTS idx_jobs_org_status ON jobs(org_id,status)','CREATE INDEX IF NOT EXISTS idx_videos_org ON videos(org_id)',
+          'CREATE INDEX IF NOT EXISTS idx_products_org ON products(org_id)','CREATE INDEX IF NOT EXISTS idx_placements_org ON placements(org_id)',
+          'CREATE INDEX IF NOT EXISTS idx_placements_video ON placements(video_id)','CREATE INDEX IF NOT EXISTS idx_frames_video ON frames(video_id,second)',
+          'CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email)','CREATE INDEX IF NOT EXISTS idx_queue_events_job ON queue_events(job_id)']
 DB_SCHEMA=os.getenv('CC_DATABASE_SCHEMA') or None   # PostgreSQL schema (search_path); tests use one per test
 _ID_TABLES=frozenset()
 def db():
@@ -141,8 +218,15 @@ def init_db(connect=None):
         c.executescript(AUTH_SCHEMA)
         c.executescript(COMMERCE_SCHEMA)
         # Idempotent migrations for databases created by earlier MVP versions.
-        for table, column, definition in [('placements','render_options',"TEXT NOT NULL DEFAULT '{}'"),('jobs','mode',"TEXT NOT NULL DEFAULT 'COMPOSITE'"),('placements','fit_confidence','REAL NOT NULL DEFAULT 0.0'),('placements','fit_status',"TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED'"),('jobs','attempts','INTEGER NOT NULL DEFAULT 0'),('jobs','max_attempts','INTEGER NOT NULL DEFAULT 3'),('jobs','cancel_requested','INTEGER NOT NULL DEFAULT 0'),('jobs','lease_until','REAL'),('jobs','lease_token','TEXT'),('jobs','placement_version','INTEGER'),('jobs','analysis_id','INTEGER'),('jobs','renderer','TEXT'),('jobs','validation_json','TEXT'),('placements','quality_status',"TEXT NOT NULL DEFAULT 'NOT_EVALUATED'"),('placements','analysis_id','INTEGER'),('placements','content_hash','TEXT'),('placement_approvals','content_hash','TEXT'),('tracked_links','channel',"TEXT NOT NULL DEFAULT 'social'"),('products','sha256','TEXT'),('products','derived_path','TEXT'),('products','asset_report',"TEXT NOT NULL DEFAULT '{}'"),('products','model_path','TEXT'),('products','model_sha256','TEXT'),('products','model_report','TEXT')]:
+        for table, column, definition in [('placements','render_options',"TEXT NOT NULL DEFAULT '{}'"),('jobs','mode',"TEXT NOT NULL DEFAULT 'COMPOSITE'"),('placements','fit_confidence','REAL NOT NULL DEFAULT 0.0'),('placements','fit_status',"TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED'"),('jobs','attempts','INTEGER NOT NULL DEFAULT 0'),('jobs','max_attempts','INTEGER NOT NULL DEFAULT 3'),('jobs','cancel_requested','INTEGER NOT NULL DEFAULT 0'),('jobs','lease_until','REAL'),('jobs','lease_token','TEXT'),('jobs','placement_version','INTEGER'),('jobs','analysis_id','INTEGER'),('jobs','renderer','TEXT'),('jobs','validation_json','TEXT'),('placements','quality_status',"TEXT NOT NULL DEFAULT 'NOT_EVALUATED'"),('placements','analysis_id','INTEGER'),('placements','content_hash','TEXT'),('placement_approvals','content_hash','TEXT'),('tracked_links','channel',"TEXT NOT NULL DEFAULT 'social'"),('products','sha256','TEXT'),('products','derived_path','TEXT'),('products','asset_report',"TEXT NOT NULL DEFAULT '{}'"),('products','model_path','TEXT'),('products','model_sha256','TEXT'),('products','model_report','TEXT'),
+                                          ('users','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('users','suspended_at','TEXT'),('users','removed_at','TEXT'),
+                                          ('invitations','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('invitations','revoked_at','TEXT'),
+                                          ('videos','size_bytes','INTEGER NOT NULL DEFAULT 0'),('products','size_bytes','INTEGER NOT NULL DEFAULT 0'),
+                                          ('jobs','output_bytes','INTEGER NOT NULL DEFAULT 0'),('offers','payment_status',"TEXT NOT NULL DEFAULT 'NOT_INVOICED'")]:
             c.add_column(table,column,definition)
+        # V10: every workspace has exactly one owner (the earliest member of workspaces created before member roles).
+        c.execute("UPDATE users SET member_role='owner' WHERE id IN (SELECT MIN(id) FROM users GROUP BY org_id) AND org_id NOT IN (SELECT org_id FROM users WHERE member_role='owner')")
+        for ddl in _INDEXES: c.execute(ddl)
 init_db()
 
 _RATE_BUCKETS = {}
@@ -210,7 +294,9 @@ def current_user(request: Request):
     with db() as c:
         row=c.execute('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',(hashlib.sha256(token.encode()).hexdigest(),int(time.time()))).fetchone()
         if not row: raise HTTPException(401,'Session expired. Please sign in again.')
-        return dict(row)
+    from .members import authorize
+    user=dict(row); authorize(user,request)
+    return user
 def require_role(user, *roles):
     if user['role'] not in roles: raise HTTPException(403,'Your account role cannot perform this action')
 def owned(c, table, item_id, org_id):
@@ -242,7 +328,7 @@ def probe(path):
     try:
         info=json.loads(p.stdout); v=next(s for s in info['streams'] if s.get('codec_type')=='video'); duration=float(info.get('format',{}).get('duration',0)); width=int(v['width']); height=int(v['height']); fr=v.get('avg_frame_rate','0/1').split('/'); fps=float(fr[0])/max(float(fr[1]),1)
     except Exception: raise HTTPException(400,'Video metadata is incomplete or unsupported')
-    if duration<=0 or duration>600 or width>3840 or height>2160: raise HTTPException(413,'Video must be between 0 and 600 seconds and no larger than 4K')
+    limits.check_video_metadata(duration,width,height,fps)
     return duration,width,height,fps
 
 def _ollama_describe(image_path):
@@ -329,13 +415,49 @@ class ConversionIn(BaseModel):
 def landing(): return (ROOT/'app'/'static'/'landing.html').read_text(encoding='utf-8')
 @app.get('/app', response_class=HTMLResponse)
 def home(): return (ROOT/'app'/'static'/'index.html').read_text(encoding='utf-8')
+@app.get('/config.js')
+def frontend_config():
+    """Runtime configuration for the bundled frontend. Served by the API in local and single-origin deployments;
+    the Vercel build writes its own copy with the production API origin."""
+    from fastapi.responses import Response
+    return Response('window.CC_CONFIG='+json.dumps({'apiBase':os.getenv('CC_FRONTEND_API_BASE','')})+';',media_type='application/javascript',headers={'Cache-Control':'no-store'})
+
+@app.get('/api/health/live')
+def health_live():
+    """Liveness: the web process is serving requests. Touches no dependency, so monitors never wake the database."""
+    return {'status':'ok'}
+
+_READY={'at':0.0,'result':None}
+def _readiness():
+    if _READY['result'] and time.time()-_READY['at']<float(os.getenv('CC_READY_CACHE_SECONDS','30')): return _READY['result']
+    checks={}
+    try:
+        with db() as c: c.execute('SELECT 1').fetchone()
+        checks['database']='ok'
+    except Exception: checks['database']='unavailable'
+    if storage.enabled():
+        try: storage.client().head_bucket(Bucket=storage.bucket()); checks['object_storage']='ok'
+        except Exception: checks['object_storage']='unavailable'
+    else: checks['object_storage']='local_disk'
+    checks['ffmpeg']='ok' if tool_exists('ffmpeg') and tool_exists('ffprobe') else 'missing'
+    try: checks['disk']='ok' if obs.disk_status()['free_gb']>=float(os.getenv('CC_MIN_FREE_DISK_GB','2')) else 'low'
+    except Exception: checks['disk']='unknown'
+    if os.getenv('CC_INLINE_WORKER','1')!='1': checks['workers_alive']=obs.worker_status()['alive']
+    ready=checks['database']=='ok' and checks['object_storage'] in ('ok','local_disk') and checks['ffmpeg']=='ok'
+    _READY.update(at=time.time(),result=({'status':'ready' if ready else 'not_ready','checks':checks},ready))
+    return _READY['result']
+
+@app.get('/api/health/ready')
+def health_ready():
+    """Readiness: dependencies reachable (cached for CC_READY_CACHE_SECONDS). Reveals no hostnames or bucket names."""
+    body,ready=_readiness()
+    return JSONResponse(body,status_code=200 if ready else 503)
+
 @app.get('/api/health')
 def health():
-    try:
-        with db() as c: c.execute('SELECT 1').fetchone(); db_ok=True
-    except Exception: db_ok=False
+    body,_=_readiness(); db_ok=body['checks']['database']=='ok'
     d=dbm.describe(); st=storage.describe()   # public endpoint: no hostnames, bucket names or credentials
-    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','generative_provider':'configured_unverified' if renderers.generative_configured() else 'not_configured','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_acceptance_min_0.75','rights_versioning':'placement_version_bound','campaign_attribution':'observed_only_no_causal_lift','mode':'local-mvp'}
+    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','generative_provider':'configured_unverified' if renderers.generative_configured() else 'not_configured','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_acceptance_min_0.75','rights_versioning':'placement_version_bound','campaign_attribution':'observed_only_no_causal_lift','mode':'production' if os.getenv('CC_ENV')=='production' else 'development','workers_alive':obs.worker_status()['alive'] if os.getenv('CC_INLINE_WORKER','1')!='1' else 'inline'}
 @app.post('/api/auth/register')
 def register(body:Register, request:Request):
     if body.role not in ('brand','creator'): raise HTTPException(422,'Role must be brand or creator')
@@ -345,7 +467,7 @@ def register(body:Register, request:Request):
         if c.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HTTPException(409,'An account with this email already exists')
         invitation=None
         if body.invitation_token:
-            invitation=c.execute('SELECT * FROM invitations WHERE token_hash=? AND accepted_at IS NULL AND expires_at>?',(hashlib.sha256(body.invitation_token.encode()).hexdigest(),int(time.time()))).fetchone()
+            invitation=c.execute('SELECT * FROM invitations WHERE token_hash=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>?',(hashlib.sha256(body.invitation_token.encode()).hexdigest(),int(time.time()))).fetchone()
             if not invitation: raise HTTPException(400,'Invitation is invalid, expired, or already used')
             if invitation['email'].lower()!=email or invitation['role']!=body.role: raise HTTPException(403,'Invitation email or role does not match')
             orgid=invitation['org_id']
@@ -354,17 +476,19 @@ def register(body:Register, request:Request):
             org=c.execute('SELECT id FROM organizations WHERE lower(name)=lower(?)',(body.organization.strip(),)).fetchone()
             if org: raise HTTPException(409,'This organization already exists. Ask an organization member for an invitation link.')
             orgid=c.execute('INSERT INTO organizations(name) VALUES(?)',(body.organization.strip(),)).lastrowid
-        cur=c.execute('INSERT INTO users(email,password_hash,name,role,org_id) VALUES(?,?,?,?,?)',(email,hash_password(body.password),body.name.strip(),body.role,orgid)); uid=cur.lastrowid
+        member_role=invitation['member_role'] if invitation else 'owner'
+        cur=c.execute('INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,?,?,?,?,?)',(email,hash_password(body.password),body.name.strip(),body.role,orgid,member_role)); uid=cur.lastrowid
         if invitation: c.execute('UPDATE invitations SET accepted_at=CURRENT_TIMESTAMP WHERE id=? AND accepted_at IS NULL',(invitation['id'],))
         token=secrets.token_urlsafe(32); c.execute('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,int(time.time())+86400*7))
-        return JSONResponse({'user':{'id':uid,'email':email,'name':body.name,'role':body.role,'org_id':orgid}},headers={'Set-Cookie':session_cookie(token)})
+        return JSONResponse({'user':{'id':uid,'email':email,'name':body.name,'role':body.role,'org_id':orgid,'member_role':member_role}},headers={'Set-Cookie':session_cookie(token)})
 @app.post('/api/auth/login')
 def login(body:Login):
     with db() as c:
-        row=c.execute('SELECT * FROM users WHERE email=?',(body.email.strip().lower(),)).fetchone()
+        row=c.execute('SELECT * FROM users WHERE email=? AND removed_at IS NULL',(body.email.strip().lower(),)).fetchone()
         if not row or not verify_password(body.password,row['password_hash']): raise HTTPException(401,'Incorrect email or password')
+        if row['suspended_at']: raise HTTPException(403,'This account is suspended. Contact your workspace owner.')
         token=secrets.token_urlsafe(32); c.execute('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),row['id'],int(time.time())+86400*7))
-        user={k:row[k] for k in ('id','email','name','role','org_id')}
+        user={k:row[k] for k in ('id','email','name','role','org_id','member_role')}
         return JSONResponse({'user':user},headers={'Set-Cookie':session_cookie(token)})
 @app.post('/api/auth/logout')
 def logout(request:Request):
@@ -374,38 +498,17 @@ def logout(request:Request):
     return JSONResponse({'ok':True},headers={'Set-Cookie':session_cookie('',0)})
 @app.get('/api/me')
 def me(request:Request):
-    u=current_user(request); return {k:u[k] for k in ('id','email','name','role','org_id')}
-
-class InvitationIn(BaseModel):
-    email: str = Field(min_length=5,max_length=254)
-    role: str
-
-@app.post('/api/invitations')
-def create_invitation(body: InvitationIn, request: Request):
     u=current_user(request)
-    if body.role not in ('brand','creator'): raise HTTPException(422,'Role must be brand or creator')
-    email=body.email.strip().lower()
-    if '@' not in email: raise HTTPException(422,'Enter a valid email address')
-    with db() as c:
-        if c.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HTTPException(409,'This email already has an account')
-        raw=secrets.token_urlsafe(32); digest=hashlib.sha256(raw.encode()).hexdigest()
-        inv_id=c.execute('INSERT INTO invitations(org_id,email,role,token_hash,expires_at,created_by) VALUES(?,?,?,?,?,?)',(u['org_id'],email,body.role,digest,int(time.time())+86400*7,u['id'])).lastrowid
-        event(c,u,'invitation.created','invitation',inv_id,{'email':email,'role':body.role})
-    return {'email':email,'role':body.role,'invitation_token':raw,'expires_in_seconds':604800,'instructions':'Share this token securely. The invited person must register with the same email and role.'}
-
-@app.get('/api/invitations')
-def list_invitations(request: Request):
-    u=current_user(request)
-    with db() as c:
-        rows=c.execute('SELECT id,email,role,expires_at,accepted_at,created_at FROM invitations WHERE org_id=? ORDER BY id DESC',(u['org_id'],)).fetchall()
-    return [dict(r) for r in rows]
+    with db() as c: org=c.execute('SELECT name FROM organizations WHERE id=?',(u['org_id'],)).fetchone()
+    return {**{k:u[k] for k in ('id','email','name','role','org_id','member_role')},'organization':org['name'] if org else None}
 
 @app.post('/api/products')
 def create_product(request:Request, name:str=Form(...), description:str=Form(''), image:UploadFile=File(...)):
     u=current_user(request); require_role(u,'brand')
     if not image.content_type or not image.content_type.startswith('image/'): raise HTTPException(415,'Product image must be an image file')
-    raw=image.file.read(10*1024*1024+1)
-    if len(raw)>10*1024*1024: raise HTTPException(413,'Product image limit is 10 MB')
+    raw=image.file.read(limits.max_image_bytes()+1)
+    if len(raw)>limits.max_image_bytes(): raise HTTPException(413,f'Product image limit is {limits.max_image_bytes()//1048576} MB')
+    with db() as c: limits.check_storage(c,u['org_id'],len(raw)*2)
     try:
         from PIL import Image
         import io
@@ -423,7 +526,7 @@ def create_product(request:Request, name:str=Form(...), description:str=Form('')
     except Exception as e: path.unlink(missing_ok=True); raise HTTPException(400,f'Invalid product image: {str(e)[:120]}')
     storage.persist(path); storage.persist(derived)
     with db() as c:
-        cur=c.execute('INSERT INTO products(org_id,name,description,image_path,created_by,sha256,derived_path,asset_report) VALUES(?,?,?,?,?,?,?,?)',(u['org_id'],name.strip(),description.strip(),str(path),u['id'],hashlib.sha256(raw).hexdigest(),str(derived),json.dumps(report))); pid=cur.lastrowid; event(c,u,'product.created','product',pid,{'asset_warnings':[w['code'] for w in report['warnings']]})
+        cur=c.execute('INSERT INTO products(org_id,name,description,image_path,created_by,sha256,derived_path,asset_report,size_bytes) VALUES(?,?,?,?,?,?,?,?,?)',(u['org_id'],name.strip(),description.strip(),str(path),u['id'],hashlib.sha256(raw).hexdigest(),str(derived),json.dumps(report),len(raw)+derived.stat().st_size)); pid=cur.lastrowid; event(c,u,'product.created','product',pid,{'asset_warnings':[w['code'] for w in report['warnings']]})
     return {'id':pid,'name':name,'description':description,'image_url':f'/api/products/{pid}/image','asset_report':report}
 @app.post('/api/products/{pid}/model')
 def upload_product_model(pid:int,request:Request,model:UploadFile=File(...)):
@@ -435,9 +538,11 @@ def upload_product_model(pid:int,request:Request,model:UploadFile=File(...)):
     except AssetError as e: raise _err(400,'MODEL_INVALID',str(e))
     except Exception: raise _err(400,'MODEL_INVALID','The file is not a valid glTF 2.0 binary model')
     with db() as c:
-        owned(c,'products',pid,u['org_id'])
+        prod=owned(c,'products',pid,u['org_id'])
+        if prod['org_id']!=u['org_id']: raise HTTPException(404,'Resource not found')
+        limits.check_storage(c,u['org_id'],len(raw))
         path=UPLOADS/f'model_{secrets.token_hex(8)}.glb'; path.write_bytes(raw); storage.persist(path)
-        c.execute('UPDATE products SET model_path=?,model_sha256=?,model_report=? WHERE id=?',(str(path),hashlib.sha256(raw).hexdigest(),json.dumps(report),pid))
+        c.execute('UPDATE products SET model_path=?,model_sha256=?,model_report=?,size_bytes=size_bytes+? WHERE id=?',(str(path),hashlib.sha256(raw).hexdigest(),json.dumps(report),len(raw),pid))
         event(c,u,'product.model_uploaded','product',pid,{'triangles':report['triangles'],'warnings':report['warnings']})
     return {'product_id':pid,'model_report':report}
 
@@ -456,17 +561,32 @@ def product_image(pid:int,request:Request):
 def upload_video(request:Request, title:str=Form(...), license_confirmed:bool=Form(...), license_expires:Optional[str]=Form(None), video:UploadFile=File(...)):
     u=current_user(request); require_role(u,'creator')
     if not license_confirmed: raise HTTPException(400,'Confirm that you own or are authorized to license this video')
-    if video.content_type not in ('video/mp4','video/quicktime','video/webm','application/octet-stream'): raise HTTPException(415,'Supported formats: MP4, MOV, WebM')
-    raw=video.file.read(150*1024*1024+1)
-    if len(raw)>150*1024*1024: raise HTTPException(413,'Video upload limit is 150 MB')
-    path=UPLOADS/f'video_{secrets.token_hex(8)}_{safe_name(video.filename or "upload.mp4")}' ; path.write_bytes(raw)
-    scan=clamav_scan(path)
-    if scan.get('clean') is False: path.unlink(missing_ok=True); raise HTTPException(400,'Malware detected in uploaded video')
-    try: duration,width,height,fps=probe(path)
-    except Exception: path.unlink(missing_ok=True); raise
-    storage.persist(path)
+    if video.content_type not in VIDEO_TYPES: raise HTTPException(415,'Supported formats: MP4, MOV, WebM')
+    with db() as c: limits.check_daily_uploads(c,u['org_id'])
+    path=UPLOADS/f'video_{secrets.token_hex(8)}_{safe_name(video.filename or "upload.mp4")}'
+    size=0
+    with open(path,'wb') as out:          # streamed to disk in 1 MB chunks: never the whole video in memory
+        while chunk:=video.file.read(1048576):
+            size+=len(chunk)
+            if size>limits.max_video_bytes(): out.close(); path.unlink(missing_ok=True); raise HTTPException(413,f'Video upload limit is {limits.max_video_bytes()//1048576} MB')
+            out.write(chunk)
+    return ingest_video(u,path,title,license_expires,size)
+
+VIDEO_TYPES=('video/mp4','video/quicktime','video/webm','application/octet-stream')
+def ingest_video(u, path, title, license_expires, size, persisted=False):
+    """Validate a received video file (malware scan, FFprobe metadata, limits, quotas) and record it."""
+    try:
+        with db() as c: limits.check_storage(c,u['org_id'],size); limits.check_daily_uploads(c,u['org_id'])
+        scan=clamav_scan(path)
+        if scan.get('clean') is False: raise HTTPException(400,'Malware detected in uploaded video')
+        duration,width,height,fps=probe(path)
+    except Exception:
+        Path(path).unlink(missing_ok=True)
+        if persisted: storage.delete(str(path))
+        raise
+    if not persisted: storage.persist(path)
     with db() as c:
-        cur=c.execute('INSERT INTO videos(org_id,title,source_path,duration,width,height,fps,license_confirmed,license_expires,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)',(u['org_id'],title.strip(),str(path),duration,width,height,fps,1,license_expires,u['id'])); vid=cur.lastrowid; event(c,u,'video.uploaded','video',vid,{'duration':duration})
+        cur=c.execute('INSERT INTO videos(org_id,title,source_path,duration,width,height,fps,license_confirmed,license_expires,created_by,size_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(u['org_id'],title.strip(),str(path),duration,width,height,fps,1,license_expires,u['id'],size)); vid=cur.lastrowid; event(c,u,'video.uploaded','video',vid,{'duration':duration,'bytes':size})
     return {'id':vid,'title':title,'duration':duration,'width':width,'height':height,'fps':fps,'analyzed':False}
 @app.get('/api/videos')
 def videos(request:Request):
@@ -481,6 +601,7 @@ def videos(request:Request):
 def analyze_video(vid:int,request:Request):
     u=current_user(request); require_role(u,'creator')
     with db() as c: v=owned(c,'videos',vid,u['org_id'])
+    limits.check_rate(u['org_id'],'analyses',limits.org_analyses_per_hour())
     try: frames=extract_frames(vid,storage.local(v['source_path']),v['duration'])
     except Exception as e: raise HTTPException(503,f'Scene analysis failed: {str(e)[:180]}')
     with db() as c:
@@ -846,6 +967,12 @@ class _GateError(RuntimeError):
     @property
     def code(self): return str(self).split(':',1)[0]
 
+class _JobTimeout(_GateError):
+    """The job exceeded CC_JOB_MAX_SECONDS. Terminal."""
+
+class _WorkerShutdown(Exception):
+    """The worker is stopping (SIGTERM): hand the job back to the queue instead of letting its lease expire."""
+
 class _ValidationFailed(RuntimeError):
     def __init__(self, report):
         self.report=report; super().__init__('OUTPUT_VALIDATION_FAILED: '+', '.join(f['code'] for f in report['failures']))
@@ -897,8 +1024,12 @@ def render_job(job_id, token=None):
         j=c.execute('SELECT * FROM jobs WHERE id=?',(job_id,)).fetchone()
     if not j: return
     j=dict(j); token=token or j['lease_token']
+    obs.job_id.set(f'job-{job_id}'); started=time.time(); max_seconds=limits.job_max_seconds()
+    obs.info('job started',job=job_id,attempt=j['attempts'],renderer=j['renderer'])
     def heartbeat(_frame=0):
-        # Renews the lease; aborts the render if the job was cancelled, revoked, or claimed by another worker.
+        # Renews the lease; aborts the render if the job was cancelled, revoked, claimed by another worker, or too slow.
+        if time.time()-started>max_seconds: raise _JobTimeout(f'JOB_TIMEOUT: the render exceeded {max_seconds} seconds')
+        if _WORKER_STOP.is_set(): raise _WorkerShutdown()
         with db() as c:
             if c.execute("UPDATE jobs SET lease_until=? WHERE id=? AND status='RUNNING' AND lease_token=? AND cancel_requested=0",(time.time()+LEASE_SECONDS,job_id,token)).rowcount!=1:
                 raise RenderCancelled('Job was cancelled, revoked, or its lease was lost')
@@ -922,13 +1053,20 @@ def render_job(job_id, token=None):
         os.replace(tmp,output); tmp=None
         storage.persist(output)
         with db() as c:
-            if c.execute("UPDATE jobs SET status='SUCCEEDED',output_path=?,validation_json=?,error=NULL,finished_at=CURRENT_TIMESTAMP,lease_until=NULL WHERE id=? AND status='RUNNING' AND lease_token=? AND cancel_requested=0",(str(output),json.dumps(val),job_id,token)).rowcount!=1:
+            if c.execute("UPDATE jobs SET status='SUCCEEDED',output_path=?,validation_json=?,error=NULL,finished_at=CURRENT_TIMESTAMP,lease_until=NULL,output_bytes=? WHERE id=? AND status='RUNNING' AND lease_token=? AND cancel_requested=0",(str(output),json.dumps(val),output.stat().st_size,job_id,token)).rowcount!=1:
                 storage.delete(output); raise RenderCancelled('Job was cancelled before completion')
             now=dict(c.execute('SELECT * FROM placements WHERE id=?',(p['id'],)).fetchone())
             if now['version']==p['version'] and now['status']=='RENDERING': lifecycle.transition(c,now,'RENDERED',p['created_by'],details={'job_id':job_id})
             c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',(j['org_id'],p['created_by'],'render.succeeded','job',job_id,json.dumps({'bytes':output.stat().st_size,'frames':info['frames_written'],'composited':info['frames_composited'],'renderer':j['renderer'],'product_psnr_db':val['product_psnr_db']})))
             c.execute('INSERT INTO queue_events(job_id,event_type,details) VALUES(?,?,?)',(job_id,'succeeded','{}'))
+        obs.info('job succeeded',job=job_id,seconds=round(time.time()-started,1))
+    except _WorkerShutdown:
+        with db() as c:
+            if c.execute("UPDATE jobs SET status='QUEUED',lease_token=NULL,lease_until=NULL,attempts=CASE WHEN attempts>0 THEN attempts-1 ELSE 0 END WHERE id=? AND lease_token=? AND status='RUNNING'",(job_id,token)).rowcount:
+                c.execute('INSERT INTO queue_events(job_id,event_type,details) VALUES(?,?,?)',(job_id,'released_on_shutdown','{}'))
+        obs.info('job released on shutdown',job=job_id)
     except RenderCancelled as e:
+        obs.info('job cancelled',job=job_id)
         with db() as c:
             if c.execute("UPDATE jobs SET status='CANCELLED',error=?,finished_at=CURRENT_TIMESTAMP,lease_until=NULL WHERE id=? AND lease_token=? AND status IN ('RUNNING','CANCELLED')",(str(e),job_id,token)).rowcount:
                 _placement_render_failed(c,j['placement_id'],j['placement_version'],'Render cancelled')
@@ -945,8 +1083,10 @@ def render_job(job_id, token=None):
             c.execute("UPDATE jobs SET status=?,error=?,validation_json=?,finished_at=CASE WHEN ?=1 THEN NULL ELSE CURRENT_TIMESTAMP END,lease_until=NULL,lease_token=CASE WHEN ?=1 THEN NULL ELSE lease_token END WHERE id=?",(status,message,json.dumps(validation) if validation else None,int(retry),int(retry),job_id))
             if not retry: _placement_render_failed(c,j['placement_id'],j['placement_version'],message)
             c.execute('INSERT INTO queue_events(job_id,event_type,details) VALUES(?,?,?)',(job_id,'retry_scheduled' if retry else status.lower(),json.dumps({'error':message,'attempts':row['attempts']})))
+        obs.warn('job failed',job=job_id,status=status,retry=retry,error=message[:200])
     finally:
         if tmp is not None: Path(tmp).unlink(missing_ok=True)
+        obs.job_id.set(None)
 
 def _queue_render(c, u, p, mode='COMPOSITE', max_cost_usd=None):
     if p['status']=='RENDER_FAILED': _verify_chain(c,p,u)
@@ -955,9 +1095,11 @@ def _queue_render(c, u, p, mode='COMPOSITE', max_cost_usd=None):
     except _GateError as e: raise _err(409,e.code,str(e))
     routing=renderers.route(a['scene_class'],v['duration'],v['width'],v['height'],max_cost_usd)
     if not routing['selected']: raise _err(409,routing['reason_code'],routing['message'],routing=routing)
+    limits.check_active_jobs(c,u['org_id'])
     jid=c.execute("INSERT INTO jobs(placement_id,org_id,status,mode,placement_version,analysis_id,renderer) VALUES(?,?,'QUEUED',?,?,?,?)",(p['id'],u['org_id'],mode,p['version'],a['id'],routing['selected'])).lastrowid
     _transition(c,p,'RENDERING',u,details={'job_id':jid,'renderer':routing['selected']})
     event(c,u,'render.queued','job',jid,{'renderer':routing['selected'],'placement_version':p['version']})
+    c.commit(); obs.wake_workers()
     return {'id':jid,'status':'QUEUED','renderer':routing['selected'],'placement_version':p['version'],'routing':routing,'message':'Render queued for the background worker'}
 
 @app.post('/api/placements/{pid}/render')
@@ -1016,7 +1158,9 @@ def download_link(jid:int,request:Request,channel:Optional[str]=None):
     _authorize_delivery(jid,u,channel,record=False)
     with db() as c: j=c.execute('SELECT placement_version FROM jobs WHERE id=?',(jid,)).fetchone()
     exp=int(time.time())+LINK_TTL_SECONDS
-    return {'url':f'/api/media/{_sign({"j":jid,"u":u["id"],"v":j["placement_version"],"c":channel,"exp":exp})}','expires_at':exp,'ttl_seconds':LINK_TTL_SECONDS}
+    url=f'/api/media/{_sign({"j":jid,"u":u["id"],"v":j["placement_version"],"c":channel,"exp":exp})}'
+    from .auth import public_url
+    return {'url':url,'absolute_url':public_url()+url,'expires_at':exp,'ttl_seconds':LINK_TTL_SECONDS}
 
 @app.get('/api/media/{token}')
 def signed_media(token:str):
@@ -1024,8 +1168,10 @@ def signed_media(token:str):
     if not data: raise HTTPException(403,'Invalid download link')
     if data['exp']<time.time(): raise _err(410,'LINK_EXPIRED','This download link has expired; request a new one')
     with db() as c:
-        row=c.execute('SELECT * FROM users WHERE id=?',(data['u'],)).fetchone()
+        row=c.execute('SELECT * FROM users WHERE id=? AND removed_at IS NULL AND suspended_at IS NULL',(data['u'],)).fetchone()
         if not row: raise HTTPException(403,'Invalid download link')
+        from .members import can
+        if not can(dict(row),'manager'): raise HTTPException(403,'Invalid download link')
         j=c.execute('SELECT placement_version FROM jobs WHERE id=?',(data['j'],)).fetchone()
         if not j or j['placement_version']!=data['v']: raise _err(403,'SUPERSEDED_VERSION','This link was issued for an earlier placement version')
     return _authorize_delivery(data['j'],dict(row),data.get('c'),record=True)
@@ -1337,3 +1483,9 @@ from .commerce import router as commerce_router   # noqa: E402  (imports this mo
 app.include_router(commerce_router)
 from .auth import router as auth_router  # noqa: E402
 app.include_router(auth_router)
+from .members import router as members_router  # noqa: E402
+app.include_router(members_router)
+from .uploads import router as uploads_router  # noqa: E402
+app.include_router(uploads_router)
+from .payments import router as payments_router  # noqa: E402
+app.include_router(payments_router)

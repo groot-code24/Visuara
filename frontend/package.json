@@ -1,0 +1,9 @@
+{
+  "name": "context-commerce-frontend",
+  "version": "10.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static landing page and app for Vercel. No dependencies; see build.mjs.",
+  "scripts": { "build": "node build.mjs" },
+  "engines": { "node": ">=18" }
+}

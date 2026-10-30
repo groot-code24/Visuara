@@ -1,31 +1,68 @@
-# Production-shaped stack: API + worker sharing Neon (DATABASE_URL) and a private S3-compatible bucket (CC_S3_*).
-# Put the secrets in .env (never commit it). Without DATABASE_URL / CC_S3_BUCKET both services fall back to
-# SQLite and local disk on the shared volume.
+# Local, production-shaped stack: PostgreSQL 16 (stands in for Neon), MinIO (stands in for Cloudflare R2),
+# Mailpit (a real SMTP server with a web inbox), the API and two independent render workers.
+#   docker compose up --build        app: http://localhost:8000   inbox: http://localhost:8025   storage console: http://localhost:9001
+# Development credentials below are for this local stack only. Production uses deploy/docker-compose.prod.yml + .env.
+x-backend: &backend
+  build: .
+  image: context-commerce:local
+  depends_on:
+    postgres: { condition: service_healthy }
+    minio-init: { condition: service_completed_successfully }
+  environment: &backend-env
+    CC_ENV: development
+    DATABASE_URL: postgresql://cc:cc-local-only@postgres:5432/context_commerce
+    CC_S3_BUCKET: context-commerce-dev
+    CC_S3_ENDPOINT_URL: http://minio:9000
+    CC_S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+    CC_S3_REGION: us-east-1
+    CC_S3_ADDRESSING: path
+    CC_S3_SSE: ""
+    AWS_ACCESS_KEY_ID: cc-local
+    AWS_SECRET_ACCESS_KEY: cc-local-secret-only
+    CC_SMTP_HOST: mailpit
+    CC_SMTP_PORT: "1025"
+    CC_SMTP_TLS: none
+    CC_MAIL_FROM: Context Commerce (local) <signin@localhost>
+    CC_PUBLIC_URL: http://localhost:8000
+    CC_SIGNING_KEY: local-development-signing-key-not-for-production
+    CC_INLINE_WORKER: "0"
+    CC_LOG_FORMAT: text
+  volumes:
+    - cc-data:/data
+  restart: unless-stopped
+  stop_grace_period: 40s
+
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: cc, POSTGRES_PASSWORD: cc-local-only, POSTGRES_DB: context_commerce }
+    volumes: [ "pg-data:/var/lib/postgresql/data" ]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U cc -d context_commerce"], interval: 3s, timeout: 3s, retries: 30 }
+    ports: [ "127.0.0.1:5433:5432" ]
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment: { MINIO_ROOT_USER: cc-local, MINIO_ROOT_PASSWORD: cc-local-secret-only }
+    volumes: [ "minio-data:/data" ]
+    ports: [ "127.0.0.1:9000:9000", "127.0.0.1:9001:9001" ]
+    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 3s, timeout: 3s, retries: 30 }
+  minio-init:   # private bucket (no anonymous access)
+    image: minio/mc:latest
+    depends_on: { minio: { condition: service_healthy } }
+    entrypoint: ["/bin/sh", "-c", "mc alias set local http://minio:9000 cc-local cc-local-secret-only && mc mb -p local/context-commerce-dev && mc anonymous set none local/context-commerce-dev"]
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: [ "127.0.0.1:8025:8025" ]
   api:
-    build: .
-    ports:
-      - "8000:8000"
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      CC_DATA_DIR: /data
-      CC_INLINE_WORKER: "0"
-    volumes:
-      - cc-data:/data
-    restart: unless-stopped
+    <<: *backend
+    ports: [ "127.0.0.1:8000:8000" ]
   worker:
-    build: .
+    <<: *backend
     command: ["python", "worker.py"]
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      CC_DATA_DIR: /data
-      CC_INLINE_WORKER: "0"
-    volumes:
-      - cc-data:/data
-    restart: unless-stopped
+    deploy: { replicas: 2 }
+    healthcheck: { test: ["CMD", "python", "-m", "ops.worker_health"], interval: 30s, timeout: 5s, retries: 3 }
+
 volumes:
   cc-data:
+  pg-data:
+  minio-data:

@@ -107,7 +107,9 @@ class Connection:
         return [r[0] for r in self.raw.execute("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_type='BASE TABLE' ORDER BY table_name")]
     def lock(self, key):
         """Serialise a critical section until this transaction ends (SQLite: database write lock; PostgreSQL: advisory lock)."""
-        if self.kind == 'sqlite': self.raw.execute('BEGIN IMMEDIATE')
+        if self.kind == 'sqlite':
+            # An open sqlite3 transaction already began with a write, so it holds the write lock.
+            if not self.raw.in_transaction: self.raw.execute('BEGIN IMMEDIATE')
         else: self.raw.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', (key,))
     def commit(self): self.raw.commit()
     def rollback(self): self.raw.rollback()
@@ -140,8 +142,10 @@ def _pool(url, schema):
             if psycopg is None: raise RuntimeError('DATABASE_URL is set but psycopg is not installed (pip install "psycopg[binary]" psycopg_pool)')
             kwargs = {'prepare_threshold': None, 'autocommit': False}   # no server-side prepares: safe behind Neon's pooler
             if schema: kwargs['options'] = f'-c search_path={schema}'
-            _POOLS[key] = ConnectionPool(url, min_size=1, max_size=int(os.getenv('CC_DB_POOL_SIZE', '10')), kwargs=kwargs,
-                                         check=ConnectionPool.check_connection, open=True, timeout=30)
+            # min_size=0 + max_idle: idle connections are closed, so an idle app lets Neon's compute scale to zero.
+            _POOLS[key] = ConnectionPool(url, min_size=int(os.getenv('CC_DB_POOL_MIN', '0')), max_size=int(os.getenv('CC_DB_POOL_SIZE', '10')), kwargs=kwargs,
+                                         check=ConnectionPool.check_connection, open=True, timeout=30,
+                                         max_idle=float(os.getenv('CC_DB_POOL_MAX_IDLE', '60')), max_lifetime=float(os.getenv('CC_DB_POOL_MAX_LIFETIME', '1800')))
         return _POOLS[key]
 
 

@@ -27,9 +27,17 @@ EMAIL_RE = re.compile(r'^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$')
 GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 GOOGLE_ISSUERS = {'https://accounts.google.com', 'accounts.google.com'}
+GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs'
 
 
 def public_url(): return os.getenv('CC_PUBLIC_URL', 'http://127.0.0.1:8000').rstrip('/')
+def app_url():
+    """Where people use the app. Equals public_url() when the API serves the frontend; the Vercel origin otherwise."""
+    return (os.getenv('CC_APP_URL') or public_url()).rstrip('/')
+def app_link(path):
+    """Link into the app: relative when the API serves the frontend itself, absolute when CC_APP_URL names another origin."""
+    return os.getenv('CC_APP_URL', '').rstrip('/') + path
+def _back(): return html.escape(app_link('/app'))
 def google_configured(): return bool(os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'))
 def _h(s): return hashlib.sha256(s.encode()).hexdigest()
 def _now(): return int(time.time())
@@ -82,6 +90,8 @@ def _resolve(c, email, name, provider, subject):
         if user and provider == 'google':
             c.execute('INSERT INTO user_identities(user_id,provider,subject,email) VALUES(?,?,?,?) ON CONFLICT(provider,subject) DO NOTHING', (user['id'], 'google', subject, email))
             m.event(c, dict(user), 'auth.identity_linked', 'user', user['id'], {'provider': 'google'})
+    if user and (user['suspended_at'] or user['removed_at']):
+        return 'suspended', None
     if user:
         m.event(c, dict(user), 'auth.signed_in', 'user', user['id'], {'method': provider})
         return 'session', _start_session(c, user['id'])
@@ -101,8 +111,27 @@ def _apply(resp, outcome):
     return resp
 
 
+def _suspended_page():
+    return _page('Account suspended', f'<h1>This account is suspended</h1><p>Contact your workspace owner to restore access.</p><a class="btn" href="{_back()}">Back</a>', 403)
+
+
 def _redirect(outcome):
-    return _apply(RedirectResponse('/app' if outcome[0] == 'session' else '/app#welcome', status_code=303), outcome)
+    if outcome[0] == 'suspended': return _suspended_page()
+    return _apply(RedirectResponse(app_link('/app' if outcome[0] == 'session' else '/app#welcome'), status_code=303), outcome)
+
+
+def _anon_event(c, typ, details):
+    c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(0,0,?,?,0,?)', (typ, 'auth', json.dumps(details)))
+
+
+@router.get('/api/auth/csrf')
+def csrf_token(request: Request):
+    """CSRF token for frontends on another origin (e.g. Vercel), which cannot read this API's cookies.
+    CORS lets only allowlisted origins read the response, so the double-submit check keeps its strength."""
+    token = request.cookies.get('cc_csrf') or secrets.token_urlsafe(24)
+    resp = JSONResponse({'csrf': token})
+    resp.set_cookie('cc_csrf', token, httponly=False, samesite='lax', secure=_secure(), path='/')
+    return resp
 
 
 @router.get('/api/auth/providers')
@@ -139,8 +168,10 @@ def email_start(body: EmailStart, request: Request):
     try:
         mailer.send(email, f'Your Context Commerce sign-in code: {code}', text, page, outbox_dir=m.DATA / 'outbox')
     except mailer.MailError as e:
-        with m.db() as c: c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE token_hash=?', (_h(token),))
-        raise _err(502, 'EMAIL_SEND_FAILED', str(e))
+        with m.db() as c:
+            c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE token_hash=?', (_h(token),))
+            _anon_event(c, 'email.failed', {'reason': str(e)[:120]})
+        raise _err(502, 'EMAIL_SEND_FAILED', 'The sign-in email could not be sent. Try again in a few minutes.')
     # Identical response whether or not an account exists (no account enumeration).
     return {'sent': True, 'email': email, 'expires_in_seconds': CODE_TTL}
 
@@ -164,6 +195,7 @@ def email_verify(body: EmailVerify):
                 # Counted in its own committed transaction; the challenge burns after MAX_CODE_ATTEMPTS wrong codes.
                 c.execute('UPDATE auth_challenges SET attempts=attempts+1, consumed_at=CASE WHEN attempts+1>=? THEN CURRENT_TIMESTAMP ELSE consumed_at END WHERE id=?', (MAX_CODE_ATTEMPTS, ch['id']))
     if not outcome: raise _err(400, 'CODE_INVALID', 'That code is invalid or has expired. Request a new one.')
+    if outcome[0] == 'suspended': raise _err(403, 'ACCOUNT_SUSPENDED', 'This account is suspended. Contact your workspace owner.')
     return _apply(JSONResponse({'status': 'signed_in' if outcome[0] == 'session' else 'signup_required'}), outcome)
 
 
@@ -181,7 +213,7 @@ def email_link(token: str, request: Request):
     with m.db() as c:
         ch = c.execute('SELECT email FROM auth_challenges WHERE token_hash=? AND consumed_at IS NULL AND expires_at>? AND attempts<?', (_h(token), _now(), MAX_CODE_ATTEMPTS)).fetchone()
     if not ch:
-        return _page('Link expired', '<h1>This sign-in link has expired</h1><p>Links work once and expire after a few minutes. Request a new one.</p><a class="btn" href="/app">Back to sign in</a>', 410)
+        return _page('Link expired', f'<h1>This sign-in link has expired</h1><p>Links work once and expire after a few minutes. Request a new one.</p><a class="btn" href="{_back()}">Back to sign in</a>', 410)
     csrf = request.cookies.get('cc_csrf') or secrets.token_urlsafe(24)
     resp = _page('Confirm sign-in', f'<h1>Sign in to Context Commerce</h1><p>Continue as <strong>{html.escape(ch["email"])}</strong>.</p>'
                  f'<form method="post"><input type="hidden" name="csrf" value="{html.escape(csrf)}"><button type="submit">Continue</button></form>')
@@ -201,7 +233,7 @@ async def email_link_confirm(token: str, request: Request):
         if ch and c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE id=? AND consumed_at IS NULL', (ch['id'],)).rowcount == 1:
             outcome = _resolve(c, ch['email'], '', 'email', None)
     if not outcome:
-        return _page('Link expired', '<h1>This sign-in link has expired</h1><p>Request a new one.</p><a class="btn" href="/app">Back to sign in</a>', 410)
+        return _page('Link expired', f'<h1>This sign-in link has expired</h1><p>Request a new one.</p><a class="btn" href="{_back()}">Back to sign in</a>', 410)
     return _redirect(outcome)
 
 
@@ -209,7 +241,7 @@ async def email_link_confirm(token: str, request: Request):
 @router.get('/auth/google/start')
 def google_start():
     if not google_configured():
-        return _page('Google sign-in unavailable', '<h1>Google sign-in is not configured</h1><p>Use email sign-in instead.</p><a class="btn" href="/app">Back</a>', 503)
+        return _page('Google sign-in unavailable', f'<h1>Google sign-in is not configured</h1><p>Use email sign-in instead.</p><a class="btn" href="{_back()}">Back</a>', 503)
     state, nonce, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(24), secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
     params = {'client_id': os.environ['GOOGLE_CLIENT_ID'], 'redirect_uri': public_url() + '/auth/google/callback', 'response_type': 'code',
@@ -220,18 +252,49 @@ def google_start():
     return resp
 
 
-def google_exchange(code, verifier):
-    """Exchange the authorization code for an ID token and return its claims.
+_JWKS = {'at': 0.0, 'keys': {}}
+_SHA256_DIGEST_INFO = bytes.fromhex('3031300d060960864801650304020105000420')
 
-    The ID token comes straight from Google's token endpoint over verified TLS, so per OpenID Connect Core 3.1.3.7 (6)
-    the TLS server validation stands in for checking the token signature. The claims are still validated by the caller.
+
+def _b64d(s): return base64.urlsafe_b64decode(s + '=' * (-len(s) % 4))
+
+
+def google_jwks(force=False):
+    """Google's current signing keys (cached for an hour; refreshed when an unknown key id appears)."""
+    if force or time.time() - _JWKS['at'] > 3600 or not _JWKS['keys']:
+        r = httpx.get(os.getenv('CC_GOOGLE_JWKS_URL', GOOGLE_JWKS_URL), timeout=10); r.raise_for_status()
+        _JWKS.update(at=time.time(), keys={k['kid']: k for k in r.json()['keys'] if k.get('kty') == 'RSA'})
+    return _JWKS['keys']
+
+
+def verify_rs256(jwt, keys=google_jwks):
+    """Verify an RS256 JWT signature (RSASSA-PKCS1-v1_5 with SHA-256) against a JWKS and return its claims."""
+    head_b64, payload_b64, sig_b64 = jwt.split('.')
+    header = json.loads(_b64d(head_b64))
+    if header.get('alg') != 'RS256': raise ValueError('unexpected signing algorithm')
+    key = keys().get(header.get('kid')) or keys(True).get(header.get('kid'))
+    if not key: raise ValueError('unknown signing key')
+    n, e = int.from_bytes(_b64d(key['n']), 'big'), int.from_bytes(_b64d(key['e']), 'big')
+    k = (n.bit_length() + 7) // 8; sig = _b64d(sig_b64)
+    if len(sig) != k or n.bit_length() < 2048: raise ValueError('malformed signature or weak key')
+    em = pow(int.from_bytes(sig, 'big'), e, n).to_bytes(k, 'big')
+    digest = hashlib.sha256(f'{head_b64}.{payload_b64}'.encode()).digest()
+    expected = b'\x00\x01' + b'\xff' * (k - 3 - len(_SHA256_DIGEST_INFO) - 32) + b'\x00' + _SHA256_DIGEST_INFO + digest
+    if not hmac.compare_digest(em, expected): raise ValueError('invalid signature')
+    return json.loads(_b64d(payload_b64))
+
+
+def google_exchange(code, verifier):
+    """Exchange the authorization code for an ID token, verify its signature against Google's keys, return its claims.
+
+    The token also arrives over verified TLS straight from Google (OpenID Connect Core 3.1.3.7 (6)); the signature
+    check is defence in depth. The claims are validated by the caller.
     """
     r = httpx.post(GOOGLE_TOKEN_URL, timeout=15, data={
         'grant_type': 'authorization_code', 'code': code, 'code_verifier': verifier, 'redirect_uri': public_url() + '/auth/google/callback',
         'client_id': os.environ['GOOGLE_CLIENT_ID'], 'client_secret': os.environ['GOOGLE_CLIENT_SECRET']})
     if r.status_code != 200: raise ValueError(f'token endpoint returned {r.status_code}')
-    payload = r.json()['id_token'].split('.')[1]
-    return json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)))
+    return verify_rs256(r.json()['id_token'])
 
 
 def validate_google_claims(claims, nonce):
@@ -247,7 +310,11 @@ def validate_google_claims(claims, nonce):
 
 @router.get('/auth/google/callback')
 def google_callback(request: Request, code: str = '', state: str = '', error: str = ''):
-    fail = lambda why: _page('Google sign-in failed', f'<h1>Google sign-in did not complete</h1><p>{html.escape(why)}</p><a class="btn" href="/app">Back to sign in</a>', 400)
+    def fail(why):
+        try:
+            with m.db() as c: _anon_event(c, 'auth.google_failed', {'reason': why[:80]})
+        except Exception: pass
+        return _page('Google sign-in failed', f'<h1>Google sign-in did not complete</h1><p>{html.escape(why)}</p><a class="btn" href="{_back()}">Back to sign in</a>', 400)
     if error: return fail('Sign-in was cancelled or refused at Google.')
     data = _open('google-oauth', request.cookies.get('cc_oauth', ''))
     if not data or not state or not hmac.compare_digest(state, data['s']): return fail('The sign-in session expired or did not match. Please start again.')
@@ -271,7 +338,7 @@ def _pending(c, request):
 
 
 def _invitations_for(c, email):
-    return c.execute('SELECT i.id,i.role,o.name organization FROM invitations i JOIN organizations o ON o.id=i.org_id WHERE lower(i.email)=? AND i.accepted_at IS NULL AND i.expires_at>? ORDER BY i.id DESC',
+    return c.execute('SELECT i.id,i.role,i.member_role,o.name organization FROM invitations i JOIN organizations o ON o.id=i.org_id WHERE lower(i.email)=? AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>? ORDER BY i.id DESC',
                      (email, _now())).fetchall()
 
 
@@ -310,8 +377,9 @@ def complete_signup(body: SignupIn, request: Request):
             inv = next((r for r in _invitations_for(c, email) if r['id'] == body.invitation_id), None)
             if not inv: raise _err(403, 'INVITATION_INVALID', 'That invitation is not valid for this email')
             inv = c.execute('SELECT * FROM invitations WHERE id=?', (inv['id'],)).fetchone()
-            org_id, role = inv['org_id'], inv['role']
-            c.execute('UPDATE invitations SET accepted_at=CURRENT_TIMESTAMP WHERE id=? AND accepted_at IS NULL', (inv['id'],))
+            org_id, role, member_role = inv['org_id'], inv['role'], inv['member_role']
+            if c.execute('UPDATE invitations SET accepted_at=CURRENT_TIMESTAMP WHERE id=? AND accepted_at IS NULL AND revoked_at IS NULL', (inv['id'],)).rowcount != 1:
+                raise _err(403, 'INVITATION_INVALID', 'That invitation is no longer valid')
         else:
             role, org_name = body.role, body.organization.strip()
             if role not in ('brand', 'creator'): raise _err(422, 'ROLE_REQUIRED', 'Choose whether you are joining as a brand or a creator')
@@ -319,11 +387,12 @@ def complete_signup(body: SignupIn, request: Request):
             if c.execute('SELECT id FROM organizations WHERE lower(name)=lower(?)', (org_name,)).fetchone():
                 raise _err(409, 'ORGANIZATION_EXISTS', 'A workspace with this name exists. Choose another name, or ask a member to invite you.')
             org_id = c.execute('INSERT INTO organizations(name) VALUES(?)', (org_name,)).lastrowid
-        uid = c.execute('INSERT INTO users(email,password_hash,name,role,org_id) VALUES(?,?,?,?,?)', (email, '', body.name.strip(), role, org_id)).lastrowid
+            member_role = 'owner'
+        uid = c.execute('INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,?,?,?,?,?)', (email, '', body.name.strip(), role, org_id, member_role)).lastrowid
         if p['provider'] == 'google' and p['subject']:
             c.execute('INSERT INTO user_identities(user_id,provider,subject,email) VALUES(?,?,?,?)', (uid, 'google', p['subject'], email))
         c.execute('DELETE FROM pending_signups WHERE token_hash=?', (p['token_hash'],))
-        user = {'id': uid, 'email': email, 'name': body.name.strip(), 'role': role, 'org_id': org_id}
+        user = {'id': uid, 'email': email, 'name': body.name.strip(), 'role': role, 'org_id': org_id, 'member_role': member_role}
         m.event(c, user, 'user.signed_up', 'user', uid, {'method': p['provider'], 'via_invitation': bool(body.invitation_id)})
         token = _start_session(c, uid)
     resp = JSONResponse({'user': user})

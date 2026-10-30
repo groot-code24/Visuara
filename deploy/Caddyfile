@@ -1,0 +1,14 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt) for the API host, e.g. api.example.com.
+{$CC_API_DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 600MB
+	}
+	reverse_proxy api:8000 {
+		header_up X-Forwarded-Proto {scheme}
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+	}
+}

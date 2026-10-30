@@ -1,0 +1,16 @@
+.git
+.venv*
+data
+backups
+docs
+tests
+qa
+benchmark
+frontend
+.vercel
+**/__pycache__
+**/*.pyc
+.env
+.env.*
+*.sqlite3
+*.zip
