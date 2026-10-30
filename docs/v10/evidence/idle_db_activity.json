@@ -1,0 +1,251 @@
+{
+ "minutes": 20.0,
+ "samples": [
+  {
+   "t": 0,
+   "xacts": 22827,
+   "connections": 3
+  },
+  {
+   "t": 30,
+   "xacts": 22836,
+   "connections": 3
+  },
+  {
+   "t": 61,
+   "xacts": 22847,
+   "connections": 1
+  },
+  {
+   "t": 91,
+   "xacts": 22863,
+   "connections": 2
+  },
+  {
+   "t": 121,
+   "xacts": 22873,
+   "connections": 2
+  },
+  {
+   "t": 152,
+   "xacts": 22882,
+   "connections": 2
+  },
+  {
+   "t": 182,
+   "xacts": 22893,
+   "connections": 0
+  },
+  {
+   "t": 212,
+   "xacts": 22902,
+   "connections": 0
+  },
+  {
+   "t": 242,
+   "xacts": 22913,
+   "connections": 0
+  },
+  {
+   "t": 272,
+   "xacts": 22923,
+   "connections": 0
+  },
+  {
+   "t": 302,
+   "xacts": 22934,
+   "connections": 0
+  },
+  {
+   "t": 332,
+   "xacts": 22945,
+   "connections": 2
+  },
+  {
+   "t": 363,
+   "xacts": 22960,
+   "connections": 2
+  },
+  {
+   "t": 393,
+   "xacts": 22970,
+   "connections": 2
+  },
+  {
+   "t": 423,
+   "xacts": 22981,
+   "connections": 0
+  },
+  {
+   "t": 453,
+   "xacts": 22991,
+   "connections": 0
+  },
+  {
+   "t": 483,
+   "xacts": 23002,
+   "connections": 0
+  },
+  {
+   "t": 513,
+   "xacts": 23011,
+   "connections": 0
+  },
+  {
+   "t": 543,
+   "xacts": 23021,
+   "connections": 0
+  },
+  {
+   "t": 574,
+   "xacts": 23030,
+   "connections": 0
+  },
+  {
+   "t": 604,
+   "xacts": 23041,
+   "connections": 0
+  },
+  {
+   "t": 634,
+   "xacts": 23050,
+   "connections": 0
+  },
+  {
+   "t": 664,
+   "xacts": 23061,
+   "connections": 0
+  },
+  {
+   "t": 694,
+   "xacts": 23070,
+   "connections": 0
+  },
+  {
+   "t": 725,
+   "xacts": 23081,
+   "connections": 0
+  },
+  {
+   "t": 755,
+   "xacts": 23091,
+   "connections": 0
+  },
+  {
+   "t": 785,
+   "xacts": 23102,
+   "connections": 0
+  },
+  {
+   "t": 815,
+   "xacts": 23111,
+   "connections": 0
+  },
+  {
+   "t": 845,
+   "xacts": 23125,
+   "connections": 2
+  },
+  {
+   "t": 877,
+   "xacts": 23137,
+   "connections": 2
+  },
+  {
+   "t": 907,
+   "xacts": 23147,
+   "connections": 0
+  },
+  {
+   "t": 938,
+   "xacts": 23157,
+   "connections": 0
+  },
+  {
+   "t": 968,
+   "xacts": 23168,
+   "connections": 0
+  },
+  {
+   "t": 998,
+   "xacts": 23177,
+   "connections": 0
+  },
+  {
+   "t": 1028,
+   "xacts": 23188,
+   "connections": 0
+  },
+  {
+   "t": 1058,
+   "xacts": 23198,
+   "connections": 0
+  },
+  {
+   "t": 1088,
+   "xacts": 23209,
+   "connections": 0
+  },
+  {
+   "t": 1119,
+   "xacts": 23218,
+   "connections": 0
+  },
+  {
+   "t": 1149,
+   "xacts": 23230,
+   "connections": 0
+  },
+  {
+   "t": 1179,
+   "xacts": 23239,
+   "connections": 0
+  }
+ ],
+ "transactions_total": 412,
+ "intervals_with_activity": 39,
+ "activity_at_seconds": [
+  30,
+  61,
+  91,
+  121,
+  152,
+  182,
+  212,
+  242,
+  272,
+  302,
+  332,
+  363,
+  393,
+  423,
+  453,
+  483,
+  513,
+  543,
+  574,
+  604,
+  634,
+  664,
+  694,
+  725,
+  755,
+  785,
+  815,
+  845,
+  877,
+  907,
+  938,
+  968,
+  998,
+  1028,
+  1058,
+  1088,
+  1119,
+  1149,
+  1179
+ ],
+ "max_gap_seconds": 32,
+ "connections_max": 3,
+ "connections_last": 0
+}

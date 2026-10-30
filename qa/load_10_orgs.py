@@ -100,6 +100,7 @@ def main():
     ap.add_argument('--creators', type=int, default=5); ap.add_argument('--concurrency', type=int, default=10)
     ap.add_argument('--database-url', default=''); ap.add_argument('--out', default=str(ROOT / 'docs' / 'v10' / 'evidence' / 'load_10_orgs.json'))
     ap.add_argument('--tag', default=str(int(time.time())))
+    ap.add_argument('--kill-worker', default='', help='container to SIGKILL once renders are running (crash-recovery drill), e.g. context-commerce-worker-1')
     a = ap.parse_args(); api, tag, pool = a.api.rstrip('/'), a.tag, ThreadPoolExecutor(a.concurrency)
     from benchmark.fixtures import generate, product_image
     work = ROOT / 'data' / f'loadtest_{tag}'; work.mkdir(parents=True, exist_ok=True)
@@ -173,6 +174,16 @@ def main():
         d = deals[i]; r = brands[i][1].call('POST', f'/api/placements/{d["pl"]}/render', label='/api/placements/{id}/render')
         d['job'] = r.json().get('id')
     phase('queue_renders', render, range(a.brands))
+    chaos = None
+    if a.kill_worker:   # crash a worker mid-render (SIGKILL: no graceful hand-back); its lease must expire and be recovered
+        t = time.time()
+        while time.time() - t < 120:
+            states = [next((j['status'] for j in brands[i][1].call('GET', '/api/jobs', label='/api/jobs').json() if j['id'] == deals[i]['job']), None) for i in range(a.brands)]
+            if states.count('RUNNING') >= 2: break
+            time.sleep(1)
+        r = subprocess.run(['docker', 'kill', a.kill_worker], capture_output=True, text=True)
+        chaos = {'killed': a.kill_worker, 'at_seconds_after_queue': round(time.time() - t_queue, 1), 'docker': (r.stdout or r.stderr).strip(), 'running_when_killed': states.count('RUNNING')}
+        print('chaos:', chaos, flush=True)
     deadline = time.time() + 1800
     while time.time() < deadline:
         js = [next((j for j in brands[i][1].call('GET', '/api/jobs', label='/api/jobs').json() if j['id'] == deals[i]['job']), {}) for i in range(a.brands)]
@@ -231,6 +242,7 @@ def main():
         'render_seconds': {'median': round(statistics.median(rd), 1) if rd else None, 'max': max(rd) if rd else None},
         'downloads_ok': sum(1 for d in deals if d.get('download_bytes', 0) > 1000),
         'isolation': {'probes_refused': refused, 'leaks': leaks},
+        'worker_crash_drill': chaos, 'jobs_with_retries': [j for j in jobs if (j.get('attempts') or 0) > 1],
         'db_connections': {'samples': len(psamples), 'max': max(psamples) if psamples else None, 'median': statistics.median(psamples) if psamples else None},
         'containers': {name: {'cpu_max': max(float(s['cpu'].rstrip('%')) for s in dsamples if s['name'] == name),
                               'mem_last': [s['mem'] for s in dsamples if s['name'] == name][-1]} for name in {s['name'] for s in dsamples}},

@@ -47,6 +47,7 @@ def main():
             pg.js("window.confirm=()=>true")
             pg.click_text('Create account' if mode == 'register' else 'Sign in', "document.querySelector('.tabs')")
             for k, v in f.items(): pg.js(f"document.querySelector('#authForm [name={k}]').value={json.dumps(v)}")
+            pg.js("document.getElementById('toast').style.display='none'")   # a toast left by the previous step must not count as the answer
             pg.click("document.getElementById('authSubmit')")
             pg.wait("document.getElementById('shell').style.display==='block' || document.getElementById('toast').style.display==='block'")
             if pg.js("document.getElementById('shell').style.display!=='block'"): raise AssertionError(pg.js("document.getElementById('toast').textContent"))

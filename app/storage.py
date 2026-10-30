@@ -46,9 +46,37 @@ def public_client():
         return _public_client
 
 
+_quick = None
+
+
+def quick_client():
+    """Client for small metadata calls on request paths (HEAD, list): short timeouts, 2 attempts, so a storage outage
+    returns an error in seconds instead of holding the request for minutes."""
+    global _quick
+    with _lock:
+        if _quick is None:
+            from botocore.config import Config
+            import boto3
+            _quick = boto3.client('s3', endpoint_url=os.getenv('CC_S3_ENDPOINT_URL') or None, region_name=os.getenv('CC_S3_REGION') or None,
+                                  config=Config(signature_version='s3v4', retries={'max_attempts': 2, 'mode': 'standard'}, connect_timeout=3, read_timeout=10,
+                                                s3={'addressing_style': os.getenv('CC_S3_ADDRESSING', 'auto')}))
+        return _quick
+
+
+def probe():
+    """Fast reachability check for readiness. Returns 'ok', 'access_denied' or 'unavailable'.
+    Lists at most one key, which object-scoped tokens (e.g. R2 "Object Read & Write") may do, unlike HeadBucket."""
+    try:
+        quick_client().list_objects_v2(Bucket=bucket(), MaxKeys=1)
+        return 'ok'
+    except Exception as e:
+        code = str(((getattr(e, 'response', None) or {}).get('Error') or {}).get('Code', ''))   # timeouts carry response=None
+        return 'access_denied' if code in ('AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', '403') else 'unavailable'
+
+
 def reset():
-    global _client, _public_client
-    with _lock: _client = None; _public_client = None
+    global _client, _public_client, _quick
+    with _lock: _client = None; _public_client = None; _quick = None
 
 
 def _data():
@@ -106,7 +134,7 @@ def exists(path):
     if not path: return False
     if Path(path).exists() or _local_for_key(path).exists(): return True
     if enabled() and key_for(path):
-        try: client().head_object(Bucket=bucket(), Key=key_for(path)); return True
+        try: quick_client().head_object(Bucket=bucket(), Key=key_for(path)); return True
         except Exception: return False
     return False
 
@@ -134,7 +162,7 @@ def presigned_put(path, content_type, ttl=None):
 
 def head(path):
     """Size in bytes of the stored object, or None when it does not exist."""
-    try: return int(client().head_object(Bucket=bucket(), Key=key_for(path))['ContentLength'])
+    try: return int(quick_client().head_object(Bucket=bucket(), Key=key_for(path))['ContentLength'])
     except Exception: return None
 
 

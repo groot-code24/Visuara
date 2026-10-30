@@ -1,0 +1,8 @@
+# Load-test override: every simulated user comes from one IP (the test machine), so the per-IP sign-in limit
+# (12/minute in production) is raised for the duration of qa/load_10_orgs.py. Nothing else changes.
+services:
+  api:
+    environment:
+      CC_AUTH_RATE_PER_MINUTE: "1000"
+      # Presigned URLs by IP: on Windows, "localhost" tries IPv6 first and adds ~2 s per new connection (measured).
+      CC_S3_PUBLIC_ENDPOINT_URL: http://127.0.0.1:8333

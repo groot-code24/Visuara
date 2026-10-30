@@ -140,11 +140,15 @@ def _pool(url, schema):
     with _POOL_LOCK:
         if key not in _POOLS:
             if psycopg is None: raise RuntimeError('DATABASE_URL is set but psycopg is not installed (pip install "psycopg[binary]" psycopg_pool)')
-            kwargs = {'prepare_threshold': None, 'autocommit': False}   # no server-side prepares: safe behind Neon's pooler
+            kwargs = {'prepare_threshold': None, 'autocommit': False,   # no server-side prepares: safe behind Neon's pooler
+                      'connect_timeout': int(os.getenv('CC_DB_CONNECT_TIMEOUT', '5')),
+                      # Detect dead connections (network partition) instead of hanging on TCP retransmits for minutes.
+                      'keepalives': 1, 'keepalives_idle': 30, 'keepalives_interval': 10, 'keepalives_count': 3,
+                      'tcp_user_timeout': int(os.getenv('CC_DB_TCP_USER_TIMEOUT_MS', '20000'))}
             if schema: kwargs['options'] = f'-c search_path={schema}'
             # min_size=0 + max_idle: idle connections are closed, so an idle app lets Neon's compute scale to zero.
             _POOLS[key] = ConnectionPool(url, min_size=int(os.getenv('CC_DB_POOL_MIN', '0')), max_size=int(os.getenv('CC_DB_POOL_SIZE', '10')), kwargs=kwargs,
-                                         check=ConnectionPool.check_connection, open=True, timeout=30,
+                                         check=ConnectionPool.check_connection, open=True, timeout=float(os.getenv('CC_DB_POOL_TIMEOUT', '10')),
                                          max_idle=float(os.getenv('CC_DB_POOL_MAX_IDLE', '60')), max_lifetime=float(os.getenv('CC_DB_POOL_MAX_LIFETIME', '1800')))
         return _POOLS[key]
 
@@ -162,6 +166,20 @@ def connect(sqlite_path, url=None, schema=None, id_tabs=frozenset()):
         return PgConnection(raw, lambda: pool.putconn(raw), id_tabs)
     raw = sqlite3.connect(sqlite_path, timeout=30); raw.row_factory = sqlite3.Row; raw.execute('PRAGMA foreign_keys=ON')
     return Connection(raw, raw.close)
+
+
+def probe(sqlite_path, schema=None, url=None, timeout=5):
+    """Readiness check with a short timeout, outside the pool (a pooled wait could take 30 s while the database is down)."""
+    url = database_url() if url is None else url
+    try:
+        if url:
+            with psycopg.connect(url, connect_timeout=timeout, autocommit=True, **({'options': f'-c search_path={schema}'} if schema else {})) as con:
+                con.execute('SELECT 1').fetchone()
+        else:
+            with sqlite3.connect(sqlite_path, timeout=timeout) as con: con.execute('SELECT 1').fetchone()
+        return True
+    except Exception:
+        return False
 
 
 def describe(url=None):

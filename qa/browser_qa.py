@@ -124,8 +124,8 @@ def main():
         token = {}
         def invite():
             page.js("navigate('settings')"); page.wait("!!document.getElementById('inviteEmail')")
-            page.js("document.getElementById('inviteEmail').value='creator@qa.test'")
-            page.click_text('Create invitation token')
+            page.js("document.getElementById('inviteEmail').value='creator@qa.test'; document.getElementById('inviteRole').value='creator'")   # V10 defaults to the inviter's own type
+            page.click_text('Send invitation')   # V10 label (was 'Create invitation token')
             page.wait("document.getElementById('inviteResult').textContent.includes(':')", what='invitation token')
             token['t'] = page.js("document.getElementById('inviteResult').textContent.split(': ')[1].split(' ')[0]")
         step('Brand creates a creator invitation', invite)

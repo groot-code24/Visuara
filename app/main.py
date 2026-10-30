@@ -433,13 +433,9 @@ _READY={'at':0.0,'result':None}
 def _readiness():
     if _READY['result'] and time.time()-_READY['at']<float(os.getenv('CC_READY_CACHE_SECONDS','30')): return _READY['result']
     checks={}
-    try:
-        with db() as c: c.execute('SELECT 1').fetchone()
-        checks['database']='ok'
-    except Exception: checks['database']='unavailable'
+    checks['database']='ok' if dbm.probe(DB,DB_SCHEMA) else 'unavailable'
     if storage.enabled():
-        try: storage.client().head_bucket(Bucket=storage.bucket()); checks['object_storage']='ok'
-        except Exception: checks['object_storage']='unavailable'
+        checks['object_storage']=storage.probe()
     else: checks['object_storage']='local_disk'
     checks['ffmpeg']='ok' if tool_exists('ffmpeg') and tool_exists('ffprobe') else 'missing'
     try: checks['disk']='ok' if obs.disk_status()['free_gb']>=float(os.getenv('CC_MIN_FREE_DISK_GB','2')) else 'low'

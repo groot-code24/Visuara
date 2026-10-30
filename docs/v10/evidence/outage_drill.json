@@ -1,0 +1,59 @@
+{
+ "results": [
+  {
+   "check": "db down: liveness still 200 (monitors do not need the database)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "db down: readiness 503 database=unavailable",
+   "ok": true,
+   "detail": "{\"status\":\"not_ready\",\"checks\":{\"database\":\"unavailable\",\"object_storage\":\"ok\",\"ffmpeg\":\"ok\",\"disk\":\"ok\",\"workers_alive\":2}}"
+  },
+  {
+   "check": "db down: authenticated request fails with a controlled error",
+   "ok": true,
+   "detail": "500 {\"detail\":\"Internal error. Quote this request id to support.\",\"request_id\":\"a806650935dc0740\"} in 10s"
+  },
+  {
+   "check": "db back: readiness 200 again",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "db back: session still valid, requests succeed",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "storage down: readiness 503 object_storage=unavailable",
+   "ok": true,
+   "detail": "{\"status\":\"not_ready\",\"checks\":{\"database\":\"ok\",\"object_storage\":\"unavailable\",\"ffmpeg\":\"ok\",\"disk\":\"ok\",\"workers_alive\":2}}"
+  },
+  {
+   "check": "storage down: upload authorisation still issued (signing is local)",
+   "ok": true,
+   "detail": "{\"method\":\"direct\",\"upload_id\":6,\"put_url\":\"http://127.0.0.1:8333/context-commerce-dev/uploads/video_137c64f29afca847_x."
+  },
+  {
+   "check": "storage down: completion refused with a retryable, non-leaking error",
+   "ok": true,
+   "detail": "409 {\"detail\":{\"code\":\"UPLOAD_NOT_RECEIVED\",\"message\":\"The file has not reached storage yet. Retry the upload.\"}}"
+  },
+  {
+   "check": "storage back: readiness 200 again",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "smtp down: email sign-in fails with EMAIL_SEND_FAILED and no internals",
+   "ok": true,
+   "detail": "502 {\"detail\":{\"code\":\"EMAIL_SEND_FAILED\",\"message\":\"The sign-in email could not be sent. Try again in a few minutes.\"}}"
+  },
+  {
+   "check": "smtp back: email sign-in works again",
+   "ok": true,
+   "detail": "{\"sent\":true,\"email\":\"smtp21793368554@qa.test\",\"expires_in_seconds\":600}"
+  }
+ ]
+}
