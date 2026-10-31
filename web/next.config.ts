@@ -1,0 +1,60 @@
+import type { NextConfig } from 'next';
+
+// The FastAPI backend. The browser only ever talks to this app's origin: /api/* and the Google OAuth callback are
+// proxied, so the session cookie is first-party and the auth guard (proxy.ts) can see it.
+const API_ORIGIN = (process.env.CC_API_ORIGIN || 'http://127.0.0.1:8000').replace(/\/$/, '');
+
+// Rewrites are fixed at build time, so a wrong address here means a site that builds and then fails every request.
+if (process.env.VERCEL) {
+  const problem = !process.env.CC_API_ORIGIN
+    ? 'CC_API_ORIGIN is not set'
+    : !API_ORIGIN.startsWith('https://') ? `CC_API_ORIGIN must use https:// (session cookies travel over it), got ${API_ORIGIN}` : '';
+  if (problem && process.env.VERCEL_ENV === 'production') throw new Error(`${problem}. Set it in the Vercel project (docs/v11/deployment.md).`);
+  if (problem) console.warn(`Warning: ${problem}. Sign-in and the dashboard will not work on this preview.`);
+  if (!process.env.NEXT_PUBLIC_CONTACT_EMAIL) console.warn('Warning: NEXT_PUBLIC_CONTACT_EMAIL is not set, so "Talk to us" and upgrade links have nowhere to go.');
+}
+
+// Presigned storage URLs are https in production; the local S3 stand-in is plain http on the loopback address.
+const storage = process.env.VERCEL ? 'https:' : 'https: http://127.0.0.1:* http://localhost:*';
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",                        // Next.js inlines its bootstrap; pages are static, so no nonce
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' data: blob: ${storage}`,
+  `media-src 'self' blob: ${storage}`,
+  `connect-src 'self' ${storage}`,                            // direct uploads go straight to the bucket
+  "font-src 'self' data:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  ...(process.env.NODE_ENV === 'production' ? [
+    { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+    { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+  ] : []),
+];
+
+const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  allowedDevOrigins: ['localhost', '127.0.0.1'],
+  output: process.env.CC_STANDALONE === '1' ? 'standalone' : undefined,
+  experimental: { proxyTimeout: 120_000 },
+  async rewrites() {
+    return [
+      { source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` },
+      { source: '/auth/google/:path*', destination: `${API_ORIGIN}/auth/google/:path*` },
+    ];
+  },
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
+};
+
+export default nextConfig;

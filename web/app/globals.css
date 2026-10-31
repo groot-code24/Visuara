@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-serif), ui-serif, Georgia, serif;
+  --color-canvas: #faf9f6;
+  --color-card: #ffffff;
+  --color-ink: #18181b;
+  --color-ink-2: #3f3f46;
+  --color-muted: #71717a;
+  --color-line: #e7e5e0;
+  --color-line-2: #d6d3cc;
+  --color-soft: #f3f2ee;
+  /* Brand: violet = imagination and premium craft; teal = precision and trust ("every frame checked"); on cinematic near-black. */
+  --font-mono: var(--font-jbmono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-brand: #7c6cff;
+  --color-brand-soft: #c9c2ff;
+  --color-trust: #2dd4bf;
+  --color-trust-soft: #99f6e4;
+  --color-night: #0a0a12;
+  --color-accent: #5b4fe9;
+  --color-accent-ink: #4338ca;
+  --color-accent-soft: #efedfd;
+  --color-good: #15803d;
+  --color-good-soft: #e9f7ee;
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf3e5;
+  --color-bad: #b91c1c;
+  --color-bad-soft: #fdeceb;
+  --radius-xl2: 1.25rem;
+  --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.04), 0 4px 16px rgba(24, 24, 27, 0.04);
+  --shadow-pop: 0 10px 40px rgba(24, 24, 27, 0.12);
+}
+
+html, body { background: var(--color-canvas); color: var(--color-ink); }
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: var(--color-accent-soft); }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+
+@keyframes cc-pulse { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+.cc-skeleton { background: var(--color-soft); animation: cc-pulse 1.4s ease-in-out infinite; border-radius: .75rem; }
+@keyframes cc-progress { from { background-position: 0 0 } to { background-position: 40px 0 } }
+.cc-stripes { background-image: linear-gradient(45deg, rgba(255,255,255,.18) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.18) 50%, rgba(255,255,255,.18) 75%, transparent 75%); background-size: 40px 40px; animation: cc-progress 1s linear infinite; }
+
+/* Marketing site: the dark "screening room" bands, motion and reveal-on-scroll. */
+.mk-dark { background: var(--color-night); color: #f4f3ef; }
+.mk-grid {
+  background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 40%, transparent 100%);
+}
+.mk-glow { background: radial-gradient(45% 55% at 28% 18%, rgba(124,108,255,.38), transparent 70%), radial-gradient(40% 50% at 82% 12%, rgba(45,212,191,.20), transparent 70%); }
+.mk-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  opacity: .07; mix-blend-mode: overlay;
+}
+.mk-gradient-text { background: linear-gradient(100deg, #fff 8%, #c9c2ff 45%, #7ee8d6 92%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mk-gradient-ink { background: linear-gradient(100deg, #5b4fe9 5%, #0d9488 95%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mk-card-light { box-shadow: 0 1px 2px rgba(24,24,27,.04), 0 24px 70px -24px rgba(24,24,27,.22); }
+.mk-ring { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 30px 80px -20px rgba(0,0,0,.6), 0 0 120px -30px rgba(124,108,255,.45); }
+
+@keyframes mk-scan { from { transform: translateY(-10%) } to { transform: translateY(110%) } }
+.mk-scan { animation: mk-scan 1s cubic-bezier(.5,0,.3,1) forwards; }
+@keyframes mk-dash { to { stroke-dashoffset: -24 } }
+.mk-dash { animation: mk-dash 1.2s linear infinite; }
+@keyframes mk-pop { from { opacity: 0; transform: scale(.92) } to { opacity: 1; transform: scale(1) } }
+.mk-pop { animation: mk-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
+@keyframes mk-fade { from { opacity: 0 } to { opacity: 1 } }
+.mk-fade { animation: mk-fade .45s ease-out both; }
+@keyframes mk-play { from { left: 0% } to { left: 100% } }
+@keyframes mk-float { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+.mk-float { animation: mk-float 6s ease-in-out infinite; }
+@keyframes mk-marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+.mk-marquee { animation: mk-marquee 40s linear infinite; }
+@keyframes mk-blink { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+
+.mk-reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); }
+.mk-reveal.is-in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-scan, .mk-dash, .mk-pop, .mk-fade, .mk-float, .mk-marquee { animation: none !important; }
+  .mk-reveal { opacity: 1; transform: none; transition: none; }
+}
