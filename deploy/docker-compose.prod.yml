@@ -20,8 +20,8 @@ services:
   api:
     <<: *backend
     ports: [ "127.0.0.1:8000:8000" ]          # only the reverse proxy / tunnel reaches it
-    mem_limit: 1g
-    cpus: 1.0
+    mem_limit: ${CC_API_MEM_LIMIT:-2g}        # quality checks run here
+    cpus: ${CC_API_CPUS:-2.0}
   worker:
     <<: *backend
     command: ["python", "worker.py"]

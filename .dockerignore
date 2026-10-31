@@ -6,7 +6,7 @@ docs
 tests
 qa
 benchmark
-frontend
+web
 .vercel
 **/__pycache__
 **/*.pyc

@@ -1,7 +1,7 @@
 # Local, production-shaped stack: PostgreSQL 16 (stands in for Neon), SeaweedFS's S3 gateway with access keys
-# (stands in for Cloudflare R2; anonymous access refused), Mailpit (a real SMTP server with a web inbox), the API and
-# two independent render workers.
-#   docker compose up --build        app: http://localhost:8000   inbox: http://localhost:8025
+# (stands in for Cloudflare R2; anonymous access refused), Mailpit (a real SMTP server with a web inbox), the API, two
+# independent workers (renders and decisions) and the Next.js web app, which proxies /api to the API.
+#   docker compose up --build        app: http://localhost:3000   inbox: http://localhost:8025   API: http://localhost:8000/docs
 # Development credentials below are for this local stack only. Production uses deploy/docker-compose.prod.yml + .env.
 x-backend: &backend
   build: .
@@ -24,10 +24,11 @@ x-backend: &backend
     CC_SMTP_PORT: "1025"
     CC_SMTP_TLS: none
     CC_MAIL_FROM: Context Commerce (local) <signin@localhost>
-    CC_PUBLIC_URL: http://localhost:8000
+    CC_PUBLIC_URL: "http://localhost:${CC_WEB_PORT:-3000}"   # the web app's origin: magic links and the Google callback go through it
     CC_SIGNING_KEY: local-development-signing-key-not-for-production
     CC_INLINE_WORKER: "0"
     CC_LOG_FORMAT: text
+    FORWARDED_ALLOW_IPS: "*"   # client IPs from the web app's proxy (X-Forwarded-For), so sign-in limits are per person
   volumes:
     - cc-data:/data
   restart: unless-stopped
@@ -50,7 +51,7 @@ services:
     image: context-commerce:local
     build: .
     depends_on: { s3: { condition: service_healthy } }
-    environment: { AWS_ACCESS_KEY_ID: cc-local, AWS_SECRET_ACCESS_KEY: cc-local-secret-only }
+    environment: { AWS_ACCESS_KEY_ID: cc-local, AWS_SECRET_ACCESS_KEY: cc-local-secret-only, APP_ORIGIN: "http://localhost:${CC_WEB_PORT:-3000}" }
     volumes: [ "./deploy/local/create_bucket.py:/init/create_bucket.py:ro" ]
     entrypoint: ["python", "/init/create_bucket.py"]
   mailpit:
@@ -58,12 +59,18 @@ services:
     ports: [ "127.0.0.1:8025:8025" ]
   api:
     <<: *backend
-    ports: [ "127.0.0.1:8000:8000" ]
+    ports: [ "127.0.0.1:${CC_API_PORT:-8000}:8000" ]   # API docs at /docs; set CC_API_PORT if 8000 is taken
   worker:
     <<: *backend
     command: ["python", "worker.py"]
     deploy: { replicas: 2 }
     healthcheck: { test: ["CMD", "python", "-m", "ops.worker_health"], interval: 30s, timeout: 5s, retries: 3 }
+  web:
+    build: { context: ./web, args: { CC_API_ORIGIN: "http://api:8000" } }
+    image: context-commerce-web:local
+    depends_on: [ api ]
+    ports: [ "127.0.0.1:${CC_WEB_PORT:-3000}:3000" ]
+    restart: unless-stopped
 
 volumes:
   cc-data:

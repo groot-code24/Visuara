@@ -1,255 +1,198 @@
-"""Ten-organization concurrency and isolation test against a running deployment (API + separate workers).
+"""Ten-workspace concurrency and isolation test against the running docker compose stack, through the web app.
 
-    python qa/load_10_orgs.py --api http://localhost:8000 [--brands 10 --creators 5 --concurrency 10]
-                               [--database-url postgresql://...] [--out docs/v10/evidence/load_10_orgs.json]
+    docker compose -f docker-compose.yml -f deploy/local/compose.loadtest.yml up -d --build
+    python qa/load_10_orgs.py [--app http://127.0.0.1:3000] [--orgs 10] [--database-url postgresql://cc:cc-local-only@127.0.0.1:5433/context_commerce]
+                              [--kill-worker context-commerce-worker-1] [--out docs/v11/evidence/load_10_orgs.json]
 
-Simulates independent workspaces doing real work at the same time, through the public HTTP API only:
-  * 10 brand workspaces (owner + manager + editor) and 5 creator workspaces (owner + manager): password sign-up,
-    invitations, concurrent sign-ins;
-  * creators upload and analyse two videos each and list them; brands create products and campaigns, search the
-    marketplace and send offers; creators accept (one licensed video per brand);
-  * every brand places its product, runs the quality check, gets creator consent and approval, then all brands
-    queue renders at once; the workers render, validate and publish; brands request download links and download;
-  * every brand then probes every other brand's private resources (products, placements, campaigns, jobs,
-    downloads, usage) and the creators' unlicensed source videos. Any 2xx is a cross-tenant leak.
-Measures API latency per endpoint, errors, render queue delay and duration, and (with --database-url) PostgreSQL
-connection counts; `docker stats` samples container CPU and memory when Docker is available.
-Expected refusals (403/404) during the isolation phase are counted separately from errors.
+Every request goes through the Next.js app's proxy to the API, as a browser's would. Simulates independent
+workspaces working at the same time:
+  * 10 owners sign up by emailed code (read from Mailpit); each invites an editor and a viewer, who join the same way;
+  * editors add two products and upload two videos (direct to the S3 bucket by presigned PUT), then all 10 workspaces
+    start a decision at once (2 products x 2 videos each) and the two workers run them;
+  * editors turn each recommendation into a placement and run its quality check; owners approve and all start renders
+    at once (optionally killing one worker mid-render); owners download the validated videos;
+  * viewers and editors are refused actions above their role; every owner then probes every other workspace's
+    products, videos, decisions, previews, placements and renders. Any 2xx there is a cross-tenant leak.
+Reports per-endpoint latency, errors, decision and render timings and (with --database-url) PostgreSQL connections.
 """
-import argparse, json, os, statistics, subprocess, sys, threading, time
+import argparse, json, statistics, subprocess, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-PW = 'load-test-password-123'
-LAT, ERRORS, LOCK = {}, [], threading.Lock()
+sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / 'qa'))
+from qa_session import Session          # noqa: E402
+from benchmark import fixtures_scene as scene   # noqa: E402
+
+SAMPLES, ERRORS, LOCK = [], [], threading.Lock()
 
 
-class User:
-    def __init__(self, api, email):
-        self.email = email
-        self.c = httpx.Client(base_url=api, timeout=600)
+def pmap(fn, items, workers):
+    with ThreadPoolExecutor(workers) as ex: return list(ex.map(fn, items))
 
-    def call(self, method, path, expect=(200,), label=None, **kw):
-        if method in ('POST', 'PUT', 'PATCH', 'DELETE') and self.c.cookies.get('cc_csrf'):
-            kw.setdefault('headers', {})['X-CSRF-Token'] = self.c.cookies.get('cc_csrf')
-        t = time.perf_counter()
-        try: r = self.c.request(method, path, **kw)
+
+def guarded(name, fn):
+    def run(x):
+        try: return fn(x)
         except Exception as e:
-            with LOCK: ERRORS.append({'call': f'{method} {label or path}', 'error': str(e)[:200]})
+            with LOCK: ERRORS.append({'phase': name, 'error': str(e)[:300]})
             raise
-        ms = (time.perf_counter() - t) * 1000
-        key = f'{method} {label or path}'
-        with LOCK:
-            LAT.setdefault(key, []).append(ms)
-            if r.status_code not in expect: ERRORS.append({'call': key, 'status': r.status_code, 'body': r.text[:300]})
-        return r
-
-
-def register(api, name, email, role, org=None, token=None):
-    u = User(api, email)
-    u.c.get('/app')   # CSRF cookie
-    body = {'name': name, 'email': email, 'password': PW, 'role': role}
-    if token: body['invitation_token'] = token
-    else: body['organization'] = org
-    r = u.call('POST', '/api/auth/register', json=body, label='/api/auth/register')
-    assert r.status_code == 200, r.text
-    u.me = r.json()['user']
-    return u
-
-
-def login(u):
-    u.c.cookies.clear(); u.c.get('/app')
-    r = u.call('POST', '/api/auth/login', json={'email': u.email, 'password': PW}, label='/api/auth/login')
-    assert r.status_code == 200, r.text
-
-
-def pct(xs, q): xs = sorted(xs); return round(xs[min(len(xs) - 1, int(q * len(xs)))], 1) if xs else None
-
-
-def docker_sampler(stop, samples):
-    while not stop.is_set():
-        try:
-            out = subprocess.run(['docker', 'stats', '--no-stream', '--format', '{{json .}}'], capture_output=True, text=True, timeout=30).stdout
-            for line in out.splitlines():
-                d = json.loads(line); samples.append({'t': round(time.time(), 1), 'name': d['Name'], 'cpu': d['CPUPerc'], 'mem': d['MemUsage']})
-        except Exception:
-            return
-        stop.wait(5)
-
-
-def pg_sampler(url, stop, samples):
-    try: import psycopg
-    except ImportError: return
-    while not stop.is_set():
-        try:
-            with psycopg.connect(url, autocommit=True) as con:
-                n = con.execute("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()").fetchone()[0]
-            samples.append(n)
-        except Exception:
-            pass
-        stop.wait(2)
+    return run
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--api', default='http://localhost:8000'); ap.add_argument('--brands', type=int, default=10)
-    ap.add_argument('--creators', type=int, default=5); ap.add_argument('--concurrency', type=int, default=10)
-    ap.add_argument('--database-url', default=''); ap.add_argument('--out', default=str(ROOT / 'docs' / 'v10' / 'evidence' / 'load_10_orgs.json'))
-    ap.add_argument('--tag', default=str(int(time.time())))
-    ap.add_argument('--kill-worker', default='', help='container to SIGKILL once renders are running (crash-recovery drill), e.g. context-commerce-worker-1')
-    a = ap.parse_args(); api, tag, pool = a.api.rstrip('/'), a.tag, ThreadPoolExecutor(a.concurrency)
-    from benchmark.fixtures import generate, product_image
-    work = ROOT / 'data' / f'loadtest_{tag}'; work.mkdir(parents=True, exist_ok=True)
-    stop, dsamples, psamples = threading.Event(), [], []
-    threading.Thread(target=docker_sampler, args=(stop, dsamples), daemon=True).start()
-    if a.database_url: threading.Thread(target=pg_sampler, args=(a.database_url, stop, psamples), daemon=True).start()
-    phases, t0 = {}, time.time()
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--app', default='http://127.0.0.1:3000'); ap.add_argument('--orgs', type=int, default=10)
+    ap.add_argument('--database-url'); ap.add_argument('--kill-worker'); ap.add_argument('--out', default=str(ROOT / 'docs' / 'v11' / 'evidence' / 'load_10_orgs.json'))
+    a = ap.parse_args()
+    tag = str(int(time.time()))[-6:]; t0 = time.time(); phases = {}
+    clips = ROOT / 'data' / f'loadtest_{tag}'
+    rooms = [scene.generate('room', 20 + i, clips)['path'] for i in range(4)]
+    prods = [scene.product(clips / 'tech.png', 160, 100, (180, 80, 30)), scene.product(clips / 'food.png', 120, 90, (40, 160, 220))]
 
-    def phase(name, fn, items):
-        t = time.time(); out = list(pool.map(fn, items)); phases[name] = round(time.time() - t, 1); print(f'{name}: {phases[name]} s', flush=True); return out
+    pg = {'max': 0, 'samples': []}; stop = threading.Event()
+    if a.database_url:
+        import psycopg
+        def sample():
+            while not stop.is_set():
+                try:
+                    with psycopg.connect(a.database_url, connect_timeout=5) as con:
+                        n = con.execute("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()").fetchone()[0]
+                    pg['samples'].append(n); pg['max'] = max(pg['max'], n)
+                except Exception: pass
+                stop.wait(2)
+        threading.Thread(target=sample, daemon=True).start()
 
-    # 1. workspaces and teams
-    def mk_brand(i):
-        owner = register(api, f'Brand {i} owner', f'owner{i}.{tag}@brand{i}.test', 'brand', f'Brand {i} {tag}')
-        team = [owner]
-        for role in ('manager', 'editor'):
-            tok = owner.call('POST', '/api/invitations', json={'email': f'{role}{i}.{tag}@brand{i}.test', 'member_role': role}, label='/api/invitations').json()['invitation_token']
-            team.append(register(api, f'Brand {i} {role}', f'{role}{i}.{tag}@brand{i}.test', 'brand', token=tok))
-        return team
-    def mk_creator(i):
-        owner = register(api, f'Creator {i}', f'owner{i}.{tag}@creator{i}.test', 'creator', f'Creator {i} {tag}')
-        tok = owner.call('POST', '/api/invitations', json={'email': f'manager{i}.{tag}@creator{i}.test', 'member_role': 'manager'}, label='/api/invitations').json()['invitation_token']
-        return [owner, register(api, f'Creator {i} manager', f'manager{i}.{tag}@creator{i}.test', 'creator', token=tok)]
-    brands = phase('signup_brands', mk_brand, range(a.brands))
-    creators = phase('signup_creators', mk_creator, range(a.creators))
-    phase('concurrent_signin', login, [u for team in brands + creators for u in team])
+    def phase(name, fn, items, workers=10):
+        t = time.time(); out = pmap(guarded(name, fn), items, workers); phases[name] = round(time.time() - t, 1)
+        print(f'{name}: {phases[name]} s', flush=True); return out
 
-    # 2. creators upload, analyse and list two videos each (the rights holder must be the uploader)
-    clips = [generate('static', 100 + k, work / f'clip{k}') for k in range(2 * a.creators)]
-    def upload(k):
-        owner = creators[k // 2][0]; meta = clips[k]
-        r = owner.call('POST', '/api/videos', data={'title': f'Clip {k}', 'license_confirmed': 'true'},
-                       files={'video': (Path(meta['path']).name, Path(meta['path']).read_bytes(), 'video/mp4')}, label='/api/videos')
-        vid = r.json()['id']
-        owner.call('POST', f'/api/videos/{vid}/analyze', label='/api/videos/{id}/analyze')
-        owner.call('PUT', f'/api/videos/{vid}/listing', json={'price_usd': 100 + k, 'categories': [f'cat{k}'], 'channels': ['social', 'web']}, label='/api/videos/{id}/listing')
-        return vid
-    vids = phase('creator_upload_analyse_list', upload, range(2 * a.creators))
+    S = lambda email: Session(a.app, email, SAMPLES)
+    # 1. owners sign up; 2. each invites an editor and a viewer, who join by signing in with the invited address
+    def signup(i):
+        o = S(f'owner{i}.{tag}@org{i}.test'); o.sign_up(f'Owner {i}', f'Load Org {i} {tag}'); return o
+    owners = phase('owner_sign_up', signup, range(a.orgs))
 
-    # 3. brands: product, campaign, marketplace search, offer; creators accept
-    prod_png = product_image(work / 'product.png')
-    def brand_setup(i):
-        owner, manager, editor = brands[i]
-        pid = editor.call('POST', '/api/products', data={'name': f'Product {i}'}, files={'image': ('p.png', Path(prod_png).read_bytes(), 'image/png')}, label='/api/products').json()['id']
-        cid = manager.call('POST', '/api/campaigns', json={'name': f'Campaign {i}', 'category': f'cat{i}', 'budget_usd': 5000, 'channels': ['social']}, label='/api/campaigns').json()['id']
-        manager.call('GET', f'/api/marketplace?campaign_id={cid}', label='/api/marketplace')
-        k = i % len(vids)
-        oid = manager.call('POST', '/api/offers', json={'campaign_id': cid, 'video_id': vids[k]}, label='/api/offers').json()['id']
-        return {'pid': pid, 'cid': cid, 'vid': vids[k], 'clip': k, 'oid': oid}
-    deals = phase('brand_product_campaign_search_offer', brand_setup, range(a.brands))
-    def accept(i):
-        d = deals[i]; creators[d['clip'] // 2][0].call('POST', f'/api/offers/{d["oid"]}/accept', label='/api/offers/{id}/accept')
-    phase('creator_accept_offers', accept, range(a.brands))
+    def team(i):
+        o = owners[i]; out = {}
+        for role in ('editor', 'viewer'):
+            o.call('POST', '/api/invitations', json={'email': f'{role}{i}.{tag}@org{i}.test', 'member_role': role}, label='/api/invitations', expect=200)
+            m = S(f'{role}{i}.{tag}@org{i}.test'); u = m.sign_up(role.title()); assert u['member_role'] == role; out[role] = m
+        return out
+    teams = phase('invite_and_join', team, range(a.orgs))
+    editors, viewers = [t['editor'] for t in teams], [t['viewer'] for t in teams]
 
-    # 4. placement, quality check, consent, approvals; then all renders at once
-    def place(i):
-        owner, manager, editor = brands[i]; d = deals[i]; meta = clips[d['clip']]
-        body = {'video_id': d['vid'], 'product_id': d['pid'], 'frame_second': .4, 'x': .5, 'y': .5, 'width': .2, 'start_second': .4, 'end_second': 2.8, 'tracking_quad': meta['quad_norm']}
-        pl = editor.call('POST', '/api/placements', json=body, label='/api/placements').json()['id']
-        q = editor.call('POST', f'/api/placements/{pl}/quality-check', label='/api/placements/{id}/quality-check').json()
-        manager.call('POST', f'/api/placements/{pl}/fit-review', data={'decision': 'accept', 'confidence': '0.9'}, label='/api/placements/{id}/fit-review')
-        manager.call('POST', f'/api/placements/{pl}/propose', label='/api/placements/{id}/propose')
-        cr = creators[d['clip'] // 2][0]
-        cr.call('PUT', f'/api/placements/{pl}/rights', json={'permitted_channels': ['social'], 'territories': ['WORLDWIDE'], 'creator_consent': True}, label='/api/placements/{id}/rights')
-        cr.call('POST', f'/api/placements/{pl}/approve', label='/api/placements/{id}/approve')
-        r = manager.call('POST', f'/api/placements/{pl}/approve', label='/api/placements/{id}/approve').json()
-        d.update(pl=pl, quality=q.get('status'), ready=r.get('status'))
-    phase('placement_quality_consent_approval', place, range(a.brands))
-    t_queue = time.time()
-    def render(i):
-        d = deals[i]; r = brands[i][1].call('POST', f'/api/placements/{d["pl"]}/render', label='/api/placements/{id}/render')
-        d['job'] = r.json().get('id')
-    phase('queue_renders', render, range(a.brands))
-    chaos = None
-    if a.kill_worker:   # crash a worker mid-render (SIGKILL: no graceful hand-back); its lease must expire and be recovered
+    # 3. content: two products (multipart through the proxy) and two videos (presigned PUT straight to the bucket)
+    def content(i):
+        e = editors[i]; pids, vids = [], []
+        for path, name, cat in ((prods[0], 'Sleeve', 'tech'), (prods[1], 'Granola', 'food')):
+            pids.append(e.call('POST', '/api/products', data={'name': name, 'category': cat}, files={'image': (Path(path).name, Path(path).read_bytes(), 'image/png')},
+                               label='/api/products', expect=200).json()['id'])
+        for k in range(2):
+            data = Path(rooms[(i + k) % len(rooms)]).read_bytes()
+            init = e.call('POST', '/api/uploads/video', json={'title': f'Clip {k}', 'filename': 'clip.mp4', 'content_type': 'video/mp4', 'size_bytes': len(data), 'license_confirmed': True},
+                          label='/api/uploads/video', expect=200).json()
+            assert init['method'] == 'direct', init
+            t = time.perf_counter(); put = httpx.put(init['put_url'], content=data, headers=init['headers'], timeout=120)
+            with LOCK: SAMPLES.append(('PUT presigned (bucket)', (time.perf_counter() - t) * 1000, put.status_code))
+            assert put.status_code == 200, put.text[:200]
+            vids.append(e.call('POST', f'/api/uploads/{init["upload_id"]}/complete', label='/api/uploads/{id}/complete', expect=200).json()['id'])
+        return pids, vids
+    content_ids = phase('products_and_direct_uploads', content, range(a.orgs))
+
+    # 4. all workspaces start a decision at once; the two workers run them
+    def start_decision(i):
+        pids, vids = content_ids[i]
+        return editors[i].call('POST', '/api/decisions', json={'name': 'Load', 'product_ids': pids, 'video_ids': vids}, label='/api/decisions', expect=200).json()['id']
+    dids = phase('start_decisions', start_decision, range(a.orgs))
+
+    def wait_decision(i):
         t = time.time()
-        while time.time() - t < 120:
-            states = [next((j['status'] for j in brands[i][1].call('GET', '/api/jobs', label='/api/jobs').json() if j['id'] == deals[i]['job']), None) for i in range(a.brands)]
-            if states.count('RUNNING') >= 2: break
-            time.sleep(1)
-        r = subprocess.run(['docker', 'kill', a.kill_worker], capture_output=True, text=True)
-        chaos = {'killed': a.kill_worker, 'at_seconds_after_queue': round(time.time() - t_queue, 1), 'docker': (r.stdout or r.stderr).strip(), 'running_when_killed': states.count('RUNNING')}
-        print('chaos:', chaos, flush=True)
-    deadline = time.time() + 1800
-    while time.time() < deadline:
-        js = [next((j for j in brands[i][1].call('GET', '/api/jobs', label='/api/jobs').json() if j['id'] == deals[i]['job']), {}) for i in range(a.brands)]
-        if all(j.get('status') not in ('QUEUED', 'RUNNING', None) for j in js): break
-        time.sleep(3)
-    phases['render_all_jobs'] = round(time.time() - t_queue, 1)
-    jobs = [{'org': i, **{k: j.get(k) for k in ('id', 'status', 'created_at', 'started_at', 'finished_at', 'attempts', 'error')}} for i, j in enumerate(js)]
-    def deliver(i):
-        m = brands[i][1]; jid = deals[i]['job']
-        link = m.call('POST', f'/api/jobs/{jid}/download-link', label='/api/jobs/{id}/download-link').json()
-        r = m.call('GET', link['url'], label='/api/media/{token}', follow_redirects=True)
-        deals[i]['download_bytes'] = len(r.content)
-        r2 = brands[i][2].call('GET', f'/api/jobs/{jid}/download', expect=(403,), label='/api/jobs/{id}/download (editor, expect 403)')
-    phase('download_links_and_downloads', deliver, range(a.brands))
+        while time.time() - t < 1800:
+            d = editors[i].call('GET', f'/api/decisions/{dids[i]}', label='/api/decisions/{id}', expect=200).json()
+            if d['status'] not in ('QUEUED', 'RUNNING'): return d, time.time() - t
+            time.sleep(3)
+        raise AssertionError('decision timed out')
+    decisions = phase('decisions_complete', wait_decision, range(a.orgs))
+    assigned = sum(d['result']['summary']['assigned'] for d, _ in decisions if d['status'] == 'SUCCEEDED')
 
-    # 5. cross-tenant isolation probes
-    leaks, refused = [], 0
+    # 5. apply the first assigned recommendation, quality check, approve, render
+    def prepare(i):
+        d, _ = decisions[i]; assert d['status'] == 'SUCCEEDED', d.get('error')
+        v = next(v for v in d['result']['videos'] if v['recommendation'])
+        pl = editors[i].call('POST', f'/api/decisions/{dids[i]}/apply', json={'video_id': v['video_id']}, label='/api/decisions/{id}/apply', expect=200).json()['placement_id']
+        q = editors[i].call('POST', f'/api/placements/{pl}/quality-check', label='/api/placements/{id}/quality-check', expect=200).json()
+        assert q['status'] == 'PASSED', q['failures']
+        r = editors[i].call('POST', f'/api/placements/{pl}/approve', label='/api/placements/{id}/approve (editor, refused)')
+        assert r.status_code == 403
+        owners[i].call('POST', f'/api/placements/{pl}/approve', json={'fit_confidence': .9}, label='/api/placements/{id}/approve', expect=200)
+        return pl
+    placements = phase('apply_check_approve', prepare, range(a.orgs))
+
+    queued_at = time.time()
+    jobs = phase('start_renders', lambda i: owners[i].call('POST', f'/api/placements/{placements[i]}/render', label='/api/placements/{id}/render', expect=200).json()['id'], range(a.orgs))
+    killed = None
+    if a.kill_worker:
+        time.sleep(3); subprocess.run(['docker', 'kill', a.kill_worker], capture_output=True); killed = round(time.time() - queued_at, 1)
+        subprocess.run(['docker', 'start', a.kill_worker], capture_output=True)
+
+    def finish(i):
+        while time.time() - queued_at < 1800:
+            j = next(j for j in owners[i].call('GET', '/api/jobs', label='/api/jobs', expect=200).json() if j['id'] == jobs[i])
+            if j['status'] not in ('QUEUED', 'RUNNING'): break
+            time.sleep(2)
+        assert j['status'] == 'SUCCEEDED', j
+        link = owners[i].call('POST', f'/api/jobs/{jobs[i]}/download-link', label='/api/jobs/{id}/download-link', expect=200).json()
+        dl = owners[i].call('GET', link['url'], label='/api/media/{token}', follow_redirects=True)
+        assert dl.status_code == 200 and dl.content[4:8] == b'ftyp', dl.status_code
+        return {'attempts': j['attempts'], 'seconds_after_queue': round(time.time() - queued_at, 1)}
+    renders = phase('renders_and_downloads', finish, range(a.orgs))
+
+    # 6. roles and isolation
+    def roles(i):
+        r = viewers[i].call('POST', '/api/products', data={'name': 'x'}, files={'image': ('p.png', b'x', 'image/png')}, label='/api/products (viewer, refused)')
+        assert r.status_code == 403
+        assert viewers[i].call('GET', f'/api/decisions/{dids[i]}', label='/api/decisions/{id}').status_code == 200
+        r = editors[i].call('POST', f'/api/jobs/{jobs[i]}/download-link', label='/api/jobs/{id}/download-link (editor, refused)')
+        assert r.status_code == 403
+    phase('role_checks', roles, range(a.orgs))
+
     def probe(i):
-        nonlocal refused
-        attacker = brands[i][1]
-        for j in range(a.brands):
-            if j == i: continue
-            d = deals[j]
-            for path in (f'/api/products/{d["pid"]}/image', f'/api/placements/{d["pl"]}', f'/api/placements/{d["pl"]}/preview',
-                         f'/api/campaigns/{d["cid"]}/report', f'/api/jobs/{d["job"]}/download', f'/api/offers/{d["oid"]}/payments'):
-                r = attacker.call('GET', path, expect=(403, 404, 409), label='isolation probe GET')
-                if r.status_code < 300 or r.status_code in (301, 302, 307): leaks.append({'attacker_org': i, 'path': path, 'status': r.status_code})
-                else:
-                    with LOCK: refused += 1
-            r = attacker.call('POST', f'/api/jobs/{d["job"]}/download-link', expect=(403, 404, 409), label='isolation probe POST')
-            if r.status_code < 300: leaks.append({'attacker_org': i, 'path': 'download-link', 'status': r.status_code})
-            else:
-                with LOCK: refused += 1
-        for k, vid in enumerate(vids):   # unlicensed creator source video
-            if k == deals[i]['clip']: continue
-            r = attacker.call('GET', f'/api/videos/{vid}/stream', expect=(403, 404), label='isolation probe GET')
-            if r.status_code < 300 or r.status_code == 307: leaks.append({'attacker_org': i, 'path': f'/api/videos/{vid}/stream', 'status': r.status_code})
-            else:
-                with LOCK: refused += 1
-    phase('cross_tenant_probes', probe, range(a.brands))
+        leaks, refused = [], 0
+        for k in range(a.orgs):
+            if k == i: continue
+            vid = content_ids[k][1][0]; pid = content_ids[k][0][0]
+            for method, url in (('GET', f'/api/products/{pid}/image'), ('GET', f'/api/videos/{vid}/stream'), ('GET', f'/api/decisions/{dids[k]}'),
+                                ('GET', f'/api/decisions/{dids[k]}/preview?video_id={vid}&product_id={pid}'), ('GET', f'/api/placements/{placements[k]}'),
+                                ('GET', f'/api/placements/{placements[k]}/preview?t=1'), ('GET', f'/api/jobs/{jobs[k]}/download'),
+                                ('POST', f'/api/jobs/{jobs[k]}/download-link'), ('POST', f'/api/decisions/{dids[k]}/apply'), ('POST', f'/api/placements/{placements[k]}/render')):
+                kw = {'json': {'video_id': vid}} if url.endswith('/apply') else {}
+                r = owners[i].call(method, url, label='isolation probe', follow_redirects=False, **kw)
+                if 200 <= r.status_code < 400: leaks.append(f'{method} {url} -> {r.status_code}')
+                else: refused += 1
+        return leaks, refused
+    probes = phase('isolation_probes', probe, range(a.orgs))
     stop.set()
 
-    def ts(s): return time.mktime(time.strptime(s, '%Y-%m-%d %H:%M:%S')) if s else None
-    qd = [ts(j['started_at']) - ts(j['created_at']) for j in jobs if j['started_at'] and j['created_at']]
-    rd = [ts(j['finished_at']) - ts(j['started_at']) for j in jobs if j['finished_at'] and j['started_at']]
-    unexpected = [e for e in ERRORS]
+    lat = {}
+    for key in sorted({k for k, _, _ in SAMPLES}):
+        xs = sorted(ms for k, ms, _ in SAMPLES if k == key)
+        lat[key] = {'n': len(xs), 'p50_ms': round(statistics.median(xs)), 'p95_ms': round(xs[min(len(xs) - 1, int(len(xs) * .95))])}
     report = {
-        'config': {'api': api, 'brands': a.brands, 'creators': a.creators, 'users': sum(len(t) for t in brands + creators), 'concurrency': a.concurrency},
-        'phases_seconds': phases, 'total_seconds': round(time.time() - t0, 1),
-        'latency_ms': {k: {'n': len(v), 'p50': pct(v, .5), 'p95': pct(v, .95), 'max': round(max(v), 1)} for k, v in sorted(LAT.items())},
-        'requests': sum(len(v) for v in LAT.values()), 'unexpected_responses': len(unexpected), 'unexpected_detail': unexpected[:30],
-        'quality_checks': {s: sum(1 for d in deals if d.get('quality') == s) for s in {d.get('quality') for d in deals}},
-        'ready_for_render': sum(1 for d in deals if d.get('ready') == 'READY_FOR_RENDER'),
-        'jobs': jobs, 'jobs_succeeded': sum(1 for j in jobs if j['status'] == 'SUCCEEDED'),
-        'queue_delay_seconds': {'median': round(statistics.median(qd), 1) if qd else None, 'max': max(qd) if qd else None},
-        'render_seconds': {'median': round(statistics.median(rd), 1) if rd else None, 'max': max(rd) if rd else None},
-        'downloads_ok': sum(1 for d in deals if d.get('download_bytes', 0) > 1000),
-        'isolation': {'probes_refused': refused, 'leaks': leaks},
-        'worker_crash_drill': chaos, 'jobs_with_retries': [j for j in jobs if (j.get('attempts') or 0) > 1],
-        'db_connections': {'samples': len(psamples), 'max': max(psamples) if psamples else None, 'median': statistics.median(psamples) if psamples else None},
-        'containers': {name: {'cpu_max': max(float(s['cpu'].rstrip('%')) for s in dsamples if s['name'] == name),
-                              'mem_last': [s['mem'] for s in dsamples if s['name'] == name][-1]} for name in {s['name'] for s in dsamples}},
+        'app': a.app, 'workspaces': a.orgs, 'users': a.orgs * 3, 'requests': len(SAMPLES), 'errors': ERRORS,
+        'unexpected_5xx': sum(1 for _, _, s in SAMPLES if s >= 500),
+        'decisions': {'succeeded': sum(d['status'] == 'SUCCEEDED' for d, _ in decisions), 'videos_assigned': assigned, 'videos_total': a.orgs * 2,
+                      'seconds_median': round(statistics.median(s for _, s in decisions), 1), 'seconds_max': round(max(s for _, s in decisions), 1)},
+        'renders': {'succeeded': len(renders), 'retried_after_worker_kill': sum(r['attempts'] > 1 for r in renders), 'worker_killed_after_s': killed,
+                    'all_done_after_s': max(r['seconds_after_queue'] for r in renders)},
+        'isolation': {'probes_refused': sum(r for _, r in probes), 'leaks': [x for lk, _ in probes for x in lk]},
+        'postgres_connections_max': pg['max'] if a.database_url else None, 'phases_s': phases, 'total_s': round(time.time() - t0, 1), 'latency': lat,
     }
-    Path(a.out).parent.mkdir(parents=True, exist_ok=True); Path(a.out).write_text(json.dumps(report, indent=1))
-    print(json.dumps({k: report[k] for k in ('config', 'total_seconds', 'requests', 'unexpected_responses', 'jobs_succeeded', 'queue_delay_seconds', 'render_seconds', 'downloads_ok', 'isolation', 'db_connections')}, indent=1))
-    ok = not leaks and not unexpected and report['jobs_succeeded'] == a.brands and report['downloads_ok'] == a.brands
+    out = Path(a.out); out.parent.mkdir(parents=True, exist_ok=True); out.write_text(json.dumps(report, indent=1))
+    print(json.dumps({k: v for k, v in report.items() if k != 'latency'}, indent=1))
+    ok = not ERRORS and not report['isolation']['leaks'] and report['unexpected_5xx'] == 0
     sys.exit(0 if ok else 1)
 
 

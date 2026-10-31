@@ -12,5 +12,3 @@ psycopg[binary]>=3.2,<4
 psycopg-pool>=3.2,<4
 # Private S3-compatible object storage when CC_S3_BUCKET is set.
 boto3>=1.35,<2
-# Optional, required only when CC_REPLICATE_* is configured for generative video.
-replicate>=1.0.0,<2.0.0

@@ -1,7 +1,7 @@
-# Every push and pull request: lint, tests on SQLite and PostgreSQL 16, dependency and secret scans, frontend
-# build checks, and the production Docker image (built and smoke-tested). Branch protection on `main` should require
-# all of these jobs; deploy-backend.yml only runs after this workflow succeeds on main, and Vercel production
-# deployments should be limited to `main` (see docs/v10/vercel-deployment.md).
+# Every push and pull request: lint, tests on SQLite and PostgreSQL 16, dependency and secret scans, the Next.js web
+# app (type check, production build, npm audit), and both Docker images (built and smoke-tested). Branch protection on
+# `main` should require all of these jobs; deploy-backend.yml only runs after this workflow succeeds on main, and
+# Vercel production deployments should be limited to `main` (see docs/v11/deployment.md).
 name: ci
 on:
   push:
@@ -67,18 +67,21 @@ jobs:
       - run: pip-audit -r requirements.txt
       - run: python qa/secret_scan.py
 
-  frontend:
+  web:
     runs-on: ubuntu-24.04
+    defaults: { run: { working-directory: web } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '22' }
-      - run: node frontend/build.mjs
-        env: { CC_API_ORIGIN: 'https://api.example.com', VERCEL_ENV: production }
-      - run: node frontend/check.mjs
+        with: { node-version: '22', cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
+        env: { CC_API_ORIGIN: 'https://api.example.com', NEXT_TELEMETRY_DISABLED: '1' }
 
   docker:
-    needs: [test-sqlite, test-postgres, security, frontend]
+    needs: [test-sqlite, test-postgres, security, web]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -91,3 +94,10 @@ jobs:
           test "$(docker exec cc id -u)" != "0"
           docker exec cc ffprobe -version > /dev/null
           docker rm -f cc
+      - run: docker build -t context-commerce-web:ci --build-arg CC_API_ORIGIN=http://api:8000 web
+      - name: smoke test web (landing page, auth guard)
+        run: |
+          docker run -d --name web -p 3000:3000 context-commerce-web:ci
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:3000/ && break; sleep 2; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/dashboard)" = "307"
+          docker rm -f web

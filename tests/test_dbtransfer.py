@@ -5,16 +5,15 @@ import pytest
 
 from app import main, db as dbm
 from ops import dbtransfer
-from test_api import CSRSTestClient, register, client, isolated_db  # noqa: F401  (shared fixtures)
+from helpers import owner
 
 
 def test_round_trip_between_engines_preserves_every_row(client, tmp_path):
-    b = register(client, 'Brand', 'brand@example.com', 'brand', 'Acme Ünïcode')
-    client.post('/api/invitations', json={'email': 'c@example.com', 'role': 'creator'})
-    client.post('/api/campaigns', json={'name': 'Launch', 'category': 'beverages', 'budget_usd': 1234.5})
+    b = owner(client, 'brand@example.com', 'Acme Ünïcode')
+    assert client.post('/api/invitations', json={'email': 'c@example.com', 'member_role': 'viewer'}).status_code == 200
     src = lambda: main.db()
     dump1 = dbtransfer.export(src, tmp_path / 'dump1')
-    assert dump1['tables']['users']['rows'] == 1 and dump1['tables']['campaigns']['rows'] == 1
+    assert dump1['tables']['users']['rows'] == 1 and dump1['tables']['invitations']['rows'] == 1
 
     with pytest.raises(SystemExit):                       # never import into a database that already holds data
         dbtransfer.import_(src, tmp_path / 'dump1')
@@ -42,7 +41,7 @@ def test_round_trip_between_engines_preserves_every_row(client, tmp_path):
 
 
 def test_tampered_dump_is_refused(client, tmp_path):
-    register(client, 'Brand', 'brand@example.com', 'brand', 'Acme')
+    owner(client, 'brand@example.com', 'Acme')
     dbtransfer.export(lambda: main.db(), tmp_path / 'dump')
     f = tmp_path / 'dump' / 'users.jsonl'; f.write_text(f.read_text().replace('brand@example.com', 'evil@example.com'))
     with pytest.raises(SystemExit, match='integrity'):

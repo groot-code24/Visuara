@@ -20,4 +20,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/live',timeout=4).status==200 else 1)"
 ENTRYPOINT ["tini", "--"]
 # FORWARDED_ALLOW_IPS (read by uvicorn) must name the reverse proxy / tunnel so client IPs are taken from X-Forwarded-For.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-graceful-shutdown", "30", "--no-server-header"]
+# Keep-alive outlives the proxies' idle connections (Next.js, Caddy, Vercel): with uvicorn's 5 s default, a proxy reusing
+# a connection at the moment uvicorn closes it gets ECONNRESET (seen in the V11 load test).
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-keep-alive", "75", "--timeout-graceful-shutdown", "30", "--no-server-header"]

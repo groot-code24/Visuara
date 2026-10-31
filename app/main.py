@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import secrets, hashlib, hmac, os, json, shutil, subprocess, time, mimetypes, threading, socket, struct, base64, urllib.request, urllib.parse, logging, re
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,8 +28,9 @@ from . import db as dbm, storage, limits, obs
 obs.configure_logging()
 from .compositor import RenderCancelled, render_plan
 from .validation import validate_plan
-app = FastAPI(title='Context Commerce MVP', version='0.6.0', description='Authorized creator video product-placement workflow')
-app.mount('/static', StaticFiles(directory=ROOT / 'app' / 'static'), name='static')
+_prod=os.getenv('CC_ENV','').lower()=='production'     # no public API explorer in production
+app = FastAPI(title='Context Commerce API', version='1.1.0', description='Product placement in your own videos: decision engine, validated rendering, delivery',
+              docs_url=None if _prod else '/docs', redoc_url=None if _prod else '/redoc', openapi_url=None if _prod else '/openapi.json')
 
 def _origin(url):
     p=urllib.parse.urlsplit(url or ''); return f'{p.scheme}://{p.netloc}'.lower() if p.scheme and p.netloc else ''
@@ -38,6 +39,9 @@ def allowed_origins():
     out={_origin(x.strip()) for x in os.getenv('CC_CORS_ORIGINS','').split(',') if x.strip()}
     out|={_origin(os.getenv(k,'')) for k in ('CC_APP_URL','CC_PUBLIC_URL')}
     out.discard(''); return out
+def _dev_loopback(origin):
+    """In development the app is opened on localhost or 127.0.0.1, on any port. Never in production."""
+    return os.getenv('CC_ENV','').lower()!='production' and bool(re.fullmatch(r'https?://(localhost|127\.0\.0\.1)(:\d+)?',origin))
 def _csp():
     extra=' '.join(sorted({_origin(os.getenv(k,'')) for k in ('CC_APP_URL','CC_PUBLIC_URL','CC_S3_PUBLIC_ENDPOINT_URL','CC_S3_ENDPOINT_URL')}-{''}))
     return (f"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; "
@@ -51,16 +55,16 @@ async def security_middleware(request: Request, call_next):
     rid_token=obs.request_id.set(rid); started=time.perf_counter()
     try:
         response=None
-        if path in ('/api/auth/login','/api/auth/register','/api/auth/email/start','/api/auth/email/verify') and request.method=='POST':
+        if path in ('/api/auth/email/start','/api/auth/email/verify','/api/auth/email/link') and request.method=='POST':
             ip=request.client.host if request.client else 'unknown'
             if not rate_limit('auth:'+ip,int(os.getenv('CC_AUTH_RATE_PER_MINUTE','12')),60): response=JSONResponse({'detail':'Too many authentication attempts. Try again in a minute.'},status_code=429)
         if response is None and request.method in _MUTATING:
             origin=(request.headers.get('origin') or '').lower()
             # Browsers always send Origin on cross-origin writes; refuse any origin that is not this site or allowlisted.
-            if origin and origin!='null' and origin not in allowed_origins() and origin!=_origin(str(request.base_url)):
+            if origin and origin!='null' and origin not in allowed_origins() and origin!=_origin(str(request.base_url)) and not _dev_loopback(origin):
                 response=JSONResponse({'detail':'Cross-origin request refused'},status_code=403)
             # /auth/* are browser form posts (magic-link confirmation) that check a CSRF form field themselves.
-            elif path not in ('/api/auth/login','/api/auth/register') and not path.startswith('/auth/'):
+            elif not path.startswith('/auth/'):
                 csrf=request.cookies.get('cc_csrf'); supplied=request.headers.get('x-csrf-token')
                 if request.cookies.get('cc_session') and (not csrf or not supplied or not hmac.compare_digest(csrf,supplied)):
                     response=JSONResponse({'detail':'CSRF token missing or invalid. Refresh the page and retry.'},status_code=403)
@@ -69,7 +73,7 @@ async def security_middleware(request: Request, call_next):
             except Exception:
                 obs.error('unhandled error',exc_info=True,method=request.method,path=path)
                 response=JSONResponse({'detail':'Internal error. Quote this request id to support.','request_id':rid},status_code=500)
-        if path in ('/','/app','/api/auth/login','/api/auth/register') and not request.cookies.get('cc_csrf'):
+        if path.startswith('/api/') and not request.cookies.get('cc_csrf'):
             response.set_cookie('cc_csrf',secrets.token_urlsafe(24),httponly=False,samesite='lax',secure=os.getenv('CC_SECURE_COOKIES','0')=='1',path='/')
         h=response.headers; h['X-Request-ID']=rid
         h.setdefault('X-Content-Type-Options','nosniff'); h.setdefault('Referrer-Policy','strict-origin-when-cross-origin'); h.setdefault('X-Frame-Options','DENY')
@@ -132,6 +136,9 @@ def _worker_loop():
             if job_id is not None:
                 obs.worker_heartbeat('rendering'); render_job(job_id,token); idle=0.5; continue
             if token=='retry': continue
+            from . import decisions
+            if decisions.run_next(stop=_WORKER_STOP):
+                idle=0.5; continue
             if time.time()-last_db_maint>maintenance.db_interval():   # piggybacks on a poll that already woke the database
                 maintenance.run_db_maintenance(); last_db_maint=time.time()
             idle=min(worker_max_idle(),idle*2)
@@ -175,23 +182,15 @@ CREATE INDEX IF NOT EXISTS idx_jobs_queue ON jobs(status,id);
 CREATE INDEX IF NOT EXISTS idx_events_org ON events(org_id,id);
 CREATE TABLE IF NOT EXISTS rate_limits(bucket_key TEXT NOT NULL, hit_at REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_rate_limits_key_time ON rate_limits(bucket_key,hit_at);
-CREATE TABLE IF NOT EXISTS generative_jobs(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL UNIQUE, provider TEXT NOT NULL, prediction_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS placement_approvals(id INTEGER PRIMARY KEY, placement_id INTEGER NOT NULL, placement_version INTEGER NOT NULL, user_id INTEGER NOT NULL, role TEXT NOT NULL, approved INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(placement_id,placement_version,user_id));
 CREATE TABLE IF NOT EXISTS placement_rights(id INTEGER PRIMARY KEY, placement_id INTEGER NOT NULL UNIQUE, placement_version INTEGER NOT NULL, permitted_channels TEXT NOT NULL DEFAULT '["social","web"]', territories TEXT NOT NULL DEFAULT '["WORLDWIDE"]', start_at TEXT, expires_at TEXT, creator_consent INTEGER NOT NULL DEFAULT 0, revoked_at TEXT, revocation_reason TEXT, updated_by INTEGER NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS surface_proposals(id INTEGER PRIMARY KEY, video_id INTEGER NOT NULL, org_id INTEGER NOT NULL, frame_second REAL NOT NULL, quad_json TEXT NOT NULL, confidence REAL NOT NULL, fit_score REAL NOT NULL, status TEXT NOT NULL DEFAULT 'PROPOSED', evidence_json TEXT NOT NULL DEFAULT '{}', reviewed_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS tracked_links(id INTEGER PRIMARY KEY, org_id INTEGER NOT NULL, placement_id INTEGER NOT NULL, placement_version INTEGER NOT NULL, slug TEXT UNIQUE NOT NULL, destination_url TEXT NOT NULL, campaign TEXT DEFAULT '', created_by INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS conversions(id INTEGER PRIMARY KEY, org_id INTEGER NOT NULL, link_id INTEGER, external_id TEXT, event_name TEXT NOT NULL, value REAL DEFAULT 0, currency TEXT DEFAULT 'USD', occurred_at TEXT, source TEXT DEFAULT 'import', dedupe_key TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(org_id,dedupe_key));
 CREATE TABLE IF NOT EXISTS queue_events(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, event_type TEXT NOT NULL, details TEXT DEFAULT '{}', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS idx_approvals_version ON placement_approvals(placement_id,placement_version);
-CREATE INDEX IF NOT EXISTS idx_surface_video ON surface_proposals(video_id,org_id);
-CREATE INDEX IF NOT EXISTS idx_conversions_org ON conversions(org_id,created_at);
 CREATE TABLE IF NOT EXISTS placement_versions(id INTEGER PRIMARY KEY, placement_id INTEGER NOT NULL, version INTEGER NOT NULL, snapshot_json TEXT NOT NULL, content_hash TEXT NOT NULL, created_by INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(placement_id,version));
 CREATE TABLE IF NOT EXISTS placement_analyses(id INTEGER PRIMARY KEY, placement_id INTEGER NOT NULL, placement_version INTEGER NOT NULL, content_hash TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('PASSED','FAILED')), scene_class TEXT NOT NULL, policy_version TEXT NOT NULL, report_json TEXT NOT NULL, track_path TEXT, track_sha256 TEXT, created_by INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS idx_analyses_placement ON placement_analyses(placement_id,placement_version);
 CREATE TABLE IF NOT EXISTS upload_sessions(id INTEGER PRIMARY KEY, org_id INTEGER NOT NULL, user_id INTEGER NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', content_type TEXT NOT NULL, expected_bytes INTEGER NOT NULL, license_expires TEXT, status TEXT NOT NULL DEFAULT 'PENDING', result_id INTEGER, error TEXT, expires_at INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, finished_at TEXT);
 CREATE INDEX IF NOT EXISTS idx_upload_sessions ON upload_sessions(org_id,status);
-CREATE TABLE IF NOT EXISTS payment_records(id INTEGER PRIMARY KEY, offer_id INTEGER NOT NULL, kind TEXT NOT NULL, amount_usd REAL NOT NULL, reference TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', recorded_by TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE INDEX IF NOT EXISTS idx_payment_records_offer ON payment_records(offer_id,id);
 '''
 _INDEXES=['CREATE INDEX IF NOT EXISTS idx_users_org ON users(org_id)','CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)',
           'CREATE INDEX IF NOT EXISTS idx_jobs_org_status ON jobs(org_id,status)','CREATE INDEX IF NOT EXISTS idx_videos_org ON videos(org_id)',
@@ -205,26 +204,27 @@ def db():
     return dbm.connect(DB, schema=DB_SCHEMA, id_tabs=_ID_TABLES)
 
 def all_schemas():
-    from .commerce import SCHEMA as COMMERCE_SCHEMA
+    from .decisions import SCHEMA as DECISIONS_SCHEMA
     from .auth import SCHEMA as AUTH_SCHEMA
-    return SCHEMA, AUTH_SCHEMA, COMMERCE_SCHEMA
+    return SCHEMA, AUTH_SCHEMA, DECISIONS_SCHEMA
 
 def init_db(connect=None):
     """Create or migrate the schema (idempotent). `connect` targets another database, e.g. for migrations."""
     global _ID_TABLES
-    _, AUTH_SCHEMA, COMMERCE_SCHEMA = all_schemas()
-    _ID_TABLES=frozenset(dbm.id_tables(SCHEMA+COMMERCE_SCHEMA+AUTH_SCHEMA))
+    _, AUTH_SCHEMA, DECISIONS_SCHEMA = all_schemas()
+    _ID_TABLES=frozenset(dbm.id_tables(SCHEMA+DECISIONS_SCHEMA+AUTH_SCHEMA))
     with (connect or db)() as c:
         if c.kind=='postgres': c.lock('schema-init')   # API and workers may start together
         c.executescript(SCHEMA)
         c.executescript(AUTH_SCHEMA)
-        c.executescript(COMMERCE_SCHEMA)
+        c.executescript(DECISIONS_SCHEMA)
         # Idempotent migrations for databases created by earlier MVP versions.
-        for table, column, definition in [('placements','render_options',"TEXT NOT NULL DEFAULT '{}'"),('jobs','mode',"TEXT NOT NULL DEFAULT 'COMPOSITE'"),('placements','fit_confidence','REAL NOT NULL DEFAULT 0.0'),('placements','fit_status',"TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED'"),('jobs','attempts','INTEGER NOT NULL DEFAULT 0'),('jobs','max_attempts','INTEGER NOT NULL DEFAULT 3'),('jobs','cancel_requested','INTEGER NOT NULL DEFAULT 0'),('jobs','lease_until','REAL'),('jobs','lease_token','TEXT'),('jobs','placement_version','INTEGER'),('jobs','analysis_id','INTEGER'),('jobs','renderer','TEXT'),('jobs','validation_json','TEXT'),('placements','quality_status',"TEXT NOT NULL DEFAULT 'NOT_EVALUATED'"),('placements','analysis_id','INTEGER'),('placements','content_hash','TEXT'),('placement_approvals','content_hash','TEXT'),('tracked_links','channel',"TEXT NOT NULL DEFAULT 'social'"),('products','sha256','TEXT'),('products','derived_path','TEXT'),('products','asset_report',"TEXT NOT NULL DEFAULT '{}'"),('products','model_path','TEXT'),('products','model_sha256','TEXT'),('products','model_report','TEXT'),
+        for table, column, definition in [('placements','render_options',"TEXT NOT NULL DEFAULT '{}'"),('jobs','mode',"TEXT NOT NULL DEFAULT 'COMPOSITE'"),('placements','fit_confidence','REAL NOT NULL DEFAULT 0.0'),('placements','fit_status',"TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED'"),('jobs','attempts','INTEGER NOT NULL DEFAULT 0'),('jobs','max_attempts','INTEGER NOT NULL DEFAULT 3'),('jobs','cancel_requested','INTEGER NOT NULL DEFAULT 0'),('jobs','lease_until','REAL'),('jobs','lease_token','TEXT'),('jobs','placement_version','INTEGER'),('jobs','analysis_id','INTEGER'),('jobs','renderer','TEXT'),('jobs','validation_json','TEXT'),('placements','quality_status',"TEXT NOT NULL DEFAULT 'NOT_EVALUATED'"),('placements','analysis_id','INTEGER'),('placements','content_hash','TEXT'),('placement_approvals','content_hash','TEXT'),('products','sha256','TEXT'),('products','derived_path','TEXT'),('products','asset_report',"TEXT NOT NULL DEFAULT '{}'"),('products','model_path','TEXT'),('products','model_sha256','TEXT'),('products','model_report','TEXT'),
                                           ('users','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('users','suspended_at','TEXT'),('users','removed_at','TEXT'),
                                           ('invitations','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('invitations','revoked_at','TEXT'),
                                           ('videos','size_bytes','INTEGER NOT NULL DEFAULT 0'),('products','size_bytes','INTEGER NOT NULL DEFAULT 0'),
-                                          ('jobs','output_bytes','INTEGER NOT NULL DEFAULT 0'),('offers','payment_status',"TEXT NOT NULL DEFAULT 'NOT_INVOICED'")]:
+                                          ('jobs','output_bytes','INTEGER NOT NULL DEFAULT 0'),
+                                          ('products','category',"TEXT NOT NULL DEFAULT 'other'"),('organizations','plan','TEXT'),('placements','decision_id','INTEGER')]:
             c.add_column(table,column,definition)
         # V10: every workspace has exactly one owner (the earliest member of workspaces created before member roles).
         c.execute("UPDATE users SET member_role='owner' WHERE id IN (SELECT MIN(id) FROM users GROUP BY org_id) AND org_id NOT IN (SELECT org_id FROM users WHERE member_role='owner')")
@@ -269,14 +269,6 @@ def clamav_scan(path):
         return {'enabled':True,'clean':None,'error':str(e)[:150]}
 
 
-def hash_password(password: str) -> str:
-    salt=secrets.token_bytes(16); digest=hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 180000)
-    return salt.hex()+':'+digest.hex()
-def verify_password(password, stored):
-    try:
-        salt, expected=stored.split(':'); actual=hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(salt), 180000).hex(); return hmac.compare_digest(actual, expected)
-    except Exception: return False
-
 def event(c, user, typ, etype, eid, details=None):
     c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',(user['org_id'],user['id'],typ,etype,eid,json.dumps(details or {})))
 
@@ -299,24 +291,12 @@ def current_user(request: Request):
     from .members import authorize
     user=dict(row); authorize(user,request)
     return user
-def require_role(user, *roles):
-    if user['role'] not in roles: raise HTTPException(403,'Your account role cannot perform this action')
 def owned(c, table, item_id, org_id):
     # Table names are internal constants only.
     row=c.execute(f'SELECT * FROM {table} WHERE id=? AND org_id=?',(item_id,org_id)).fetchone()
-    if not row and table in ('videos','placements','products'): row=_shared(c,table,item_id,org_id)
     if not row: raise HTTPException(404,'Resource not found')
     return dict(row)
 
-def _shared(c, table, item_id, org_id):
-    """Cross-organization access. Writes stay guarded by role and rights-holder checks at each endpoint."""
-    if table=='videos':      # a brand organization holding an active licence grant for this video
-        from .commerce import active_grant
-        return c.execute('SELECT * FROM videos WHERE id=?',(item_id,)).fetchone() if active_grant(c,item_id,org_id) else None
-    if table=='placements':  # the creator organization that owns the placement's video
-        return c.execute('SELECT p.* FROM placements p JOIN videos v ON v.id=p.video_id WHERE p.id=? AND v.org_id=?',(item_id,org_id)).fetchone()
-    if table=='products':    # a creator organization reviewing a placement that uses this product
-        return c.execute('SELECT pr.* FROM products pr WHERE pr.id=? AND EXISTS(SELECT 1 FROM placements p JOIN videos v ON v.id=p.video_id WHERE p.product_id=pr.id AND v.org_id=?)',(item_id,org_id)).fetchone()
 def safe_name(name): return ''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in name)[:120] or 'upload'
 def tool_exists(name): return shutil.which(name) is not None
 def _has_cv2():
@@ -372,14 +352,6 @@ def extract_frames(video_id, path, duration):
             results.append((sec,str(out),desc,score))
     return results
 
-class Register(BaseModel):
-    name: str = Field(min_length=1,max_length=80)
-    email: str = Field(min_length=5,max_length=254)
-    password: str = Field(min_length=8,max_length=128)
-    role: str
-    organization: str = Field(default='',max_length=100)   # ignored when joining by invitation
-    invitation_token: Optional[str] = None
-class Login(BaseModel): email: str; password: str
 class ProductIn(BaseModel): name: str = Field(min_length=1,max_length=120); description: str = Field(default='',max_length=1000)
 class PlacementIn(BaseModel):
     video_id:int; product_id:int; frame_second:float=Field(ge=0); x:float=Field(ge=0,le=1); y:float=Field(ge=0,le=1); width:float=Field(gt=0.02,le=0.7); start_second:float=Field(ge=0); end_second:float=Field(gt=0)
@@ -388,41 +360,15 @@ class PlacementIn(BaseModel):
     color_match: bool = True
     adjust: Optional[dict] = None
     model3d: Optional[dict] = None
-class RightsIn(BaseModel):
-    permitted_channels: list[str] = Field(default_factory=lambda:['social','web'], min_length=1)
-    territories: list[str] = Field(default_factory=lambda:['WORLDWIDE'], min_length=1)
-    start_at: Optional[str] = None
-    expires_at: Optional[str] = None
-    creator_consent: bool = False
-class SurfaceReviewIn(BaseModel):
-    decision: str
-    quad: Optional[list[list[float]]] = None
+class ApproveIn(BaseModel):
+    # The approver attests that the product fits the scene (human judgement on top of the automated check).
+    fit_confidence: float = Field(default=1.0, ge=0, le=1)
     notes: str = Field(default='', max_length=1000)
-class TrackedLinkIn(BaseModel):
-    placement_id: Optional[int] = None
-    channel: str = 'social'
-    destination_url: str = Field(min_length=8, max_length=2048)
-    campaign: str = Field(default='', max_length=120)
-class ConversionIn(BaseModel):
-    external_id: Optional[str] = None
-    link_slug: Optional[str] = None
-    event_name: str = Field(min_length=1,max_length=80)
-    value: float = Field(default=0,ge=0,le=100000000)
-    currency: str = Field(default='USD',min_length=3,max_length=3)
-    occurred_at: Optional[str] = None
-    dedupe_key: str = Field(min_length=3,max_length=200)
 
-
-@app.get('/', response_class=HTMLResponse)
-def landing(): return (ROOT/'app'/'static'/'landing.html').read_text(encoding='utf-8')
-@app.get('/app', response_class=HTMLResponse)
-def home(): return (ROOT/'app'/'static'/'index.html').read_text(encoding='utf-8')
-@app.get('/config.js')
-def frontend_config():
-    """Runtime configuration for the bundled frontend. Served by the API in local and single-origin deployments;
-    the Vercel build writes its own copy with the production API origin."""
-    from fastapi.responses import Response
-    return Response('window.CC_CONFIG='+json.dumps({'apiBase':os.getenv('CC_FRONTEND_API_BASE','')})+';',media_type='application/javascript',headers={'Cache-Control':'no-store'})
+@app.get('/')
+def root():
+    """The web app (Next.js, web/) is a separate service; this process serves the API only."""
+    return {'service':'context-commerce-api','version':app.version,'docs':'/docs'}
 
 @app.get('/api/health/live')
 def health_live():
@@ -455,40 +401,7 @@ def health_ready():
 def health():
     body,_=_readiness(); db_ok=body['checks']['database']=='ok'
     d=dbm.describe(); st=storage.describe()   # public endpoint: no hostnames, bucket names or credentials
-    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','generative_provider':'configured_unverified' if renderers.generative_configured() else 'not_configured','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_acceptance_min_0.75','rights_versioning':'placement_version_bound','campaign_attribution':'observed_only_no_causal_lift','mode':'production' if os.getenv('CC_ENV')=='production' else 'development','workers_alive':obs.worker_status()['alive'] if os.getenv('CC_INLINE_WORKER','1')!='1' else 'inline'}
-@app.post('/api/auth/register')
-def register(body:Register, request:Request):
-    if body.role not in ('brand','creator'): raise HTTPException(422,'Role must be brand or creator')
-    email=body.email.strip().lower()
-    if '@' not in email: raise HTTPException(422,'Enter a valid email address')
-    with db() as c:
-        if c.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HTTPException(409,'An account with this email already exists')
-        invitation=None
-        if body.invitation_token:
-            invitation=c.execute('SELECT * FROM invitations WHERE token_hash=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>?',(hashlib.sha256(body.invitation_token.encode()).hexdigest(),int(time.time()))).fetchone()
-            if not invitation: raise HTTPException(400,'Invitation is invalid, expired, or already used')
-            if invitation['email'].lower()!=email or invitation['role']!=body.role: raise HTTPException(403,'Invitation email or role does not match')
-            orgid=invitation['org_id']
-        else:
-            if not body.organization.strip(): raise HTTPException(422,'Organization name is required to create a new workspace')
-            org=c.execute('SELECT id FROM organizations WHERE lower(name)=lower(?)',(body.organization.strip(),)).fetchone()
-            if org: raise HTTPException(409,'This organization already exists. Ask an organization member for an invitation link.')
-            orgid=c.execute('INSERT INTO organizations(name) VALUES(?)',(body.organization.strip(),)).lastrowid
-        member_role=invitation['member_role'] if invitation else 'owner'
-        cur=c.execute('INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,?,?,?,?,?)',(email,hash_password(body.password),body.name.strip(),body.role,orgid,member_role)); uid=cur.lastrowid
-        if invitation: c.execute('UPDATE invitations SET accepted_at=CURRENT_TIMESTAMP WHERE id=? AND accepted_at IS NULL',(invitation['id'],))
-        token=secrets.token_urlsafe(32); c.execute('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,int(time.time())+86400*7))
-        org_name=c.execute('SELECT name FROM organizations WHERE id=?',(orgid,)).fetchone()['name']
-        return JSONResponse({'user':{'id':uid,'email':email,'name':body.name,'role':body.role,'org_id':orgid,'member_role':member_role,'organization':org_name}},headers={'Set-Cookie':session_cookie(token)})
-@app.post('/api/auth/login')
-def login(body:Login):
-    with db() as c:
-        row=c.execute('SELECT * FROM users WHERE email=? AND removed_at IS NULL',(body.email.strip().lower(),)).fetchone()
-        if not row or not verify_password(body.password,row['password_hash']): raise HTTPException(401,'Incorrect email or password')
-        if row['suspended_at']: raise HTTPException(403,'This account is suspended. Contact your workspace owner.')
-        token=secrets.token_urlsafe(32); c.execute('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),row['id'],int(time.time())+86400*7))
-        user={k:row[k] for k in ('id','email','name','role','org_id','member_role')}
-        return JSONResponse({'user':user},headers={'Set-Cookie':session_cookie(token)})
+    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_approval_min_0.75','decision_engine':__import__('app.decisions',fromlist=['x']).ENGINE_VERSION,'rights_versioning':'placement_version_bound','mode':'production' if os.getenv('CC_ENV')=='production' else 'development','workers_alive':obs.worker_status()['alive'] if os.getenv('CC_INLINE_WORKER','1')!='1' else 'inline'}
 @app.post('/api/auth/logout')
 def logout(request:Request):
     token=request.cookies.get('cc_session')
@@ -498,12 +411,15 @@ def logout(request:Request):
 @app.get('/api/me')
 def me(request:Request):
     u=current_user(request)
-    with db() as c: org=c.execute('SELECT name FROM organizations WHERE id=?',(u['org_id'],)).fetchone()
-    return {**{k:u[k] for k in ('id','email','name','role','org_id','member_role')},'organization':org['name'] if org else None}
+    with db() as c: org=c.execute('SELECT name FROM organizations WHERE id=?',(u['org_id'],)).fetchone(); plan=limits.org_plan(c,u['org_id'])
+    return {**{k:u[k] for k in ('id','email','name','org_id','member_role')},'organization':org['name'] if org else None,'plan':plan,'plan_name':limits.PLANS[plan]['name']}
 
 @app.post('/api/products')
-def create_product(request:Request, name:str=Form(...), description:str=Form(''), image:UploadFile=File(...)):
-    u=current_user(request); require_role(u,'brand')
+def create_product(request:Request, name:str=Form(...), description:str=Form(''), category:str=Form('other'), image:UploadFile=File(...)):
+    u=current_user(request)
+    from .decisions import CATEGORIES
+    if category not in CATEGORIES: raise HTTPException(422,'Category must be one of: '+', '.join(CATEGORIES))
+    if not name.strip(): raise HTTPException(422,'Give the product a name')
     if not image.content_type or not image.content_type.startswith('image/'): raise HTTPException(415,'Product image must be an image file')
     raw=image.file.read(limits.max_image_bytes()+1)
     if len(raw)>limits.max_image_bytes(): raise HTTPException(413,f'Product image limit is {limits.max_image_bytes()//1048576} MB')
@@ -525,20 +441,19 @@ def create_product(request:Request, name:str=Form(...), description:str=Form('')
     except Exception as e: path.unlink(missing_ok=True); raise HTTPException(400,f'Invalid product image: {str(e)[:120]}')
     storage.persist(path); storage.persist(derived)
     with db() as c:
-        cur=c.execute('INSERT INTO products(org_id,name,description,image_path,created_by,sha256,derived_path,asset_report,size_bytes) VALUES(?,?,?,?,?,?,?,?,?)',(u['org_id'],name.strip(),description.strip(),str(path),u['id'],hashlib.sha256(raw).hexdigest(),str(derived),json.dumps(report),len(raw)+derived.stat().st_size)); pid=cur.lastrowid; event(c,u,'product.created','product',pid,{'asset_warnings':[w['code'] for w in report['warnings']]})
-    return {'id':pid,'name':name,'description':description,'image_url':f'/api/products/{pid}/image','asset_report':report}
+        cur=c.execute('INSERT INTO products(org_id,name,description,image_path,created_by,sha256,derived_path,asset_report,size_bytes,category) VALUES(?,?,?,?,?,?,?,?,?,?)',(u['org_id'],name.strip(),description.strip(),str(path),u['id'],hashlib.sha256(raw).hexdigest(),str(derived),json.dumps(report),len(raw)+derived.stat().st_size,category)); pid=cur.lastrowid; event(c,u,'product.created','product',pid,{'asset_warnings':[w['code'] for w in report['warnings']]})
+    return {'id':pid,'name':name.strip(),'description':description.strip(),'category':category,'image_url':f'/api/products/{pid}/image','asset_report':report}
 @app.post('/api/products/{pid}/model')
 def upload_product_model(pid:int,request:Request,model:UploadFile=File(...)):
     """Attach a validated, self-contained .glb 3D model to a product. The image asset is unchanged."""
-    u=current_user(request); require_role(u,'brand')
+    u=current_user(request)
     from .assets3d import load_glb, AssetError, MAX_GLB_BYTES
     raw=model.file.read(MAX_GLB_BYTES+1)
     try: _mesh,report=load_glb(raw)
     except AssetError as e: raise _err(400,'MODEL_INVALID',str(e))
     except Exception: raise _err(400,'MODEL_INVALID','The file is not a valid glTF 2.0 binary model')
     with db() as c:
-        prod=owned(c,'products',pid,u['org_id'])
-        if prod['org_id']!=u['org_id']: raise HTTPException(404,'Resource not found')
+        owned(c,'products',pid,u['org_id'])
         limits.check_storage(c,u['org_id'],len(raw))
         path=UPLOADS/f'model_{secrets.token_hex(8)}.glb'; path.write_bytes(raw); storage.persist(path)
         c.execute('UPDATE products SET model_path=?,model_sha256=?,model_report=?,size_bytes=size_bytes+? WHERE id=?',(str(path),hashlib.sha256(raw).hexdigest(),json.dumps(report),len(raw),pid))
@@ -548,7 +463,7 @@ def upload_product_model(pid:int,request:Request,model:UploadFile=File(...)):
 @app.get('/api/products')
 def products(request:Request):
     u=current_user(request)
-    with db() as c: rows=c.execute('SELECT id,name,description,created_at,asset_report,model_report FROM products WHERE org_id=? ORDER BY id DESC',(u['org_id'],)).fetchall()
+    with db() as c: rows=c.execute('SELECT id,name,description,category,created_at,asset_report,model_report FROM products WHERE org_id=? ORDER BY id DESC',(u['org_id'],)).fetchall()
     return [dict(r, asset_report=json.loads(r['asset_report'] or '{}'), model_report=json.loads(r['model_report']) if r['model_report'] else None, has_model=bool(r['model_report']), image_url=f'/api/products/{r["id"]}/image') for r in rows]
 @app.get('/api/products/{pid}/image')
 def product_image(pid:int,request:Request):
@@ -558,7 +473,7 @@ def product_image(pid:int,request:Request):
 
 @app.post('/api/videos')
 def upload_video(request:Request, title:str=Form(...), license_confirmed:bool=Form(...), license_expires:Optional[str]=Form(None), video:UploadFile=File(...)):
-    u=current_user(request); require_role(u,'creator')
+    u=current_user(request)
     if not license_confirmed: raise HTTPException(400,'Confirm that you own or are authorized to license this video')
     if video.content_type not in VIDEO_TYPES: raise HTTPException(415,'Supported formats: MP4, MOV, WebM')
     with db() as c: limits.check_daily_uploads(c,u['org_id'])
@@ -575,10 +490,11 @@ VIDEO_TYPES=('video/mp4','video/quicktime','video/webm','application/octet-strea
 def ingest_video(u, path, title, license_expires, size, persisted=False):
     """Validate a received video file (malware scan, FFprobe metadata, limits, quotas) and record it."""
     try:
-        with db() as c: limits.check_storage(c,u['org_id'],size); limits.check_daily_uploads(c,u['org_id'])
+        with db() as c: limits.check_video_size(c,u['org_id'],size); limits.check_storage(c,u['org_id'],size); limits.check_daily_uploads(c,u['org_id'])
         scan=clamav_scan(path)
         if scan.get('clean') is False: raise HTTPException(400,'Malware detected in uploaded video')
         duration,width,height,fps=probe(path)
+        with db() as c: limits.check_video_for_plan(c,u['org_id'],duration)
     except Exception:
         Path(path).unlink(missing_ok=True)
         if persisted: storage.delete(str(path))
@@ -590,23 +506,17 @@ def ingest_video(u, path, title, license_expires, size, persisted=False):
 @app.get('/api/videos')
 def videos(request:Request):
     u=current_user(request)
-    cols='v.id,v.title,v.duration,v.width,v.height,v.fps,v.analyzed,v.license_confirmed,v.license_expires,v.created_at'
     with db() as c:
-        # Own videos, plus videos licensed to this organization through an active marketplace grant.
-        rows=c.execute(f'SELECT {cols},0 licensed FROM videos v WHERE v.org_id=? UNION SELECT {cols},1 licensed FROM videos v JOIN video_grants g ON g.video_id=v.id '
-                       'WHERE g.grantee_org_id=? AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR substr(g.expires_at,1,10)>=?) ORDER BY 1 DESC',(u['org_id'],u['org_id'],_today())).fetchall()
-    return [dict(r) for r in rows]
+        rows=c.execute('SELECT id,title,duration,width,height,fps,analyzed,license_confirmed,license_expires,size_bytes,created_at FROM videos WHERE org_id=? ORDER BY id DESC',(u['org_id'],)).fetchall()
+        thumbs={r['video_id']:r['first_second'] for r in c.execute('SELECT video_id,MIN(second) AS first_second FROM frames WHERE video_id IN (SELECT id FROM videos WHERE org_id=?) GROUP BY video_id',(u['org_id'],)).fetchall()}
+    return [dict(r,thumbnail_url=f'/api/videos/{r["id"]}/frames/{int(thumbs[r["id"]]*1000)}' if r['id'] in thumbs else None) for r in rows]
 @app.post('/api/videos/{vid}/analyze')
 def analyze_video(vid:int,request:Request):
-    u=current_user(request); require_role(u,'creator')
+    u=current_user(request)
     with db() as c: v=owned(c,'videos',vid,u['org_id'])
     limits.check_rate(u['org_id'],'analyses',limits.org_analyses_per_hour())
-    try: frames=extract_frames(vid,storage.local(v['source_path']),v['duration'])
+    try: frames=analyze_keyframes(v,u)
     except Exception as e: raise HTTPException(503,f'Scene analysis failed: {str(e)[:180]}')
-    with db() as c:
-        c.execute('DELETE FROM frames WHERE video_id=?',(vid,))
-        for sec,path,desc,score in frames: c.execute('INSERT INTO frames(video_id,second,image_path,description,score) VALUES(?,?,?,?,?)',(vid,sec,path,desc,score))
-        c.execute('UPDATE videos SET analyzed=1 WHERE id=?',(vid,)); event(c,u,'video.analyzed','video',vid,{'keyframes':len(frames)})
     return {'video_id':vid,'analyzed':True,'method':('OpenCV scene-change detection + local Ollama vision descriptions' if os.getenv('CC_VISION_MODEL') else 'OpenCV scene-change detection + FFmpeg keyframes; heuristic ranking'), 'semantic_vision_enabled':bool(os.getenv('CC_VISION_MODEL')),'scenes':[{'second':s,'image_url':f'/api/videos/{vid}/frames/{int(s*1000)}','description':d,'score':sc} for s,p,d,sc in frames]}
 @app.get('/api/videos/{vid}/scenes')
 def scenes(vid:int,request:Request):
@@ -621,6 +531,15 @@ def frame(vid:int,ms:int,request:Request):
         owned(c,'videos',vid,u['org_id']); r=c.execute('SELECT image_path FROM frames WHERE video_id=? AND second*1000>=? AND second*1000<? ORDER BY second LIMIT 1',(vid,ms,ms+1)).fetchone()
     if not r: raise HTTPException(404,'Frame not found')
     return storage.response(r['image_path'],media_type='image/jpeg')
+
+def analyze_keyframes(v, u):
+    """Extract and store keyframes for a video (replacing earlier ones). Used by the API and the decision engine."""
+    frames=extract_frames(v['id'],storage.local(v['source_path']),v['duration'])
+    with db() as c:
+        c.execute('DELETE FROM frames WHERE video_id=?',(v['id'],))
+        for sec,path,desc,score in frames: c.execute('INSERT INTO frames(video_id,second,image_path,description,score) VALUES(?,?,?,?,?)',(v['id'],sec,path,desc,score))
+        c.execute('UPDATE videos SET analyzed=1 WHERE id=?',(v['id'],)); event(c,u,'video.analyzed','video',v['id'],{'keyframes':len(frames)})
+    return frames
 
 def _today(): return time.strftime('%Y-%m-%d')
 def _license_ok(v): return bool(v['license_confirmed']) and not (v['license_expires'] and v['license_expires']<_today())
@@ -657,9 +576,8 @@ def _rights(c, p):
     return c.execute('SELECT * FROM placement_rights WHERE placement_id=? AND placement_version=?',(p['id'],p['version'])).fetchone()
 
 def _approvals_ok(c, p, v):
-    """Brand approval plus approval by the video's rights holder, both bound to this exact version and content hash."""
-    rows=c.execute('SELECT user_id,role FROM placement_approvals WHERE placement_id=? AND placement_version=? AND approved=1 AND content_hash=?',(p['id'],p['version'],p['content_hash'])).fetchall()
-    return any(r['role']=='brand' for r in rows) and any(r['role']=='creator' and r['user_id']==v['created_by'] for r in rows)
+    """A workspace approval bound to this exact version and content hash."""
+    return c.execute("SELECT 1 FROM placement_approvals WHERE placement_id=? AND placement_version=? AND approved=1 AND content_hash=? AND role='workspace'",(p['id'],p['version'],p['content_hash'])).fetchone() is not None
 
 def _current_analysis(c, p):
     if not p.get('analysis_id'): return None
@@ -676,18 +594,6 @@ def _quality_rejections(c, org_id):
 def _asset_path(prod):
     derived=storage.local(prod.get('derived_path'))
     return derived if derived and Path(derived).exists() else storage.local(prod['image_path'])
-
-def _grant_for(c, v, org_id):
-    if v['org_id']==org_id: return None
-    from .commerce import active_grant
-    return active_grant(c,v['id'],org_id)
-
-def _apply_grant_terms(c, pid, v, org_id):
-    """Default a cross-organization placement's rights to the licence grant's channels, territories and expiry."""
-    g=_grant_for(c,v,org_id)
-    if g:
-        exp=min([x for x in (g['expires_at'],v['license_expires']) if x],default=None)
-        c.execute('UPDATE placement_rights SET permitted_channels=?,territories=?,expires_at=? WHERE placement_id=?',(g['channels'],g['territories'],exp,pid))
 
 def _validate_adjust(adjust):
     if not adjust: return None
@@ -737,7 +643,7 @@ def _validate_geometry(v, frame_second, start_second, end_second, tracking_quad)
 
 @app.post('/api/placements')
 def create_placement(body:PlacementIn,request:Request):
-    u=current_user(request); require_role(u,'brand')
+    u=current_user(request)
     with db() as c:
         v=owned(c,'videos',body.video_id,u['org_id']); owned(c,'products',body.product_id,u['org_id'])
         if not _license_ok(v): raise HTTPException(403,'Video license permission is missing or expired')
@@ -749,7 +655,6 @@ def create_placement(body:PlacementIn,request:Request):
             render_options['model3d']=_validate_model3d(body.model3d,owned(c,'products',body.product_id,u['org_id']))
         cur=c.execute('INSERT INTO placements(org_id,video_id,product_id,frame_second,x,y,width,start_second,end_second,created_by,render_options,fit_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(u['org_id'],body.video_id,body.product_id,body.frame_second,body.x,body.y,body.width,body.start_second,body.end_second,u['id'],json.dumps(render_options),'REVIEW_REQUIRED')); pid=cur.lastrowid
         c.execute('INSERT INTO placement_rights(placement_id,placement_version,creator_consent,expires_at,updated_by) VALUES(?,?,?,?,?)',(pid,1,0,v['license_expires'],u['id']))
-        _apply_grant_terms(c,pid,v,u['org_id'])
         digest=_record_version(c,pid,u['id'])
         event(c,u,'placement.created','placement',pid,{'render_options':render_options,'content_hash':digest})
     return {'id':pid,'status':'DRAFT','version':1,'content_hash':digest,'next_step':'Run the quality check'}
@@ -757,13 +662,14 @@ def create_placement(body:PlacementIn,request:Request):
 def placements(request:Request):
     u=current_user(request)
     with db() as c:
-        rows=c.execute('SELECT p.*,v.title video_title,v.created_by video_owner,pr.name product_name FROM placements p JOIN videos v ON v.id=p.video_id JOIN products pr ON pr.id=p.product_id WHERE p.org_id=? OR v.org_id=? ORDER BY p.id DESC',(u['org_id'],u['org_id'])).fetchall()
-    return [dict(r,render_options=json.loads(r['render_options'] or '{}'),is_rights_holder=(r['video_owner']==u['id'])) for r in rows]
+        rows=c.execute('SELECT p.*,v.title video_title,pr.name product_name FROM placements p JOIN videos v ON v.id=p.video_id JOIN products pr ON pr.id=p.product_id WHERE p.org_id=? ORDER BY p.id DESC',(u['org_id'],)).fetchall()
+    return [dict(r,render_options=json.loads(r['render_options'] or '{}'),image_url=f'/api/products/{r["product_id"]}/image') for r in rows]
 @app.get('/api/placements/{pid}')
 def placement_detail(pid:int,request:Request):
     u=current_user(request)
     with db() as c:
         p=owned(c,'placements',pid,u['org_id']); v=dict(c.execute('SELECT * FROM videos WHERE id=?',(p['video_id'],)).fetchone())
+        prod=c.execute('SELECT id,name,category FROM products WHERE id=?',(p['product_id'],)).fetchone()
         a=_current_analysis(c,p); rights=_rights(c,p)
         versions=[dict(r,snapshot=json.loads(r['snapshot_json'])) for r in c.execute('SELECT version,content_hash,snapshot_json,created_at FROM placement_versions WHERE placement_id=? ORDER BY version',(pid,)).fetchall()]
         approvals=[dict(r) for r in c.execute('SELECT placement_version,user_id,role,content_hash,created_at FROM placement_approvals WHERE placement_id=? ORDER BY id',(pid,)).fetchall()]
@@ -771,14 +677,42 @@ def placement_detail(pid:int,request:Request):
         jobs=[dict(r) for r in c.execute('SELECT id,status,renderer,placement_version,error,created_at,finished_at FROM jobs WHERE placement_id=? ORDER BY id DESC',(pid,)).fetchall()]
     for x in versions: x.pop('snapshot_json',None)
     return {'placement':dict(p,render_options=json.loads(p['render_options'] or '{}')),'video':{k:v[k] for k in ('id','title','duration','width','height','fps')},
-            'is_rights_holder':v['created_by']==u['id'],'quality':(dict(json.loads(a['report_json']),analysis_id=a['id'],created_at=a['created_at']) if a else None),
+            'product':dict(prod,image_url=f'/api/products/{prod["id"]}/image') if prod else None,'quality':(dict(json.loads(a['report_json']),analysis_id=a['id'],created_at=a['created_at']) if a else None),
             'rights':(dict(rights,permitted_channels=json.loads(rights['permitted_channels']),territories=json.loads(rights['territories'])) if rights else None),
             'versions':versions,'approvals':approvals,'jobs':jobs,'history':history}
+
+# A check takes seconds per second of placement, and a long window can outlast the web proxy (Vercel allows 120 s to
+# the first byte). So checks run on a small pool: the request waits a while, then answers 202 {"status":"RUNNING"} and
+# the client asks again; the same request collects the running check for this exact version instead of starting another.
+_QC_POOL=ThreadPoolExecutor(max_workers=int(os.getenv('CC_QUALITY_CONCURRENCY','2')),thread_name_prefix='quality')
+_QC_RUNS={}; _QC_LOCK=threading.Lock()
+def quality_wait_seconds(): return float(os.getenv('CC_QUALITY_WAIT_SECONDS','90'))
 
 @app.post('/api/placements/{pid}/quality-check')
 def quality_check(pid:int,request:Request):
     """Measure every frame of the placement interval and apply the quality policy to this exact version."""
-    u=current_user(request); require_role(u,'brand','creator')
+    u=current_user(request)
+    with db() as c:
+        p=owned(c,'placements',pid,u['org_id'])
+        if p['status']!='DRAFT': raise _err(409,'NOT_DRAFT','Quality checks run on draft versions. Revise the placement to create a new draft version.')
+    key=(u['org_id'],pid,p['version'],p['content_hash'])
+    with _QC_LOCK:
+        run=_QC_RUNS.get(key)
+        if run is None:
+            for k,(f,t) in list(_QC_RUNS.items()):
+                if f.done() and time.time()-t>3600: _QC_RUNS.pop(k,None)      # results nobody came back for
+            limits.check_rate(u['org_id'],'quality',limits.org_quality_checks_per_hour())
+            run=_QC_RUNS[key]=(_QC_POOL.submit(_run_quality_check,pid,u),time.time())
+    try: out=run[0].result(timeout=quality_wait_seconds())
+    except FutureTimeout:
+        return JSONResponse({'status':'RUNNING','placement_id':pid,'message':'Still measuring every frame of the placement.'},status_code=202)
+    except BaseException:
+        with _QC_LOCK: _QC_RUNS.pop(key,None)
+        raise
+    with _QC_LOCK: _QC_RUNS.pop(key,None)
+    return out
+
+def _run_quality_check(pid,u):
     with db() as c:
         p=owned(c,'placements',pid,u['org_id'])
         if p['status']!='DRAFT': raise _err(409,'NOT_DRAFT','Quality checks run on draft versions. Revise the placement to create a new draft version.')
@@ -824,142 +758,36 @@ def quality_check(pid:int,request:Request):
         event(c,u,'placement.quality_checked','placement',pid,{'analysis_id':aid,'status':report['status'],'scene_class':report['scene_class'],'codes':[f['code'] for f in report['failures']],'version':p['version']})
     return {'analysis_id':aid,'placement_id':pid,'placement_version':p['version'],**report}
 
-@app.post('/api/placements/{pid}/propose')
-def propose(pid:int,request:Request):
-    u=current_user(request); require_role(u,'brand')
-    with db() as c:
-        p=owned(c,'placements',pid,u['org_id'])
-        a=_current_analysis(c,p)
-        if not a or a['status']!='PASSED': raise _err(409,'QUALITY_NOT_PASSED','The automated quality check must pass for this exact version before proposal',quality_status=p['quality_status'])
-        if p['fit_status']!='ACCEPTED': raise _err(409,'FIT_NOT_ACCEPTED','A reviewer must accept visual fit at confidence >= 0.75 before proposal')
-        _transition(c,p,'PROPOSED',u)
-    return {'id':pid,'status':'PROPOSED','version':p['version']}
 @app.post('/api/placements/{pid}/approve')
-def approve(pid:int,request:Request):
-    u=current_user(request); require_role(u,'brand','creator')
-    checks=None
+def approve(pid:int,request:Request,body:Optional[ApproveIn]=None):
+    """Approve this exact version for rendering. Requires a passing quality check for the version, a reviewer's fit
+    judgement of at least 0.75, a valid video licence and a renderer that supports the analysed scene class."""
+    u=current_user(request); body=body or ApproveIn()
+    if body.fit_confidence<.75: raise _err(422,'FIT_CONFIDENCE_TOO_LOW','Confidence below the 0.75 threshold. Revise the placement or reject it; it will not be rendered.')
     with db() as c:
         p=owned(c,'placements',pid,u['org_id']); v=owned(c,'videos',p['video_id'],u['org_id'])
-        if u['role']=='creator':
-            if v['created_by']!=u['id']: raise _err(403,'NOT_RIGHTS_HOLDER','Only the creator who holds rights to this video can approve its placements')
-            if not rights_are_active(_rights(c,p)): raise _err(409,'CONSENT_REQUIRED','Grant creator consent for this placement version before approving')
-            _transition(c,p,'CREATOR_APPROVED',u)
-            c.execute('UPDATE placements SET creator_approved=1 WHERE id=?',(pid,))
-        else:
-            if p['status']=='PROPOSED': raise _err(409,'AWAITING_CREATOR_APPROVAL','The creator (rights holder) must approve first')
-            _transition(c,p,'BRAND_APPROVED',u)
-            c.execute('UPDATE placements SET brand_approved=1 WHERE id=?',(pid,))
-        c.execute('INSERT INTO placement_approvals(placement_id,placement_version,user_id,role,approved,content_hash) VALUES(?,?,?,?,1,?) ON CONFLICT(placement_id,placement_version,user_id) DO UPDATE SET role=excluded.role,approved=1,content_hash=excluded.content_hash,created_at=CURRENT_TIMESTAMP',(pid,p['version'],u['id'],u['role'],p['content_hash']))
-        event(c,u,'placement.approved','placement',pid,{'role':u['role'],'placement_version':p['version'],'content_hash':p['content_hash']})
-        if u['role']=='brand': checks=_verify_chain(c,p,u)
-        p2=owned(c,'placements',pid,u['org_id'])
-    return {'id':pid,'status':p2['status'],'creator_approved':p2['creator_approved'],'brand_approved':p2['brand_approved'],'placement_version':p2['version'],'verification':checks}
+        if p['status']!='DRAFT': raise _err(409,'NOT_DRAFT',f'Placement is {p["status"]}; only draft versions can be approved')
+        a=_current_analysis(c,p)
+        if not a or a['status']!='PASSED': raise _err(409,'QUALITY_NOT_PASSED','The automated quality check must pass for this exact version before approval',quality_status=p['quality_status'])
+        if not _license_ok(v): raise _err(409,'RIGHTS_EXPIRED','The video licence is missing or has expired')
+        routing=renderers.route(a['scene_class'],v['duration'],v['width'],v['height'])
+        if not routing['selected']: raise _err(409,'NO_CAPABLE_RENDERER',routing.get('message'),routing=routing)
+        c.execute("UPDATE placements SET fit_confidence=?,fit_status='ACCEPTED',creator_approved=1,brand_approved=1 WHERE id=?",(body.fit_confidence,pid))
+        # The workspace uploaded the video with a licence confirmation; approval records its consent for this version.
+        c.execute('UPDATE placement_rights SET creator_consent=1,revoked_at=NULL,updated_by=?,updated_at=CURRENT_TIMESTAMP WHERE placement_id=? AND placement_version=?',(u['id'],pid,p['version']))
+        c.execute("INSERT INTO placement_approvals(placement_id,placement_version,user_id,role,approved,content_hash) VALUES(?,?,?,'workspace',1,?) ON CONFLICT(placement_id,placement_version,user_id) DO UPDATE SET role=excluded.role,approved=1,content_hash=excluded.content_hash,created_at=CURRENT_TIMESTAMP",(pid,p['version'],u['id'],p['content_hash']))
+        _transition(c,p,'APPROVED',u,details={'renderer':routing['selected'],'fit_confidence':body.fit_confidence})
+        event(c,u,'placement.approved','placement',pid,{'placement_version':p['version'],'content_hash':p['content_hash'],'fit_confidence':body.fit_confidence,'notes':body.notes[:500]})
+    return {'id':pid,'status':'APPROVED','placement_version':p['version'],'renderer':routing['selected'],'next_step':'Start the render'}
 @app.post('/api/placements/{pid}/reject')
 def reject_placement(pid:int,request:Request,reason:str=Form(...)):
-    u=current_user(request); require_role(u,'brand','creator')
-    if len(reason.strip())<3: raise HTTPException(422,'Give a reason so the other party can revise the placement')
-    with db() as c:
-        p=owned(c,'placements',pid,u['org_id']); v=owned(c,'videos',p['video_id'],u['org_id'])
-        if u['role']=='creator' and v['created_by']!=u['id']: raise _err(403,'NOT_RIGHTS_HOLDER','Only the rights holder can reject on the creator side')
-        _transition(c,p,'REJECTED',u,reason[:500])
-    return {'id':pid,'status':'REJECTED','next_step':'The brand can revise the placement to create a new draft version'}
-
-def _verify_chain(c, p, u):
-    """Walk BRAND_APPROVED -> RIGHTS_VERIFIED -> QUALITY_VERIFIED -> READY_FOR_RENDER, stopping at the first failed gate."""
-    v=dict(c.execute('SELECT * FROM videos WHERE id=?',(p['video_id'],)).fetchone()); rights=_rights(c,p); checks=[]
-    def gate(name, ok, code, message):
-        checks.append({'check':name,'passed':bool(ok),'code':None if ok else code,'message':'ok' if ok else message}); return bool(ok)
-    expired=bool((rights and rights['expires_at'] and rights['expires_at'][:10]<_today()) or (v['license_expires'] and v['license_expires']<_today()))
-    if expired:
-        if 'EXPIRED' in lifecycle.TRANSITIONS.get(p['status'],()): _transition(c,p,'EXPIRED',u,'Video license or placement rights expired')
-        gate('rights',False,'RIGHTS_EXPIRED','The video license or placement rights have expired'); return checks
-    if p['status'] in ('BRAND_APPROVED','RIGHTS_VERIFIED','QUALITY_VERIFIED','RENDER_FAILED'):
-        if not gate('rights',rights_are_active(rights) and _license_ok(v),'RIGHTS_NOT_ACTIVE','Creator consent for this version is missing, not yet active, or revoked'): return checks
-        if p['status']=='BRAND_APPROVED': _transition(c,p,'RIGHTS_VERIFIED',u)
-    a=_current_analysis(c,p)
-    if p['status'] in ('RIGHTS_VERIFIED','QUALITY_VERIFIED','RENDER_FAILED'):
-        ok=gate('quality',a and a['status']=='PASSED' and p['fit_status']=='ACCEPTED','QUALITY_NOT_VERIFIED','Automated checks must pass and a reviewer must accept fit for this exact version')
-        ok=gate('approvals',_approvals_ok(c,p,v),'APPROVALS_NOT_BOUND','Rights-holder and brand approvals must exist for this exact version') and ok
-        if not ok: return checks
-        if p['status']=='RIGHTS_VERIFIED': _transition(c,p,'QUALITY_VERIFIED',u,details={'analysis_id':a['id'],'scene_class':a['scene_class']})
-    if p['status'] in ('QUALITY_VERIFIED','RENDER_FAILED'):
-        routing=renderers.route(a['scene_class'],v['duration'],v['width'],v['height'])
-        if not gate('renderer',routing['selected'],'NO_CAPABLE_RENDERER',routing.get('message')): return checks
-        _transition(c,p,'READY_FOR_RENDER',u,details={'renderer':routing['selected']})
-    return checks
-@app.post('/api/placements/{pid}/verify')
-def verify_placement(pid:int,request:Request):
-    u=current_user(request); require_role(u,'brand')
+    u=current_user(request)
+    if len(reason.strip())<3: raise HTTPException(422,'Give a reason so the placement can be revised')
     with db() as c:
         p=owned(c,'placements',pid,u['org_id'])
-        if p['status'] not in ('BRAND_APPROVED','RIGHTS_VERIFIED','QUALITY_VERIFIED','RENDER_FAILED'): raise _err(409,'NOT_VERIFIABLE',f'Placement is {p["status"]}; verification runs after brand approval')
-        checks=_verify_chain(c,p,u)
-    return {'id':pid,'status':p['status'],'verification':checks}
-
-def _run_replicate_generation(video, product, placement, job_id):
-    """Run a configured Replicate model. Model input schema is explicitly operator-configured."""
-    token=os.getenv('CC_REPLICATE_API_TOKEN'); model=os.getenv('CC_REPLICATE_MODEL'); template=os.getenv('CC_REPLICATE_INPUT_TEMPLATE')
-    if not (token and model and template):
-        raise RuntimeError('Generative insertion is not configured. Set CC_REPLICATE_API_TOKEN, CC_REPLICATE_MODEL and CC_REPLICATE_INPUT_TEMPLATE.')
-    try:
-        import replicate
-    except ImportError as e: raise RuntimeError('Install the optional replicate dependency to use generative rendering') from e
-    max_video_seconds=float(os.getenv('CC_GENERATIVE_MAX_VIDEO_SECONDS','30'))
-    max_input_bytes=int(os.getenv('CC_GENERATIVE_MAX_INPUT_BYTES',str(100*1024*1024)))
-    max_output_bytes=int(os.getenv('CC_GENERATIVE_MAX_OUTPUT_BYTES',str(1024*1024*1024)))
-    if float(video['duration'])>max_video_seconds: raise RuntimeError(f'Source duration exceeds configured generative limit of {max_video_seconds:g} seconds')
-    if Path(storage.local(video['source_path'])).stat().st_size>max_input_bytes: raise RuntimeError(f'Source video exceeds configured generative input limit of {max_input_bytes} bytes')
-    try: mapping=json.loads(template)
-    except Exception as e: raise RuntimeError('CC_REPLICATE_INPUT_TEMPLATE must be a JSON object mapping model input fields to {{video}}, {{product_image}}, and/or {{prompt}}') from e
-    if not isinstance(mapping,dict): raise RuntimeError('CC_REPLICATE_INPUT_TEMPLATE must be a JSON object')
-    prompt=(f'Insert the exact product shown in the product image into the source video during seconds {placement["start_second"]:.2f} to {placement["end_second"]:.2f}. '
-            'Preserve the product identity, scene continuity, camera motion, lighting and shadows. Do not add text, logos, or unrelated objects. Return a video file.')
-    inputs={}
-    with open(storage.local(video['source_path']),'rb') as vf, open(storage.local(product['image_path']),'rb') as pf:
-        for key,val in mapping.items():
-            if val=='{{video}}': inputs[key]=vf
-            elif val=='{{product_image}}': inputs[key]=pf
-            elif val=='{{prompt}}': inputs[key]=prompt
-            elif isinstance(val,str) and val.startswith('{{') and val.endswith('}}'):
-                raise RuntimeError('Unknown input template placeholder: '+val)
-            else: inputs[key]=val
-        result=replicate.run(model,input=inputs)
-    if isinstance(result,(list,tuple)):
-        result=result[0] if result else None
-    elif not hasattr(result,'read') and not isinstance(result,(str,bytes,Path)):
-        try: result=next(iter(result))
-        except (TypeError,StopIteration): pass
-    if result is None: raise RuntimeError('Generative model returned no output')
-    output=OUTPUTS/f'generative_placement_{placement["id"]}_job_{job_id}.mp4'
-    if hasattr(result,'read'):
-        total=0
-        with open(output,'wb') as f:
-            while True:
-                chunk=result.read(1024*1024)
-                if not chunk: break
-                total+=len(chunk)
-                if total>max_output_bytes: raise RuntimeError('Generated output exceeds configured output-size limit')
-                f.write(chunk)
-    else:
-        url=str(result)
-        parsed=urllib.parse.urlparse(url)
-        allowed=[x.strip().lower() for x in os.getenv('CC_GENERATIVE_OUTPUT_HOSTS','replicate.delivery,replicate.com,storage.googleapis.com').split(',') if x.strip()]
-        host=(parsed.hostname or '').lower()
-        if parsed.scheme!='https' or not host or not any(host==domain or host.endswith('.'+domain) for domain in allowed):
-            raise RuntimeError('Generative output URL host is not allowlisted. Configure CC_GENERATIVE_OUTPUT_HOSTS for your provider output domain.')
-        req=urllib.request.Request(url,headers={'User-Agent':'ContextCommerce/1.0'})
-        with urllib.request.urlopen(req,timeout=120) as response, open(output,'wb') as f:
-            total=0
-            while True:
-                chunk=response.read(1024*1024)
-                if not chunk: break
-                total+=len(chunk)
-                if total>max_output_bytes: raise RuntimeError('Generated output exceeds configured output-size limit')
-                f.write(chunk)
-    # Require a real playable video, not an image or an empty provider response.
-    probe(output)
-    return output
-
+        c.execute("UPDATE placements SET fit_status='REJECTED' WHERE id=?",(pid,))
+        _transition(c,p,'REJECTED',u,reason[:500])
+    return {'id':pid,'status':'REJECTED','next_step':'Revise the placement to create a new draft version'}
 
 class _GateError(RuntimeError):
     """A policy gate failed. Terminal: never retried."""
@@ -978,15 +806,14 @@ class _ValidationFailed(RuntimeError):
 
 def _render_gates(c, p, j=None):
     """Re-check every gate for p's current version. Returns (video, product, analysis) or raises _GateError."""
-    v=c.execute('SELECT * FROM videos WHERE id=?',(p['video_id'],)).fetchone()
-    if v and v['org_id']!=p['org_id'] and not _grant_for(c,v,p['org_id']): raise _GateError('LICENCE_NOT_ACTIVE: the licence grant for this video has ended or been revoked')
+    v=c.execute('SELECT * FROM videos WHERE id=? AND org_id=?',(p['video_id'],p['org_id'])).fetchone()
     prod=c.execute('SELECT * FROM products WHERE id=? AND org_id=?',(p['product_id'],p['org_id'])).fetchone()
     if not v or not prod: raise _GateError('SOURCE_UNAVAILABLE: a required source asset is unavailable')
     v,prod=dict(v),dict(prod)
     if not _license_ok(v) or not rights_are_active(_rights(c,p)): raise _GateError('RIGHTS_NOT_ACTIVE: rights are not active, expired, or revoked for this version')
     if _product_sha(c,prod,_uses_model(p))!=json.loads(c.execute('SELECT snapshot_json FROM placement_versions WHERE placement_id=? AND version=?',(p['id'],p['version'])).fetchone()['snapshot_json'])['product_sha256']:
         raise _GateError('PRODUCT_CHANGED: the product image no longer matches the approved version')
-    if not _approvals_ok(c,p,v): raise _GateError('APPROVALS_NOT_BOUND: rights-holder and brand approvals for this exact version are missing')
+    if not _approvals_ok(c,p,v): raise _GateError('APPROVALS_NOT_BOUND: no approval exists for this exact version')
     a=_current_analysis(c,p)
     if not a or a['status']!='PASSED' or p['fit_status']!='ACCEPTED': raise _GateError('QUALITY_NOT_VERIFIED: no passing quality analysis and accepted fit for this version')
     if j is not None and (j['placement_version']!=p['version'] or j['analysis_id']!=a['id']): raise _GateError('VERSION_MISMATCH: the job was created for a different placement version')
@@ -1040,8 +867,6 @@ def render_job(job_id, token=None):
             p=dict(p)
             if p['status']!='RENDERING': raise _GateError(f'INVALID_STATE: placement is {p["status"]}, not RENDERING')
             v,prod,a=_render_gates(c,p,j)
-        if j['mode']=='GENERATIVE':
-            raise _GateError('GENERATIVE_OUTPUT_UNVALIDATED: generative outputs cannot be validated automatically in this release')
         plan,plan_summary=_build_plan(a,prod,p)
         output=OUTPUTS/f'placement_{p["id"]}_v{p["version"]}_job_{job_id}.mp4'; tmp=output.with_name(f'{output.stem}.{token[:8]}.part.mp4')
         src=storage.local(v['source_path'])
@@ -1087,15 +912,14 @@ def render_job(job_id, token=None):
         if tmp is not None: Path(tmp).unlink(missing_ok=True)
         obs.job_id.set(None)
 
-def _queue_render(c, u, p, mode='COMPOSITE', max_cost_usd=None):
-    if p['status']=='RENDER_FAILED': _verify_chain(c,p,u)
-    if p['status']!='READY_FOR_RENDER': raise _err(409,'NOT_READY_FOR_RENDER',f'Placement is {p["status"]}; it must be READY_FOR_RENDER (both approvals, verified rights and quality)',status=p['status'])
+def _queue_render(c, u, p):
+    if p['status'] not in ('APPROVED','RENDER_FAILED'): raise _err(409,'NOT_APPROVED',f'Placement is {p["status"]}; approve this version before rendering',status=p['status'])
     try: v,prod,a=_render_gates(c,p)
     except _GateError as e: raise _err(409,e.code,str(e))
-    routing=renderers.route(a['scene_class'],v['duration'],v['width'],v['height'],max_cost_usd)
+    routing=renderers.route(a['scene_class'],v['duration'],v['width'],v['height'])
     if not routing['selected']: raise _err(409,routing['reason_code'],routing['message'],routing=routing)
-    limits.check_active_jobs(c,u['org_id'])
-    jid=c.execute("INSERT INTO jobs(placement_id,org_id,status,mode,placement_version,analysis_id,renderer) VALUES(?,?,'QUEUED',?,?,?,?)",(p['id'],u['org_id'],mode,p['version'],a['id'],routing['selected'])).lastrowid
+    limits.check_active_jobs(c,u['org_id']); limits.check_monthly(c,u['org_id'],'renders')
+    jid=c.execute("INSERT INTO jobs(placement_id,org_id,status,mode,placement_version,analysis_id,renderer) VALUES(?,?,'QUEUED','COMPOSITE',?,?,?)",(p['id'],u['org_id'],p['version'],a['id'],routing['selected'])).lastrowid
     _transition(c,p,'RENDERING',u,details={'job_id':jid,'renderer':routing['selected']})
     event(c,u,'render.queued','job',jid,{'renderer':routing['selected'],'placement_version':p['version']})
     c.commit(); obs.wake_workers()
@@ -1103,28 +927,13 @@ def _queue_render(c, u, p, mode='COMPOSITE', max_cost_usd=None):
 
 @app.post('/api/placements/{pid}/render')
 def start_render(pid:int,request:Request):
-    u=current_user(request); require_role(u,'brand')
+    u=current_user(request)
     with db() as c: return _queue_render(c,u,owned(c,'placements',pid,u['org_id']))
-@app.post('/api/placements/{pid}/route-render')
-def route_render(pid:int, request:Request, quality:str='balanced', max_cost_usd:float=1.0, max_latency_seconds:int=900):
-    """Kept for API compatibility. Routing is decided by the analysed scene class, never by a requested quality tier."""
-    u=current_user(request); require_role(u,'brand')
-    with db() as c: out=_queue_render(c,u,owned(c,'placements',pid,u['org_id']),max_cost_usd=max_cost_usd)
-    out['routing'].update({'selected_mode':out['renderer'],'quality_target':quality,'cost_ceiling_usd':max_cost_usd,'latency_budget_seconds':max_latency_seconds})
-    return out
-@app.post('/api/placements/{pid}/generative-render')
-def start_generative_render(pid:int,request:Request):
-    """Generative rendering stays unavailable until a configured provider passes a live integration check."""
-    u=current_user(request); require_role(u,'brand')
-    cap=next(p for p in renderers.capabilities() if p['id']=='replicate_generative')
-    if not cap['available']:
-        raise _err(503,'GENERATIVE_UNAVAILABLE','Generative rendering is not available: '+('the configured provider has not passed a live integration check (CC_REPLICATE_VERIFIED)' if cap['configured'] else 'no compatible provider is configured'),capability=cap)
-    raise _err(409,'NO_VALIDATED_GENERATIVE_PATH','No scene class currently routes to generative rendering, because its outputs cannot be validated automatically.')
 
 @app.get('/api/jobs')
 def jobs(request:Request):
     u=current_user(request)
-    with db() as c: rows=c.execute('SELECT j.*,p.video_id,p.product_id,v.title video_title,pr.name product_name FROM jobs j JOIN placements p ON p.id=j.placement_id JOIN videos v ON v.id=p.video_id JOIN products pr ON pr.id=p.product_id WHERE j.org_id=? OR v.org_id=? ORDER BY j.id DESC',(u['org_id'],u['org_id'])).fetchall()
+    with db() as c: rows=c.execute('SELECT j.*,p.video_id,p.product_id,v.title video_title,pr.name product_name FROM jobs j JOIN placements p ON p.id=j.placement_id JOIN videos v ON v.id=p.video_id JOIN products pr ON pr.id=p.product_id WHERE j.org_id=? ORDER BY j.id DESC',(u['org_id'],)).fetchall()
     return [dict({k:r[k] for k in r.keys() if k not in ('validation_json','lease_token','output_path')},validation=(json.loads(r['validation_json']) if r['validation_json'] else None),download_url=f'/api/jobs/{r["id"]}/download' if r['status']=='SUCCEEDED' else None) for r in rows]
 LINK_TTL_SECONDS=int(os.getenv('CC_DOWNLOAD_LINK_TTL','300'))
 
@@ -1151,13 +960,13 @@ def _unsign(token):
     except Exception: return None
 
 @app.post('/api/jobs/{jid}/download-link')
-def download_link(jid:int,request:Request,channel:Optional[str]=None):
+def download_link(jid:int,request:Request):
     """Short-lived link bound to this job, user and placement version. All delivery gates are re-checked when it is used."""
     u=current_user(request)
-    _authorize_delivery(jid,u,channel,record=False)
+    _authorize_delivery(jid,u,record=False)
     with db() as c: j=c.execute('SELECT placement_version FROM jobs WHERE id=?',(jid,)).fetchone()
     exp=int(time.time())+LINK_TTL_SECONDS
-    url=f'/api/media/{_sign({"j":jid,"u":u["id"],"v":j["placement_version"],"c":channel,"exp":exp})}'
+    url=f'/api/media/{_sign({"j":jid,"u":u["id"],"v":j["placement_version"],"exp":exp})}'
     from .auth import public_url
     return {'url':url,'absolute_url':public_url()+url,'expires_at':exp,'ttl_seconds':LINK_TTL_SECONDS}
 
@@ -1173,16 +982,16 @@ def signed_media(token:str):
         if not can(dict(row),'manager'): raise HTTPException(403,'Invalid download link')
         j=c.execute('SELECT placement_version FROM jobs WHERE id=?',(data['j'],)).fetchone()
         if not j or j['placement_version']!=data['v']: raise _err(403,'SUPERSEDED_VERSION','This link was issued for an earlier placement version')
-    return _authorize_delivery(data['j'],dict(row),data.get('c'),record=True)
+    return _authorize_delivery(data['j'],dict(row),record=True)
 
 @app.get('/api/jobs/{jid}/download')
-def download(jid:int,request:Request,channel:Optional[str]=None):
+def download(jid:int,request:Request):
     """Deliver only a validated render of the current, approved, rights-cleared placement version."""
-    return _authorize_delivery(jid,current_user(request),channel,record=True)
+    return _authorize_delivery(jid,current_user(request),record=True)
 
-def _authorize_delivery(jid, u, channel=None, record=True):
+def _authorize_delivery(jid, u, record=True):
     with db() as c:
-        j=c.execute('SELECT j.* FROM jobs j JOIN placements p ON p.id=j.placement_id JOIN videos v ON v.id=p.video_id WHERE j.id=? AND (j.org_id=? OR v.org_id=?)',(jid,u['org_id'],u['org_id'])).fetchone()
+        j=c.execute('SELECT * FROM jobs WHERE id=? AND org_id=?',(jid,u['org_id'])).fetchone()
         if not j: raise HTTPException(404,'Asset not found')
         if j['status']!='SUCCEEDED' or not j['output_path']: raise HTTPException(409,'Asset is not ready')
         p=dict(c.execute('SELECT * FROM placements WHERE id=?',(j['placement_id'],)).fetchone())
@@ -1191,21 +1000,18 @@ def _authorize_delivery(jid, u, channel=None, record=True):
         if (json.loads(j['validation_json'] or '{}')).get('status')!='PASSED': raise _err(403,'OUTPUT_NOT_VALIDATED','The rendered output has not passed validation')
         try: _render_gates(c,p,dict(j))
         except _GateError as e: raise _err(403,e.code,'Delivery blocked: '+str(e))
-        if channel and not rights_are_active(_rights(c,p),channel): raise _err(403,'CHANNEL_NOT_PERMITTED',f'The creator has not licensed the {channel} channel')
         path=j['output_path']
         if not storage.exists(path): raise HTTPException(410,'Rendered asset file is no longer available')
         if not record: return path
         if p['status']=='RENDERED':
             lifecycle.transition(c,p,'DELIVERED',u['id'],details={'job_id':jid})
-            from .commerce import on_delivered
-            on_delivered(c,p)
-        c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',(u['org_id'],u['id'],'asset.downloaded','job',jid,json.dumps({'placement_version':p['version'],'channel':channel})))
+        c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',(u['org_id'],u['id'],'asset.downloaded','job',jid,json.dumps({'placement_version':p['version']})))
     return storage.response(path,media_type='video/mp4',filename=f'context-commerce-placement-{p["id"]}-v{p["version"]}.mp4')
 
 @app.patch('/api/placements/{pid}/revise')
 def revise_placement(pid:int, request:Request, frame_second:float=Form(...), x:float=Form(...), y:float=Form(...), width:float=Form(...), start_second:float=Form(...), end_second:float=Form(...), tracking_quad:str=Form(''), color_match:bool=Form(True), adjust:str=Form(''), model3d:str=Form('')):
-    """Create a new immutable placement version; approvals, consent, quality and fit for the old version cannot authorize it."""
-    u=current_user(request); require_role(u,'brand')
+    """Create a new immutable placement version; the approval, quality check and fit judgement of the old version cannot authorize it."""
+    u=current_user(request)
     if not (0<=x<=1 and 0<=y<=1 and .02<width<=.7): raise HTTPException(422,'Invalid placement geometry or timing')
     try: quad=json.loads(tracking_quad) if tracking_quad.strip() else None
     except ValueError: raise HTTPException(422,'tracking_quad must be JSON')
@@ -1226,196 +1032,28 @@ def revise_placement(pid:int, request:Request, frame_second:float=Form(...), x:f
         version=p['version']+1
         c.execute("UPDATE placements SET frame_second=?,x=?,y=?,width=?,start_second=?,end_second=?,version=?,status='DRAFT',creator_approved=0,brand_approved=0,fit_confidence=0,fit_status='REVIEW_REQUIRED',quality_status='NOT_EVALUATED',analysis_id=NULL,render_options=? WHERE id=? AND version=?",(frame_second,x,y,width,start_second,end_second,version,json.dumps(opts),pid,p['version']))
         c.execute('INSERT INTO placement_rights(placement_id,placement_version,creator_consent,expires_at,updated_by) VALUES(?,?,?,?,?) ON CONFLICT(placement_id) DO UPDATE SET placement_version=excluded.placement_version,permitted_channels=\'["social","web"]\',territories=\'["WORLDWIDE"]\',start_at=NULL,expires_at=excluded.expires_at,creator_consent=0,revoked_at=NULL,revocation_reason=NULL,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP',(pid,version,0,v['license_expires'],u['id']))
-        _apply_grant_terms(c,pid,v,u['org_id'])
-        c.execute("UPDATE tracked_links SET active=0 WHERE placement_id=?",(pid,))
         c.execute("UPDATE jobs SET cancel_requested=1,status=CASE WHEN status='QUEUED' THEN 'CANCELLED' ELSE status END,error='Superseded by placement revision' WHERE placement_id=? AND status IN ('QUEUED','RUNNING')",(pid,))
         digest=_record_version(c,pid,u['id'])
         event(c,u,'placement.revised','placement',pid,{'new_version':version,'previous_version':p['version'],'from_status':p['status'],'content_hash':digest})
         event(c,u,'placement.transition','placement',pid,{'from':p['status'],'to':'DRAFT','version':version,'reason':'revision'})
-    return {'id':pid,'version':version,'status':'DRAFT','content_hash':digest,'fit_status':'REVIEW_REQUIRED','quality_status':'NOT_EVALUATED','approvals_reset':True,'creator_consent_required':True}
-
-@app.get('/api/placements/{pid}/rights')
-def get_placement_rights(pid:int, request:Request):
-    u=current_user(request)
-    with db() as c:
-        p=owned(c,'placements',pid,u['org_id']); row=_rights(c,p)
-        if not row: raise HTTPException(404,'Rights record not found for current placement version')
-        out=dict(row); out['permitted_channels']=json.loads(out['permitted_channels']); out['territories']=json.loads(out['territories']); return out
-
-@app.put('/api/placements/{pid}/rights')
-def update_placement_rights(pid:int, body:RightsIn, request:Request):
-    u=current_user(request); require_role(u,'brand','creator')
-    allowed_channels={'social','web','paid_ads','broadcast','ott','in_app'}
-    if not set(body.permitted_channels).issubset(allowed_channels): raise HTTPException(422,'Unsupported permitted channel')
-    if any(not (t=='WORLDWIDE' or (len(t)==2 and t.isalpha()) or (len(t)==3 and t.isalpha())) for t in body.territories): raise HTTPException(422,'Territories must use WORLDWIDE or ISO country/region codes')
-    if body.expires_at and body.start_at and body.expires_at < body.start_at: raise HTTPException(422,'Rights expiry must be after start date')
-    with db() as c:
-        p=owned(c,'placements',pid,u['org_id']); v=owned(c,'videos',p['video_id'],u['org_id'])
-        if p['status'] not in ('DRAFT','PROPOSED'): raise _err(409,'RIGHTS_LOCKED','Rights terms are locked after creator approval. Revise the placement to change them.')
-        if v['org_id']!=p['org_id']:
-            g=_grant_for(c,v,p['org_id'])
-            if not g: raise _err(409,'LICENCE_NOT_ACTIVE','The brand no longer holds a licence for this video')
-            gt=json.loads(g['territories'])
-            if not set(body.permitted_channels)<=set(json.loads(g['channels'])): raise _err(409,'OUTSIDE_LICENCE','Channels must stay within the licence: '+', '.join(json.loads(g['channels'])))
-            if 'WORLDWIDE' not in gt and not set(body.territories)<=set(gt): raise _err(409,'OUTSIDE_LICENCE','Territories must stay within the licence: '+', '.join(gt))
-            if g['expires_at'] and (not body.expires_at or body.expires_at[:10]>g['expires_at'][:10]): raise _err(409,'OUTSIDE_LICENCE','Rights must expire on or before the licence end '+g['expires_at'][:10])
-        if u['role']=='creator' and v['created_by']!=u['id']: raise _err(403,'NOT_RIGHTS_HOLDER','Only the creator who holds rights to this video can grant or change consent')
-        existing=_rights(c,p); consent=int(body.creator_consent)
-        if u['role']=='brand':
-            if not existing and body.creator_consent: raise HTTPException(403,'Only the creator can grant creator consent')
-            if existing and int(body.creator_consent)!=int(existing['creator_consent']): raise HTTPException(403,'Only the creator can grant or withdraw creator consent')
-            # Consent was given for specific terms; a brand-side change of terms requires fresh consent.
-            same=existing and json.loads(existing['permitted_channels'])==body.permitted_channels and json.loads(existing['territories'])==body.territories and existing['start_at']==body.start_at and existing['expires_at']==body.expires_at
-            if not same: consent=0
-        c.execute('INSERT INTO placement_rights(placement_id,placement_version,permitted_channels,territories,start_at,expires_at,creator_consent,updated_by) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(placement_id) DO UPDATE SET placement_version=excluded.placement_version,permitted_channels=excluded.permitted_channels,territories=excluded.territories,start_at=excluded.start_at,expires_at=excluded.expires_at,creator_consent=excluded.creator_consent,revoked_at=NULL,revocation_reason=NULL,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP',(pid,p['version'],json.dumps(body.permitted_channels),json.dumps(body.territories),body.start_at,body.expires_at,consent,u['id']))
-        event(c,u,'rights.updated','placement',pid,{'version':p['version'],'channels':body.permitted_channels,'territories':body.territories,'creator_consent':bool(consent)})
-    return {'placement_id':pid,'placement_version':p['version'],'creator_consent':bool(consent),'permitted_channels':body.permitted_channels,'territories':body.territories,'expires_at':body.expires_at}
+    return {'id':pid,'version':version,'status':'DRAFT','content_hash':digest,'fit_status':'REVIEW_REQUIRED','quality_status':'NOT_EVALUATED','approvals_reset':True}
 
 @app.post('/api/placements/{pid}/revoke-rights')
 def revoke_rights(pid:int, request:Request, reason:str=Form(...)):
-    u=current_user(request); require_role(u,'creator','brand')
+    """Takedown: stop all rendering and delivery of this placement (e.g. the video licence was withdrawn)."""
+    u=current_user(request)
     if len(reason.strip())<3: raise HTTPException(422,'Provide a clear revocation reason')
     with db() as c:
-        p=owned(c,'placements',pid,u['org_id']); v=owned(c,'videos',p['video_id'],u['org_id'])
-        if u['role']=='creator' and v['created_by']!=u['id']: raise _err(403,'NOT_RIGHTS_HOLDER','Only the rights holder can revoke on the creator side')
+        p=owned(c,'placements',pid,u['org_id'])
         c.execute('UPDATE placement_rights SET revoked_at=CURRENT_TIMESTAMP,revocation_reason=?,updated_by=? WHERE placement_id=? AND placement_version=?',(reason[:500],u['id'],pid,p['version']))
         c.execute("UPDATE jobs SET status=CASE WHEN status='QUEUED' THEN 'CANCELLED' ELSE status END,cancel_requested=1,error='Rights revoked' WHERE placement_id=? AND status IN ('QUEUED','RUNNING')",(pid,))
-        c.execute('UPDATE tracked_links SET active=0 WHERE placement_id=?',(pid,))
         if 'REVOKED' in lifecycle.TRANSITIONS.get(p['status'],()): lifecycle.transition(c,p,'REVOKED',u['id'],reason[:500])
         event(c,u,'rights.revoked','placement',pid,{'version':p['version'],'reason':reason[:500]})
     return {'placement_id':pid,'revoked':True,'delivery_blocked':True,'status':p['status']}
 
-@app.post('/api/videos/{vid}/surface-proposals')
-def surface_proposals(vid:int, request:Request, frame_second:float=Form(1.0)):
-    """Generate conservative planar-surface proposals from the selected frame. Candidates require human review."""
-    u=current_user(request)
-    with db() as c:
-        v=owned(c,'videos',vid,u['org_id'])
-        frame=c.execute('SELECT image_path,second FROM frames WHERE video_id=? ORDER BY ABS(second-?) LIMIT 1',(vid,frame_second)).fetchone()
-    if not frame: raise HTTPException(409,'Analyze the video first to generate keyframes')
-    frame_second=frame['second']   # proposals belong to the keyframe actually analysed
-    if not _has_cv2(): raise HTTPException(503,'OpenCV is required for surface proposals')
-    import cv2, numpy as np
-    image=cv2.imread(storage.local(frame['image_path']))
-    if image is None: raise HTTPException(500,'Could not read selected keyframe')
-    h,w=image.shape[:2]; gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-    edges=cv2.Canny(gray,60,160); contours,_=cv2.findContours(edges,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-    candidates=[]
-    for contour in sorted(contours,key=cv2.contourArea,reverse=True)[:80]:
-        area=cv2.contourArea(contour)/(w*h)
-        if area < .025 or area > .75: continue
-        peri=cv2.arcLength(contour,True); approx=cv2.approxPolyDP(contour,.025*peri,True)
-        if len(approx)!=4 or not cv2.isContourConvex(approx): continue
-        pts=approx.reshape(4,2).astype(float)
-        center=pts.mean(axis=0); angles=np.arctan2(pts[:,1]-center[1],pts[:,0]-center[0]); pts=pts[np.argsort(angles)]
-        # Normalize and rotate to approximate top-left first; candidate remains a proposal, not an automatic acceptance.
-        start=int(np.argmin(pts.sum(axis=1))); pts=np.roll(pts,-start,axis=0)
-        quad=(pts/np.array([w,h])).clip(0,1).tolist()
-        patch=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY); mask=np.zeros((h,w),np.uint8); cv2.fillConvexPoly(mask,pts.astype(np.int32),255)
-        lap=cv2.Laplacian(patch,cv2.CV_64F); texture=float(lap[mask>0].var()) if (mask>0).any() else 0.0; texture_score=min(1.0,texture/250.0)
-        aspect=max(np.linalg.norm(pts[1]-pts[0]),1)/max(np.linalg.norm(pts[2]-pts[1]),1)
-        aspect_score=1.0 if .2<aspect<5 else .4
-        confidence=round(max(0,min(.89,.35*min(area/.12,1)+.35*texture_score+.3*aspect_score)),3)
-        candidates.append({'quad':quad,'confidence':confidence,'fit_score':confidence,'area_fraction':round(area,3),'texture_score':round(texture_score,3),'aspect_ratio':round(aspect,3)})
-        if len(candidates)>=8: break
-    with db() as c:
-        ids=[]
-        for cand in candidates:
-            cur=c.execute('INSERT INTO surface_proposals(video_id,org_id,frame_second,quad_json,confidence,fit_score,evidence_json) VALUES(?,?,?,?,?,?,?)',(vid,u['org_id'],frame_second,json.dumps(cand['quad']),cand['confidence'],cand['fit_score'],json.dumps({k:v for k,v in cand.items() if k not in ('quad','confidence','fit_score')})))
-            ids.append(cur.lastrowid)
-        event(c,u,'surface.proposals_generated','video',vid,{'count':len(ids),'frame_second':frame_second})
-    return {'video_id':vid,'frame_second':frame_second,'proposals':[dict(id=i,**cand,status='PROPOSED',requires_human_review=True) for i,cand in zip(ids,candidates)],'message':'CV contour candidates only. They are not semantic proof that a product fits; review or correct the quadrilateral before use.'}
-
-@app.post('/api/surface-proposals/{proposal_id}/review')
-def review_surface(proposal_id:int, body:SurfaceReviewIn, request:Request):
-    u=current_user(request)
-    if body.decision not in ('accept','reject','correct'): raise HTTPException(422,'decision must be accept, reject, or correct')
-    with db() as c:
-        row=c.execute('SELECT * FROM surface_proposals WHERE id=? AND org_id=?',(proposal_id,u['org_id'])).fetchone()
-        if not row: raise HTTPException(404,'Surface proposal not found')
-        quad=json.loads(row['quad_json'])
-        if body.decision=='correct':
-            if body.quad is None: raise HTTPException(422,'Corrected quad is required')
-            try:
-                from .tracking import validate_quad
-                quad=validate_quad(body.quad).tolist()
-            except Exception as e: raise HTTPException(422,str(e))
-        status={'accept':'ACCEPTED','reject':'REJECTED','correct':'CORRECTED'}[body.decision]
-        c.execute('UPDATE surface_proposals SET quad_json=?,status=?,reviewed_by=? WHERE id=?',(json.dumps(quad),status,u['id'],proposal_id))
-        event(c,u,'surface.reviewed','surface_proposal',proposal_id,{'decision':body.decision,'confidence':row['confidence'],'notes':body.notes})
-    return {'id':proposal_id,'status':status,'quad':quad,'confidence':row['confidence'],'confidence_is_heuristic':True}
-
-@app.post('/api/placements/{pid}/fit-review')
-def fit_review(pid:int, request:Request, decision:str=Form(...), confidence:float=Form(1.0), notes:str=Form('')):
-    """Human judgement that the product belongs in the scene. Required in addition to the automated quality check."""
-    u=current_user(request); require_role(u,'brand','creator')
-    if decision not in ('accept','reject'): raise HTTPException(422,'decision must be accept or reject')
-    if not 0<=confidence<=1: raise HTTPException(422,'confidence must be between 0 and 1')
-    with db() as c:
-        p=owned(c,'placements',pid,u['org_id'])
-        if decision=='accept' and confidence<.75: raise _err(422,'FIT_CONFIDENCE_TOO_LOW','Confidence below the 0.75 threshold. Correct the placement or reject it; it will not be rendered.')
-        if p['status']!='DRAFT': raise _err(409,'NOT_DRAFT','Fit review applies to draft versions. Revise the placement to change it.')
-        status='ACCEPTED' if decision=='accept' else 'REJECTED'
-        c.execute('UPDATE placements SET fit_confidence=?,fit_status=? WHERE id=?',(confidence,status,pid))
-        event(c,u,'placement.fit_reviewed','placement',pid,{'decision':decision,'confidence':confidence,'fit_status':status,'notes':notes[:1000],'version':p['version']})
-        if status=='REJECTED': _transition(c,p,'REJECTED',u,'Visual fit rejected by reviewer',{'notes':notes[:500]})
-    return {'id':pid,'fit_status':status,'confidence':confidence,'threshold':.75,'confidence_is_human_attestation':True,'status':p['status']}
-
-@app.post('/api/placements/{pid}/tracked-links')
-def create_tracked_link(pid:int, body:TrackedLinkIn, request:Request):
-    u=current_user(request); require_role(u,'brand')
-    from urllib.parse import urlparse
-    parsed=urlparse(body.destination_url)
-    if parsed.scheme!='https' or not parsed.netloc: raise HTTPException(422,'Destination URL must be a valid HTTPS URL')
-    with db() as c:
-        p=owned(c,'placements',pid,u['org_id'])
-        if p['status'] not in ('RENDERED','DELIVERED'): raise _err(409,'NOT_DELIVERABLE','Only rendered, approved placements can be promoted')
-        if not rights_are_active(_rights(c,p),body.channel): raise _err(409,'CHANNEL_NOT_PERMITTED',f'The creator has not licensed the {body.channel} channel for this version')
-        slug=secrets.token_urlsafe(9)
-        c.execute('INSERT INTO tracked_links(org_id,placement_id,placement_version,slug,destination_url,campaign,created_by,channel) VALUES(?,?,?,?,?,?,?,?)',(u['org_id'],pid,p['version'],slug,body.destination_url,body.campaign,u['id'],body.channel))
-        event(c,u,'tracked_link.created','placement',pid,{'slug':slug,'campaign':body.campaign,'channel':body.channel})
-    return {'slug':slug,'tracking_url':f'/r/{slug}','destination_url':body.destination_url,'placement_version':p['version'],'channel':body.channel}
-
-@app.get('/r/{slug}')
-def redirect_tracked(slug:str, request:Request):
-    from fastapi.responses import RedirectResponse
-    with db() as c:
-        row=c.execute('SELECT * FROM tracked_links WHERE slug=? AND active=1',(slug,)).fetchone()
-        if not row: raise HTTPException(404,'Tracking link not found or inactive')
-        p=c.execute('SELECT * FROM placements WHERE id=? AND org_id=?',(row['placement_id'],row['org_id'])).fetchone()
-        rights=c.execute('SELECT * FROM placement_rights WHERE placement_id=? AND placement_version=?',(row['placement_id'],row['placement_version'])).fetchone()
-        if not p or p['version']!=row['placement_version'] or p['status'] not in ('RENDERED','DELIVERED') or not rights_are_active(rights, row['channel']):
-            c.execute('UPDATE tracked_links SET active=0 WHERE id=?',(row['id'],)); c.commit(); raise HTTPException(410,'Campaign link disabled because placement version or rights are no longer valid')
-        c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',(row['org_id'],row['created_by'],'campaign.click','tracked_link',row['id'],json.dumps({'slug':slug,'campaign':row['campaign'],'channel':row['channel']})))
-        target=row['destination_url']
-    return RedirectResponse(target,status_code=302)
-
-@app.post('/api/conversions/import')
-def import_conversion(body:ConversionIn, request:Request):
-    u=current_user(request); require_role(u,'brand')
-    with db() as c:
-        link=None
-        if body.link_slug:
-            link=c.execute('SELECT * FROM tracked_links WHERE slug=? AND org_id=?',(body.link_slug,u['org_id'])).fetchone()
-            if not link: raise HTTPException(404,'Tracking link not found')
-        try:
-            conv_id=c.execute('INSERT INTO conversions(org_id,link_id,external_id,event_name,value,currency,occurred_at,source,dedupe_key) VALUES(?,?,?,?,?,?,?,?,?)',(u['org_id'],link['id'] if link else None,body.external_id,body.event_name,body.value,body.currency.upper(),body.occurred_at,'manual_import',body.dedupe_key)).lastrowid
-        except dbm.IntegrityError: raise HTTPException(409,'Duplicate conversion dedupe_key')
-        event(c,u,'conversion.imported','conversion',conv_id,{'event_name':body.event_name,'value':body.value,'currency':body.currency.upper(),'source':'observed_import'})
-    return {'imported':True,'attribution':'observed_click_attribution_only','causal_lift':'NOT_MEASURED','note':'Observed conversions are not evidence of incremental lift.'}
-
-@app.get('/api/campaign-analytics')
-def campaign_analytics(request:Request):
-    u=current_user(request)
-    with db() as c:
-        clicks=c.execute("SELECT COUNT(*) FROM events WHERE org_id=? AND event_type='campaign.click'",(u['org_id'],)).fetchone()[0]
-        conversions=c.execute('SELECT COUNT(*) n,COALESCE(SUM(value),0) value FROM conversions WHERE org_id=?',(u['org_id'],)).fetchone()
-        attributed=c.execute('SELECT COUNT(*) FROM conversions WHERE org_id=? AND link_id IS NOT NULL',(u['org_id'],)).fetchone()[0]
-    return {'observed_clicks':clicks,'imported_conversions':conversions['n'],'conversion_value':conversions['value'],'conversions_with_link_attribution':attributed,'causal_incrementality':'NOT_MEASURED','warning':'No randomized holdout or valid counterfactual experiment has been run.'}
-
 @app.post('/api/jobs/{jid}/cancel')
 def cancel_job(jid:int, request:Request):
-    u=current_user(request); require_role(u,'brand')
+    u=current_user(request)
     with db() as c:
         j=c.execute('SELECT * FROM jobs WHERE id=? AND org_id=?',(jid,u['org_id'])).fetchone()
         if not j: raise HTTPException(404,'Job not found')
@@ -1428,7 +1066,7 @@ def cancel_job(jid:int, request:Request):
 
 @app.get('/api/placements/{pid}/preview')
 def preview_frame(pid:int,request:Request,t:float=0.0,original:bool=False):
-    """Diagnostic frame built from the exact render plan. Watermarked UNAPPROVED PREVIEW and never deliverable."""
+    """Diagnostic frame built from the exact render plan. Watermarked PREVIEW and never deliverable."""
     u=current_user(request)
     import cv2
     from fastapi.responses import Response
@@ -1442,7 +1080,7 @@ def preview_frame(pid:int,request:Request,t:float=0.0,original:bool=False):
     src,out=render_frame(storage.local(v['source_path']),plan,max(0,round(t*fps)))
     img=(src if original else out).copy()
     for color,thick in (((255,255,255),3),((30,30,200),1)):
-        cv2.putText(img,'UNAPPROVED PREVIEW',(10,img.shape[0]-12),cv2.FONT_HERSHEY_SIMPLEX,.55,color,thick,cv2.LINE_AA)
+        cv2.putText(img,'PREVIEW',(10,img.shape[0]-12),cv2.FONT_HERSHEY_SIMPLEX,.55,color,thick,cv2.LINE_AA)
     ok,buf=cv2.imencode('.jpg',img,[cv2.IMWRITE_JPEG_QUALITY,90])
     return Response(buf.tobytes(),media_type='image/jpeg',headers={'Cache-Control':'no-store','X-Preview':'unapproved'})
 
@@ -1462,7 +1100,7 @@ def analytics(request:Request):
     u=current_user(request)
     with db() as c:
         def count(q,args=(u['org_id'],)): return c.execute(q,args).fetchone()[0]
-        return {'products':count('SELECT COUNT(*) FROM products WHERE org_id=?'),'videos':count('SELECT COUNT(*) FROM videos WHERE org_id=?'),'placements':count('SELECT COUNT(*) FROM placements WHERE org_id=?'),'renders_succeeded':count("SELECT COUNT(*) FROM jobs WHERE org_id=? AND status='SUCCEEDED'"),'renders_failed':count("SELECT COUNT(*) FROM jobs WHERE org_id=? AND status='FAILED'"),'downloads':count("SELECT COUNT(*) FROM events WHERE org_id=? AND event_type='asset.downloaded'"),'events':count('SELECT COUNT(*) FROM events WHERE org_id=?')}
+        return {'products':count('SELECT COUNT(*) FROM products WHERE org_id=?'),'videos':count('SELECT COUNT(*) FROM videos WHERE org_id=?'),'decisions':count('SELECT COUNT(*) FROM decisions WHERE org_id=?'),'placements':count('SELECT COUNT(*) FROM placements WHERE org_id=?'),'renders_succeeded':count("SELECT COUNT(*) FROM jobs WHERE org_id=? AND status='SUCCEEDED'"),'renders_failed':count("SELECT COUNT(*) FROM jobs WHERE org_id=? AND status='FAILED'"),'downloads':count("SELECT COUNT(*) FROM events WHERE org_id=? AND event_type='asset.downloaded'"),'events':count('SELECT COUNT(*) FROM events WHERE org_id=?')}
 @app.get('/api/observability')
 def observability(request:Request):
     u=current_user(request)
@@ -1478,13 +1116,23 @@ def events(request:Request):
     with db() as c: rows=c.execute('SELECT event_type,entity_type,entity_id,details,created_at FROM events WHERE org_id=? ORDER BY id DESC LIMIT 100',(u['org_id'],)).fetchall()
     return [dict(r) for r in rows]
 
-from .commerce import router as commerce_router   # noqa: E402  (imports this module)
-app.include_router(commerce_router)
+from .decisions import router as decisions_router   # noqa: E402  (imports this module)
+app.include_router(decisions_router)
 from .auth import router as auth_router  # noqa: E402
 app.include_router(auth_router)
 from .members import router as members_router  # noqa: E402
 app.include_router(members_router)
 from .uploads import router as uploads_router  # noqa: E402
 app.include_router(uploads_router)
-from .payments import router as payments_router  # noqa: E402
-app.include_router(payments_router)
+
+
+def _operator(request):
+    token=os.getenv('CC_OPS_TOKEN','')
+    if not token or len(token)<24: raise HTTPException(404,'Not found')
+    if not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+token): raise HTTPException(401,'Operator token required')
+
+@app.get('/api/ops/metrics')
+def ops_metrics(request:Request):
+    """Operator metrics (bearer CC_OPS_TOKEN): queue depth and age, workers, jobs, storage, organizations."""
+    _operator(request)
+    with db() as c: return obs.metrics(c)

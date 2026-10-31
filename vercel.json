@@ -1,6 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "echo 'no install step: the frontend is static HTML/JS'",
-  "buildCommand": "node frontend/build.mjs"
-}

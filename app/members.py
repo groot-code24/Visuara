@@ -1,12 +1,11 @@
 """Workspace membership: member roles, permissions, invitations, suspension, removal and ownership transfer.
 
-Each account belongs to one workspace. The workspace kind (brand or creator) is the account's `role`; what the
-person may do inside the workspace is their `member_role`:
+Each account belongs to one workspace. What the person may do inside the workspace is their `member_role`:
 
     owner    everything, including transferring ownership
     admin    manage members and invitations, plus everything a manager can do
-    manager  commercial actions: campaigns, offers, licences, approvals, consent, renders, downloads
-    editor   content work: uploads, products, analysis, placements, quality checks, revisions
+    manager  approvals, renders, downloads, takedowns
+    editor   content work: uploads, products, analysis, decisions, placements, quality checks, revisions
     viewer   read-only reviewer
 
 Permissions are enforced in one place, `authorize()`, which `main.current_user()` calls for every authenticated
@@ -31,8 +30,9 @@ _RULES = [  # (methods, path pattern, minimum member role); first match wins
     ({'POST'}, r'^/api/(products|videos|uploads)(/.*)?$', 'editor'),
     ({'POST'}, r'^/api/placements$', 'editor'),
     ({'POST'}, r'^/api/placements/\d+/quality-check$', 'editor'),
+    ({'POST'}, r'^/api/decisions(/\d+/apply)?$', 'editor'),
+    ({'POST'}, r'^/api/decisions/\d+/cancel$', 'editor'),
     ({'PATCH'}, r'^/api/placements/\d+/revise$', 'editor'),
-    ({'POST'}, r'^/api/surface-proposals/\d+/review$', 'editor'),
 ]
 _COMPILED = [(meths, re.compile(p), role) for meths, p, role in _RULES]
 
@@ -72,7 +72,7 @@ def list_members(request: Request):
     with m.db() as c:
         rows = c.execute('SELECT id,email,name,member_role,suspended_at,created_at FROM users WHERE org_id=? AND removed_at IS NULL ORDER BY id', (u['org_id'],)).fetchall()
         org = c.execute('SELECT id,name FROM organizations WHERE id=?', (u['org_id'],)).fetchone()
-    return {'organization': dict(org), 'kind': u['role'], 'you': {'id': u['id'], 'member_role': u['member_role']}, 'roles': list(INVITABLE),
+    return {'organization': dict(org), 'you': {'id': u['id'], 'member_role': u['member_role']}, 'roles': list(INVITABLE),
             'members': [dict(r, suspended=bool(r['suspended_at'])) for r in rows]}
 
 
@@ -149,8 +149,7 @@ def transfer_ownership(uid: int, request: Request):
 # ---------------------------------------------------------------- invitations
 class InvitationIn(BaseModel):
     email: str = Field(min_length=5, max_length=254)
-    role: str = ''                       # account kind of the invitee: brand or creator (default: the inviter's)
-    member_role: str = 'manager'        # V9 invitees had full commercial rights; lower roles are explicit
+    member_role: str = 'editor'
 
 
 def invitation_ttl(): return int(os.getenv('CC_INVITATION_TTL', str(7 * 86400)))
@@ -161,24 +160,23 @@ def create_invitation(body: InvitationIn, request: Request):
     u = m.current_user(request)
     email = body.email.strip().lower()
     if not re.match(r'^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$', email): raise HTTPException(422, 'Enter a valid email address')
-    kind = body.role or u['role']           # shared workspaces may hold both kinds of account (V6 behaviour)
-    if kind not in ('brand', 'creator'): raise HTTPException(422, 'Role must be brand or creator')
     if body.member_role not in INVITABLE: raise HTTPException(422, f'Member role must be one of {", ".join(INVITABLE)}')
     if body.member_role == 'admin' and u['member_role'] != 'owner': raise HTTPException(403, 'Only the owner can invite admins')
     if not m.rate_limit(f'invite:{u["org_id"]}', 30, 3600): raise HTTPException(429, 'Too many invitations this hour')
     with m.db() as c:
         if c.execute('SELECT id FROM users WHERE email=?', (email,)).fetchone(): raise HTTPException(409, 'This email already has an account')
-        if limits.org_usage(c, u['org_id'])['members'] >= limits.org_max_members(): raise HTTPException(413, f'This workspace has reached {limits.org_max_members()} members')
+        cap = limits.effective_max_members(c, u['org_id'])
+        if limits.org_usage(c, u['org_id'])['members'] >= cap: raise HTTPException(402, {'code': 'PLAN_MEMBERS_LIMIT', 'message': f'Your plan includes {cap} member(s). Upgrade your plan to invite more people.'})
         c.execute("UPDATE invitations SET revoked_at=CURRENT_TIMESTAMP WHERE org_id=? AND lower(email)=? AND accepted_at IS NULL AND revoked_at IS NULL", (u['org_id'], email))
         raw = secrets.token_urlsafe(32)
         inv_id = c.execute('INSERT INTO invitations(org_id,email,role,member_role,token_hash,expires_at,created_by) VALUES(?,?,?,?,?,?,?)',
-                           (u['org_id'], email, kind, body.member_role, hashlib.sha256(raw.encode()).hexdigest(), int(time.time()) + invitation_ttl(), u['id'])).lastrowid
+                           (u['org_id'], email, 'brand', body.member_role, hashlib.sha256(raw.encode()).hexdigest(), int(time.time()) + invitation_ttl(), u['id'])).lastrowid
         org = c.execute('SELECT name FROM organizations WHERE id=?', (u['org_id'],)).fetchone()['name']
         m.event(c, u, 'invitation.created', 'invitation', inv_id, {'member_role': body.member_role})
     emailed = False
     if mailer.enabled():
         from .auth import app_url
-        link = f'{app_url()}/app?invited=1'
+        link = f'{app_url()}/login?invited=1'
         try:
             mailer.send(email, f'{u["name"]} invited you to {org} on Context Commerce',
                         f'{u["name"]} invited you to join the {org} workspace on Context Commerce as {body.member_role}.\n\nSign in with this email address to accept: {link}\n\nThe invitation expires in {invitation_ttl() // 86400} days.',
@@ -186,16 +184,16 @@ def create_invitation(body: InvitationIn, request: Request):
             emailed = True
         except mailer.MailError:
             emailed = False
-    return {'id': inv_id, 'email': email, 'role': kind, 'member_role': body.member_role, 'emailed': emailed, 'invitation_token': raw,
+    return {'id': inv_id, 'email': email, 'member_role': body.member_role, 'emailed': emailed,
             'expires_in_seconds': invitation_ttl(),
-            'instructions': 'The invitee signs in with this email address (Google or email code) and accepts the invitation. Password registration can use the token instead.'}
+            'instructions': 'The invitee signs in with this email address (Google, magic link or code) and accepts the invitation.'}
 
 
 @router.get('/api/invitations')
 def list_invitations(request: Request):
     u = m.current_user(request)
     with m.db() as c:
-        rows = c.execute('SELECT id,email,role,member_role,expires_at,accepted_at,revoked_at,created_at FROM invitations WHERE org_id=? ORDER BY id DESC', (u['org_id'],)).fetchall()
+        rows = c.execute('SELECT id,email,member_role,expires_at,accepted_at,revoked_at,created_at FROM invitations WHERE org_id=? ORDER BY id DESC', (u['org_id'],)).fetchall()
     now = int(time.time())
     return [dict(r, status='accepted' if r['accepted_at'] else 'revoked' if r['revoked_at'] else 'expired' if r['expires_at'] < now else 'pending') for r in rows]
 
@@ -213,5 +211,8 @@ def revoke_invitation(inv_id: int, request: Request):
 @router.get('/api/usage')
 def usage(request: Request):
     u = m.current_user(request)
-    with m.db() as c: used = limits.org_usage(c, u['org_id'])
-    return {'usage': used, 'limits': limits.snapshot()}
+    with m.db() as c:
+        used = limits.org_usage(c, u['org_id']); plan, lim = limits.plan_limits(c, u['org_id'])
+        caps = {'storage_mb': limits.effective_storage_bytes(c, u['org_id']) // 1048576, 'members': limits.effective_max_members(c, u['org_id']),
+                'max_video_mb': limits.effective_video_bytes(c, u['org_id']) // 1048576, 'daily_video_uploads': limits.effective_daily_uploads(c, u['org_id']), 'active_jobs': limits.effective_active_jobs(c, u['org_id'])}
+    return {'plan': plan, 'plan_limits': lim, 'effective': caps, 'usage': used, 'limits': limits.snapshot(), 'plans': limits.PLANS}

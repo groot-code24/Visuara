@@ -1,3 +1,5 @@
+> **Superseded by [docs/v11/deployment.md](../v11/deployment.md).** This describes the V10 static frontend, which no longer exists. Follow the V11 guide.
+
 # Vercel frontend deployment
 
 **Status:** the configuration is complete and was tested with a local emulator of Vercel's router, against the real API on a second origin (browser QA 10/10). **No Vercel deployment has been made**: there is no Vercel account or CLI here.

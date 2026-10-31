@@ -1,6 +1,4 @@
 """Renderer capability declarations and routing. Routing never silently falls back to a weaker tier."""
-import os
-
 PROVIDERS = [
     {
         'id': 'overlay_2d', 'tier': 'A', 'name': 'Deterministic screen-space overlay',
@@ -33,29 +31,14 @@ PROVIDERS = [
         'verified': False, 'available': False, 'est_cost_usd': None, 'version': None,
         'limitations': 'Not implemented. No segmentation model is integrated.',
     },
-    {
-        'id': 'replicate_generative', 'tier': 'D', 'name': 'Generative video editing (Replicate adapter)',
-        'scene_classes': ['D_NON_PLANAR_OR_UNSTABLE'], 'requires': ['provider_config', 'live_integration_check'], 'occlusion': True,
-        'verified': False, 'est_cost_usd': None, 'version': None,
-        'limitations': 'Adapter exists but has never been run against a live compatible model. Output cannot be checked by the deterministic validator.',
-    },
 ]
-
-
-def generative_configured():
-    return bool(os.getenv('CC_REPLICATE_API_TOKEN') and os.getenv('CC_REPLICATE_MODEL') and os.getenv('CC_REPLICATE_INPUT_TEMPLATE'))
 
 
 def capabilities():
     out = []
     for p in PROVIDERS:
         p = dict(p)
-        if p['id'] == 'replicate_generative':
-            p['configured'] = generative_configured()
-            p['verified'] = p['configured'] and os.getenv('CC_REPLICATE_VERIFIED') == '1'
-            p['available'] = p['verified']
-        else:
-            p.setdefault('available', True)
+        p.setdefault('available', True)
         out.append(p)
     return out
 

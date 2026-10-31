@@ -1,86 +1,53 @@
 # Context Commerce
 
-Authorised product placement in creator videos. Brands and creators join from the landing page, with Google or an emailed code or magic link. Creators list videos they hold the rights to; brands license them, place a product image or 3D model on a tracked surface, and get the creator's consent to that exact version. A deterministic renderer produces the video, every frame is validated, and only then can it be downloaded through short-lived, access-checked links.
+**Put your products in the videos you already have.** Upload two to four product images and your videos. Context Commerce finds the flat surfaces in every scene, decides which product fits where, and explains why. It then renders placements that pass a frame-by-frame quality check. There are no reshoots and no generative redrawing of your product.
 
-**The system renders only what it can render convincingly, and refuses everything else with a reason.**
+- **Sign in** with Google, or with an emailed magic link and code. There are no passwords.
+- **Decision engine:** 1–4 products × many videos → the best product for each video, its surface, its time window, a preview, a score and the reasons. See [docs/v11/decision-engine.md](docs/v11/decision-engine.md).
+- **Check, approve, render:** every placement is measured on every frame and approved by a manager for that exact version. The output is validated before it can be downloaded through short-lived links.
+- **Plans:** Free, Pro ($39, or $29 billed annually), Agency ($159, or $119 billed annually) and Enterprise, enforced by the API. See [docs/v11/pricing.md](docs/v11/pricing.md), which includes the competitor analysis.
 
-**Release status (V10): BLOCKED for public launch; not yet a controlled pilot.** Everything runs locally and in Docker, and is tested, including 10 concurrent organizations. But Neon, Cloudflare R2, the SMTP provider, Google OAuth and Vercel have never been connected (no accounts were available), and no real creator footage has been evaluated. See [docs/v10/release-readiness.md](docs/v10/release-readiness.md).
+**Status (V11):** runs locally and in Docker, with tests passing. Neon, Cloudflare R2, a real SMTP provider, Google sign-in and Vercel have never been connected, because no accounts were available. No real creator footage has been evaluated. See [docs/v11/known-limitations.md](docs/v11/known-limitations.md).
 
-## What V10 adds
-- **Deployment:**
-  - frontend on Vercel (static, Build Output API);
-  - API and render workers as separate Docker services on one VM;
-  - Neon PostgreSQL and Cloudflare R2;
-  - cross-domain auth with an exact CORS allowlist and same-site cookies.
-- **Uploads go straight from the browser to private storage** (presigned PUT), then are verified server-side; abandoned uploads are cleaned up.
-- **Workspaces for teams:**
-  - roles: owner, admin, manager, editor and viewer, enforced on the server;
-  - invitations by email (revocable);
-  - suspension, removal and ownership transfer, with an audit log.
-- **Fair, bounded processing:**
-  - per-organization quotas for storage, daily uploads, active renders and analysis rates;
-  - fair job claiming across organizations;
-  - job timeout;
-  - graceful worker shutdown that hands the job back to the queue.
-- **Neon-friendly idle behaviour:**
-  - the worker backs off to a 15-minute poll and wakes at once through a file on the shared volume;
-  - liveness checks never touch the database;
-  - idle connections are closed.
-- **Operations:**
-  - JSON logs with request and job ids, with redaction;
-  - liveness and readiness endpoints;
-  - operator metrics;
-  - alert script;
-  - cache cleanup;
-  - production guard: the app refuses to start in production with any development stand-in active.
-- **Supervised payments:** an invoice, payment and settlement ledger recorded by the operator. There is no card processing.
-- **3D:** the plane tolerance now accounts for pose error (validated on fresh held-out scenes).
-- **Google ID tokens** are verified against Google's signing keys.
-- **CI workflow, deploy and rollback scripts, git history.**
-
-## Quick start (local, no accounts needed)
+## Run it
+**Docker** (PostgreSQL, S3 stand-in, email inbox, API, two workers, web app):
 ```bash
-docker compose up --build        # app http://localhost:8000 · email inbox http://localhost:8025
+docker compose up --build
+# app http://localhost:3000 · sign-in emails http://localhost:8025 · API docs http://localhost:8000/docs
 ```
-This runs PostgreSQL 16, an S3-compatible store, a real SMTP inbox (Mailpit), the API and two workers.
-
-Without Docker (Python 3.11+ and FFmpeg):
+**Without Docker** (Python 3.11+, Node 20+, FFmpeg). This uses SQLite, local disk and an email outbox in `data/outbox/`:
 ```bash
-scripts/dev.sh setup && scripts/dev.sh run          # Windows: .\scripts\dev.ps1 setup; .\scripts\dev.ps1 run
+scripts/dev.sh setup
+scripts/dev.sh run        # API + worker on :8000
+scripts/dev.sh web        # second terminal: web app on http://localhost:3000
 ```
-Details: [docs/v10/local-development.md](docs/v10/local-development.md).
+On Windows, use `.\scripts\dev.ps1 setup`, then `.\scripts\dev.ps1 all`, which starts the API, a worker and the web app. Open **http://localhost:3000**.
+
+Sign-in locally: with no email provider configured, the sign-in page shows the magic link and code itself. For real email or Google, add your SMTP or Google OAuth settings to `.env` (see `.env.example`) and restart the API.
+
+## Layout
+| Path | What |
+|---|---|
+| `web/` | Next.js 16 app: landing, pricing, sign-in, dashboard ([docs/v11/web-app.md](docs/v11/web-app.md)) |
+| `app/` | FastAPI API: auth, workspaces and roles, uploads, decisions, placements, quality policy, renderer, validation |
+| `worker.py` | Render and decision worker (run one or more) |
+| `ops/` | Migrations, backups, maintenance, plans, monitoring |
+| `tests/`, `qa/` | Backend tests; browser QA, load test, outage drill |
+| `benchmark/` | Synthetic fixtures and visual-quality benchmarks |
+| `deploy/`, `docker-compose.yml`, `Dockerfile`, `web/Dockerfile` | Deployment |
+
+## Test
+```bash
+PYTHONPATH=".:tests" python -m pytest -q        # Windows: PYTHONPATH=".;tests"
+cd web && npm run typecheck && npm run build
+python qa/browser_qa_web.py                     # needs a web build whose CC_API_ORIGIN matches --api-port
+python qa/browser_qa_stack.py --app http://localhost:3000    # browser against the docker compose stack
+```
 
 ## Deploy
-| Part | Guide |
-|---|---|
-| Frontend (Vercel) | [vercel-deployment.md](docs/v10/vercel-deployment.md) |
-| API (VM + Docker + Caddy/Tunnel) | [backend-deployment.md](docs/v10/backend-deployment.md) |
-| Workers | [worker-deployment.md](docs/v10/worker-deployment.md) |
-| Neon | [database-operations.md](docs/v10/database-operations.md) |
-| Cloudflare R2 | [storage-operations.md](docs/v10/storage-operations.md) |
-| Google OAuth and SMTP | [backend-deployment.md](docs/v10/backend-deployment.md), [security-review.md](docs/v10/security-review.md#smtp-sender-authentication-for-the-provider-you-choose) |
-| Backups | [backup-and-recovery.md](docs/v10/backup-and-recovery.md) |
-| Monitoring | [monitoring.md](docs/v10/monitoring.md) |
-| Go-live checklist | [release-readiness.md](docs/v10/release-readiness.md#production-deployment-checklist) |
+Vercel hosts only the web app (root directory `web`). The API and workers run on a VM with Neon and R2, and they must be live first. See the step-by-step order in [docs/v11/deployment.md](docs/v11/deployment.md); the backend guides are in [docs/v10/](docs/v10/).
 
-## Tests and evidence
-```bash
-PYTHONPATH=".:tests" python -m pytest -q                         # SQLite (Windows: ".;tests")
-CC_TEST_DATABASE_URL=postgresql://… PYTHONPATH=".:tests" python -m pytest -q
-python qa/browser_qa_v10.py                                      # split-origin browser QA (compose stack)
-python qa/load_10_orgs.py --api http://localhost:8000            # 10 organizations, concurrent, isolation probes
-python -m benchmark.run_3d_benchmark --seeds 8 9 10              # 3D, fresh held-out seeds
-node frontend/build.mjs && node frontend/check.mjs
-python qa/secret_scan.py
-```
-Observed results: [docs/v10/test-evidence.md](docs/v10/test-evidence.md).
-
-## Documents
-**V10:**
-- [release readiness](docs/v10/release-readiness.md) · [audit](docs/v10/repository-audit.md) · [architecture](docs/v10/architecture.md) · [deployment architecture](docs/v10/deployment-architecture.md)
-- [multi-tenant readiness](docs/v10/multi-tenant-readiness.md) · [3D tolerance](docs/v10/3d-tolerance.md) · [security](docs/v10/security-review.md) · [data protection](docs/v10/data-protection.md) · [incidents](docs/v10/incident-response.md)
-- [limitations](docs/v10/known-limitations.md) · [technical debt](docs/v10/technical-debt.md)
-
-**Earlier:** [V9](docs/v9/) · [V8](docs/v8/) · [V6](docs/)
-
-Only upload media you own or have explicit permission to process and license.
+## Documentation
+- [docs/v11/changes.md](docs/v11/changes.md): what V11 added, simplified and removed
+- [docs/v11/test-evidence.md](docs/v11/test-evidence.md): what was tested and the results
+- [docs/v11/known-limitations.md](docs/v11/known-limitations.md)

@@ -1,0 +1,156 @@
+{
+ "app": "http://127.0.0.1:3000",
+ "workspaces": 10,
+ "users": 30,
+ "requests": 3572,
+ "errors": [],
+ "unexpected_5xx": 0,
+ "decisions": {
+  "succeeded": 10,
+  "videos_assigned": 20,
+  "videos_total": 20,
+  "seconds_median": 704.9,
+  "seconds_max": 1107.6
+ },
+ "renders": {
+  "succeeded": 10,
+  "retried_after_worker_kill": 1,
+  "worker_killed_after_s": 7.7,
+  "all_done_after_s": 180.5
+ },
+ "isolation": {
+  "probes_refused": 900,
+  "leaks": []
+ },
+ "postgres_connections_max": 13,
+ "phases_s": {
+  "owner_sign_up": 8.3,
+  "invite_and_join": 4.5,
+  "products_and_direct_uploads": 21.2,
+  "start_decisions": 0.5,
+  "decisions_complete": 1107.7,
+  "apply_check_approve": 56.5,
+  "start_renders": 0.4,
+  "renders_and_downloads": 171.0,
+  "role_checks": 0.8,
+  "isolation_probes": 13.7
+ },
+ "total_s": 1418.3,
+ "latency": {
+  "GET /api/auth/signup": {
+   "n": 30,
+   "p50_ms": 140,
+   "p95_ms": 249
+  },
+  "GET /api/decisions/{id}": {
+   "n": 2171,
+   "p50_ms": 59,
+   "p95_ms": 776
+  },
+  "GET /api/jobs": {
+   "n": 181,
+   "p50_ms": 84,
+   "p95_ms": 636
+  },
+  "GET /api/media/{token}": {
+   "n": 10,
+   "p50_ms": 326,
+   "p95_ms": 835
+  },
+  "GET isolation probe": {
+   "n": 630,
+   "p50_ms": 142,
+   "p95_ms": 248
+  },
+  "POST /api/auth/email/start": {
+   "n": 30,
+   "p50_ms": 551,
+   "p95_ms": 5033
+  },
+  "POST /api/auth/email/verify": {
+   "n": 30,
+   "p50_ms": 431,
+   "p95_ms": 766
+  },
+  "POST /api/auth/signup": {
+   "n": 30,
+   "p50_ms": 235,
+   "p95_ms": 540
+  },
+  "POST /api/decisions": {
+   "n": 10,
+   "p50_ms": 397,
+   "p95_ms": 445
+  },
+  "POST /api/decisions/{id}/apply": {
+   "n": 10,
+   "p50_ms": 1095,
+   "p95_ms": 1136
+  },
+  "POST /api/invitations": {
+   "n": 20,
+   "p50_ms": 573,
+   "p95_ms": 927
+  },
+  "POST /api/jobs/{id}/download-link": {
+   "n": 10,
+   "p50_ms": 89,
+   "p95_ms": 432
+  },
+  "POST /api/jobs/{id}/download-link (editor, refused)": {
+   "n": 10,
+   "p50_ms": 78,
+   "p95_ms": 163
+  },
+  "POST /api/placements/{id}/approve": {
+   "n": 10,
+   "p50_ms": 147,
+   "p95_ms": 521
+  },
+  "POST /api/placements/{id}/approve (editor, refused)": {
+   "n": 10,
+   "p50_ms": 41,
+   "p95_ms": 460
+  },
+  "POST /api/placements/{id}/quality-check": {
+   "n": 10,
+   "p50_ms": 49649,
+   "p95_ms": 55277
+  },
+  "POST /api/placements/{id}/render": {
+   "n": 10,
+   "p50_ms": 382,
+   "p95_ms": 400
+  },
+  "POST /api/products": {
+   "n": 20,
+   "p50_ms": 3436,
+   "p95_ms": 6555
+  },
+  "POST /api/products (viewer, refused)": {
+   "n": 10,
+   "p50_ms": 369,
+   "p95_ms": 402
+  },
+  "POST /api/uploads/video": {
+   "n": 20,
+   "p50_ms": 580,
+   "p95_ms": 932
+  },
+  "POST /api/uploads/{id}/complete": {
+   "n": 20,
+   "p50_ms": 4872,
+   "p95_ms": 8677
+  },
+  "POST isolation probe": {
+   "n": 270,
+   "p50_ms": 146,
+   "p95_ms": 239
+  },
+  "PUT presigned (bucket)": {
+   "n": 20,
+   "p50_ms": 1634,
+   "p95_ms": 2562
+  }
+ }
+}

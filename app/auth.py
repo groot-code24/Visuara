@@ -1,13 +1,14 @@
-"""Passwordless sign-in for brands and creators: Google (OpenID Connect) and email (one-time code or magic link).
+"""Passwordless sign-in: Google (OpenID Connect) and email (magic link or one-time code), as on claude.ai.
 
-First sign-in with a verified email that has no account starts onboarding: the person chooses brand or creator and
-names a workspace, or accepts a pending invitation addressed to that email. Password sign-in remains available.
+First sign-in with a verified email that has no account starts onboarding (/welcome in the web app): the person
+gives their name and names a workspace, or accepts a pending invitation addressed to that email. There are no
+passwords. The web app (Next.js) proxies /api/* and /auth/google/* to this API, so cookies are first-party.
 """
 import base64, hashlib, hmac, html, json, os, re, secrets, time, urllib.parse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from . import main as m, mailer
@@ -30,14 +31,14 @@ GOOGLE_ISSUERS = {'https://accounts.google.com', 'accounts.google.com'}
 GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs'
 
 
-def public_url(): return os.getenv('CC_PUBLIC_URL', 'http://127.0.0.1:8000').rstrip('/')
+def public_url(): return os.getenv('CC_PUBLIC_URL', 'http://localhost:3000').rstrip('/')
+def _production(): return os.getenv('CC_ENV', '').lower() == 'production'
 def app_url():
     """Where people use the app. Equals public_url() when the API serves the frontend; the Vercel origin otherwise."""
     return (os.getenv('CC_APP_URL') or public_url()).rstrip('/')
 def app_link(path):
-    """Link into the app: relative when the API serves the frontend itself, absolute when CC_APP_URL names another origin."""
+    """Link into the web app: relative when the app proxies the API on one origin, absolute when CC_APP_URL is set."""
     return os.getenv('CC_APP_URL', '').rstrip('/') + path
-def _back(): return html.escape(app_link('/app'))
 def google_configured(): return bool(os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'))
 def _h(s): return hashlib.sha256(s.encode()).hexdigest()
 def _now(): return int(time.time())
@@ -111,13 +112,13 @@ def _apply(resp, outcome):
     return resp
 
 
-def _suspended_page():
-    return _page('Account suspended', f'<h1>This account is suspended</h1><p>Contact your workspace owner to restore access.</p><a class="btn" href="{_back()}">Back</a>', 403)
+def _to_login(error):
+    return RedirectResponse(app_link('/login?error=' + urllib.parse.quote(error)), status_code=303)
 
 
 def _redirect(outcome):
-    if outcome[0] == 'suspended': return _suspended_page()
-    return _apply(RedirectResponse(app_link('/app' if outcome[0] == 'session' else '/app#welcome'), status_code=303), outcome)
+    if outcome[0] == 'suspended': return _to_login('suspended')
+    return _apply(RedirectResponse(app_link('/dashboard' if outcome[0] == 'session' else '/welcome'), status_code=303), outcome)
 
 
 def _anon_event(c, typ, details):
@@ -136,7 +137,7 @@ def csrf_token(request: Request):
 
 @router.get('/api/auth/providers')
 def providers():
-    return {'google': google_configured(), 'email': mailer.enabled(), 'email_backend': mailer.backend() or None, 'password': True}
+    return {'google': google_configured(), 'email': mailer.enabled(), 'email_backend': mailer.backend() or None, 'development': not _production()}
 
 
 # ---------------------------------------------------------------- email: one-time code + magic link
@@ -149,31 +150,38 @@ def email_start(body: EmailStart, request: Request):
     email = _norm_email(body.email)
     if not EMAIL_RE.match(email): raise _err(422, 'EMAIL_INVALID', 'Enter a valid email address')
     if not mailer.enabled(): raise _err(503, 'EMAIL_SIGNIN_DISABLED', 'Email sign-in is not configured on this server')
-    if not m.rate_limit('signin-email:' + email, 5, 3600) or not m.rate_limit('signin-ip:' + _ip(request), 20, 3600):
+    if not m.rate_limit('signin-email:' + email, 5, 3600) or not m.rate_limit('signin-ip:' + _ip(request), int(os.getenv('CC_SIGNIN_EMAILS_PER_IP_HOUR', '20')), 3600):
         raise _err(429, 'RATE_LIMITED', 'Too many sign-in emails requested. Wait a few minutes and try again.')
     token = secrets.token_urlsafe(32); code = f'{secrets.randbelow(10 ** 6):06d}'
     with m.db() as c:
         c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE email=? AND consumed_at IS NULL', (email,))
         c.execute('INSERT INTO auth_challenges(email,token_hash,code_hash,expires_at,ip) VALUES(?,?,?,?,?)',
                   (email, _h(token), _code_hash(email, code), _now() + CODE_TTL, _ip(request)))
-    link = f'{public_url()}/auth/email/{token}'
+    # The token travels in the URL fragment, which browsers never send to servers (no tokens in proxy or CDN logs).
+    link = f'{app_url()}/verify#token={token}'
     minutes = CODE_TTL // 60
-    text = (f'Your Context Commerce sign-in code is {code}\n\nOr open this link to sign in:\n{link}\n\n'
-            f'The code and link expire in {minutes} minutes and work once. If you did not request this, ignore this email.')
-    page = (f'<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#191a2c">'
-            f'<h2 style="margin:0 0 12px">Sign in to Context Commerce</h2><p>Your one-time code:</p>'
-            f'<p style="font-size:30px;letter-spacing:6px;font-weight:bold;margin:8px 0 20px">{code}</p>'
-            f'<p><a href="{html.escape(link)}" style="background:#5148e8;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block">Sign in</a></p>'
-            f'<p style="color:#6b6d80;font-size:13px">The code and link expire in {minutes} minutes and work once. If you did not request this, ignore this email.</p></div>')
+    text = (f'Sign in to Context Commerce\n\nOpen this link to sign in:\n{link}\n\nOr enter this code: {code}\n\n'
+            f'The link and code expire in {minutes} minutes and work once. If you did not request this, ignore this email.')
+    page = (f'<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:460px;margin:auto;padding:32px 24px;color:#1f1e1d">'
+            f'<p style="font-size:15px;font-weight:600;margin:0 0 24px">Context Commerce</p>'
+            f'<h2 style="font-size:22px;font-weight:600;margin:0 0 16px">Sign in to Context Commerce</h2>'
+            f'<p style="margin:0 0 24px"><a href="{html.escape(link)}" style="background:#1f1e1d;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;display:inline-block;font-weight:600">Sign in</a></p>'
+            f'<p style="color:#6b6a68;font-size:14px;margin:0 0 6px">Or enter this code:</p>'
+            f'<p style="font-size:28px;letter-spacing:6px;font-weight:600;margin:0 0 24px">{code}</p>'
+            f'<p style="color:#8a8986;font-size:13px">The link and code expire in {minutes} minutes and work once. If you did not request this, ignore this email.</p></div>')
     try:
-        mailer.send(email, f'Your Context Commerce sign-in code: {code}', text, page, outbox_dir=m.DATA / 'outbox')
+        mailer.send(email, 'Sign in to Context Commerce', text, page, outbox_dir=m.DATA / 'outbox')
     except mailer.MailError as e:
         with m.db() as c:
             c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE token_hash=?', (_h(token),))
             _anon_event(c, 'email.failed', {'reason': str(e)[:120]})
         raise _err(502, 'EMAIL_SEND_FAILED', 'The sign-in email could not be sent. Try again in a few minutes.')
     # Identical response whether or not an account exists (no account enumeration).
-    return {'sent': True, 'email': email, 'expires_in_seconds': CODE_TTL}
+    out = {'sent': True, 'email': email, 'expires_in_seconds': CODE_TTL}
+    # Without an email provider nothing can reach an inbox, so development hands the link to the sign-in page. The
+    # production guard refuses the outbox backend, and this checks production again.
+    if mailer.backend() == 'outbox' and not _production(): out['dev'] = {'link': f'/verify#token={token}', 'code': code}
+    return out
 
 
 class EmailVerify(BaseModel):
@@ -199,55 +207,52 @@ def email_verify(body: EmailVerify):
     return _apply(JSONResponse({'status': 'signed_in' if outcome[0] == 'session' else 'signup_required'}), outcome)
 
 
-def _page(title, body, status=200):
-    return HTMLResponse(f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)} · Context Commerce</title>
-<style>body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7fb;font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#191a2c}}
-.card{{background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(25,26,44,.08);padding:34px;max-width:420px;width:calc(100% - 32px);box-sizing:border-box}}
-h1{{font-size:22px;margin:0 0 10px}}p{{color:#5f6178;line-height:1.6}}button,a.btn{{display:inline-block;width:100%;box-sizing:border-box;text-align:center;background:#5148e8;color:#fff;border:0;border-radius:11px;padding:13px 18px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;margin-top:12px}}</style>
-</head><body><main class="card">{body}</main></body></html>''', status_code=status)
+class LinkIn(BaseModel):
+    token: str = Field(min_length=20, max_length=100)
 
 
-@router.get('/auth/email/{token}')
-def email_link(token: str, request: Request):
-    """Confirmation page. Email scanners prefetch links, so signing in requires an explicit POST from this page."""
+def _live_challenge(c, token):
+    return c.execute('SELECT id,email FROM auth_challenges WHERE token_hash=? AND consumed_at IS NULL AND expires_at>? AND attempts<?',
+                     (_h(token), _now(), MAX_CODE_ATTEMPTS)).fetchone()
+
+
+@router.post('/api/auth/email/link/check')
+def email_link_check(body: LinkIn):
+    """Which address a magic link belongs to, without using it. Email scanners prefetch links, so the web app shows
+    "Continue as <email>" and signs in only on an explicit click (POST /api/auth/email/link)."""
+    with m.db() as c: ch = _live_challenge(c, body.token)
+    if not ch: raise _err(410, 'LINK_EXPIRED', 'This sign-in link has expired or was already used. Request a new one.')
+    return {'email': ch['email']}
+
+
+@router.post('/api/auth/email/link')
+def email_link_confirm(body: LinkIn):
+    outcome = None
     with m.db() as c:
-        ch = c.execute('SELECT email FROM auth_challenges WHERE token_hash=? AND consumed_at IS NULL AND expires_at>? AND attempts<?', (_h(token), _now(), MAX_CODE_ATTEMPTS)).fetchone()
-    if not ch:
-        return _page('Link expired', f'<h1>This sign-in link has expired</h1><p>Links work once and expire after a few minutes. Request a new one.</p><a class="btn" href="{_back()}">Back to sign in</a>', 410)
-    csrf = request.cookies.get('cc_csrf') or secrets.token_urlsafe(24)
-    resp = _page('Confirm sign-in', f'<h1>Sign in to Context Commerce</h1><p>Continue as <strong>{html.escape(ch["email"])}</strong>.</p>'
-                 f'<form method="post"><input type="hidden" name="csrf" value="{html.escape(csrf)}"><button type="submit">Continue</button></form>')
-    resp.set_cookie('cc_csrf', csrf, httponly=False, samesite='lax', secure=_secure(), path='/')
-    return resp
-
-
-@router.post('/auth/email/{token}')
-async def email_link_confirm(token: str, request: Request):
-    form = await request.form()
-    csrf = request.cookies.get('cc_csrf')
-    if not csrf or not hmac.compare_digest(csrf, str(form.get('csrf', ''))):
-        return _page('Sign-in failed', '<h1>Please try again</h1><p>The request could not be verified. Open the link from your email again.</p>', 403)
-    with m.db() as c:
-        ch = c.execute('SELECT id,email FROM auth_challenges WHERE token_hash=? AND consumed_at IS NULL AND expires_at>? AND attempts<?', (_h(token), _now(), MAX_CODE_ATTEMPTS)).fetchone()
-        outcome = None
+        ch = _live_challenge(c, body.token)
         if ch and c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE id=? AND consumed_at IS NULL', (ch['id'],)).rowcount == 1:
             outcome = _resolve(c, ch['email'], '', 'email', None)
-    if not outcome:
-        return _page('Link expired', f'<h1>This sign-in link has expired</h1><p>Request a new one.</p><a class="btn" href="{_back()}">Back to sign in</a>', 410)
-    return _redirect(outcome)
+    if not outcome: raise _err(410, 'LINK_EXPIRED', 'This sign-in link has expired or was already used. Request a new one.')
+    if outcome[0] == 'suspended': raise _err(403, 'ACCOUNT_SUSPENDED', 'This account is suspended. Contact your workspace owner.')
+    return _apply(JSONResponse({'status': 'signed_in' if outcome[0] == 'session' else 'signup_required'}), outcome)
 
 
 # ---------------------------------------------------------------- Google (OpenID Connect, authorization code + PKCE)
 @router.get('/auth/google/start')
-def google_start():
-    if not google_configured():
-        return _page('Google sign-in unavailable', f'<h1>Google sign-in is not configured</h1><p>Use email sign-in instead.</p><a class="btn" href="{_back()}">Back</a>', 503)
+def google_start(request: Request):
+    if not google_configured(): return _to_login('google_unavailable')
+    # The state cookie must be set on the host Google will return to, or the callback cannot match it. In development
+    # the same app answers on localhost and 127.0.0.1.
+    origin = urllib.parse.urlsplit(public_url())
+    seen = request.headers.get('x-forwarded-host')
+    if not _production() and seen and seen.lower() != origin.netloc.lower():
+        return RedirectResponse(public_url() + '/auth/google/start', status_code=303)
     state, nonce, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(24), secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
     params = {'client_id': os.environ['GOOGLE_CLIENT_ID'], 'redirect_uri': public_url() + '/auth/google/callback', 'response_type': 'code',
               'scope': 'openid email profile', 'state': state, 'nonce': nonce, 'code_challenge': challenge,
               'code_challenge_method': 'S256', 'prompt': 'select_account'}
-    resp = RedirectResponse(GOOGLE_AUTH_URL + '?' + urllib.parse.urlencode(params), status_code=303)
+    resp = RedirectResponse(os.getenv('CC_GOOGLE_AUTH_URL', GOOGLE_AUTH_URL) + '?' + urllib.parse.urlencode(params), status_code=303)
     _set(resp, 'cc_oauth', _seal('google-oauth', {'s': state, 'n': nonce, 'v': verifier, 'exp': _now() + 600}), 600, path='/auth/google')
     return resp
 
@@ -290,7 +295,7 @@ def google_exchange(code, verifier):
     The token also arrives over verified TLS straight from Google (OpenID Connect Core 3.1.3.7 (6)); the signature
     check is defence in depth. The claims are validated by the caller.
     """
-    r = httpx.post(GOOGLE_TOKEN_URL, timeout=15, data={
+    r = httpx.post(os.getenv('CC_GOOGLE_TOKEN_URL', GOOGLE_TOKEN_URL), timeout=15, data={
         'grant_type': 'authorization_code', 'code': code, 'code_verifier': verifier, 'redirect_uri': public_url() + '/auth/google/callback',
         'client_id': os.environ['GOOGLE_CLIENT_ID'], 'client_secret': os.environ['GOOGLE_CLIENT_SECRET']})
     if r.status_code != 200: raise ValueError(f'token endpoint returned {r.status_code}')
@@ -310,12 +315,13 @@ def validate_google_claims(claims, nonce):
 
 @router.get('/auth/google/callback')
 def google_callback(request: Request, code: str = '', state: str = '', error: str = ''):
-    def fail(why):
+    def fail(why, code='google_failed'):
         try:
             with m.db() as c: _anon_event(c, 'auth.google_failed', {'reason': why[:80]})
         except Exception: pass
-        return _page('Google sign-in failed', f'<h1>Google sign-in did not complete</h1><p>{html.escape(why)}</p><a class="btn" href="{_back()}">Back to sign in</a>', 400)
-    if error: return fail('Sign-in was cancelled or refused at Google.')
+        resp = _to_login(code); resp.delete_cookie('cc_oauth', path='/auth/google')
+        return resp
+    if error: return fail('Sign-in was cancelled or refused at Google.', 'google_cancelled')
     data = _open('google-oauth', request.cookies.get('cc_oauth', ''))
     if not data or not state or not hmac.compare_digest(state, data['s']): return fail('The sign-in session expired or did not match. Please start again.')
     try:
@@ -338,7 +344,7 @@ def _pending(c, request):
 
 
 def _invitations_for(c, email):
-    return c.execute('SELECT i.id,i.role,i.member_role,o.name organization FROM invitations i JOIN organizations o ON o.id=i.org_id WHERE lower(i.email)=? AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>? ORDER BY i.id DESC',
+    return c.execute('SELECT i.id,i.member_role,o.name organization FROM invitations i JOIN organizations o ON o.id=i.org_id WHERE lower(i.email)=? AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>? ORDER BY i.id DESC',
                      (email, _now())).fetchall()
 
 
@@ -347,7 +353,19 @@ def signup_state(request: Request):
     with m.db() as c:
         p = _pending(c, request)
         if not p: raise _err(404, 'NO_PENDING_SIGNUP', 'No sign-up in progress')
-        return {'email': p['email'], 'name': p['name'], 'provider': p['provider'], 'invitations': [dict(r) for r in _invitations_for(c, p['email'])]}
+        return {'email': p['email'], 'name': p['name'], 'provider': p['provider'], 'invitations': [dict(r) for r in _invitations_for(c, p['email'])],
+                'suggested_workspace': _suggest_workspace(p['email'], p['name'])}
+
+
+_PERSONAL_DOMAINS = {'gmail', 'googlemail', 'outlook', 'hotmail', 'yahoo', 'icloud', 'proton', 'protonmail', 'live', 'aol', 'example'}
+
+
+def _suggest_workspace(email, name):
+    local, _, domain = email.partition('@')
+    company = domain.split('.')[0]
+    if company and company not in _PERSONAL_DOMAINS: return company.title()
+    first = (name or local).split(' ')[0].title()
+    return first + "'s workspace"
 
 
 @router.post('/api/auth/signup/cancel')
@@ -361,7 +379,6 @@ def cancel_signup(request: Request):
 
 class SignupIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    role: str = ''
     organization: str = Field(default='', max_length=120)
     invitation_id: int | None = None
 
@@ -377,22 +394,22 @@ def complete_signup(body: SignupIn, request: Request):
             inv = next((r for r in _invitations_for(c, email) if r['id'] == body.invitation_id), None)
             if not inv: raise _err(403, 'INVITATION_INVALID', 'That invitation is not valid for this email')
             inv = c.execute('SELECT * FROM invitations WHERE id=?', (inv['id'],)).fetchone()
-            org_id, role, member_role = inv['org_id'], inv['role'], inv['member_role']
+            org_id, member_role = inv['org_id'], inv['member_role']
             if c.execute('UPDATE invitations SET accepted_at=CURRENT_TIMESTAMP WHERE id=? AND accepted_at IS NULL AND revoked_at IS NULL', (inv['id'],)).rowcount != 1:
                 raise _err(403, 'INVITATION_INVALID', 'That invitation is no longer valid')
         else:
-            role, org_name = body.role, body.organization.strip()
-            if role not in ('brand', 'creator'): raise _err(422, 'ROLE_REQUIRED', 'Choose whether you are joining as a brand or a creator')
-            if not org_name: raise _err(422, 'ORGANIZATION_REQUIRED', 'Name your workspace (your company, channel or studio)')
+            org_name = body.organization.strip()
+            if not org_name: raise _err(422, 'ORGANIZATION_REQUIRED', 'Name your workspace (your company, brand or studio)')
             if c.execute('SELECT id FROM organizations WHERE lower(name)=lower(?)', (org_name,)).fetchone():
                 raise _err(409, 'ORGANIZATION_EXISTS', 'A workspace with this name exists. Choose another name, or ask a member to invite you.')
-            org_id = c.execute('INSERT INTO organizations(name) VALUES(?)', (org_name,)).lastrowid
+            org_id = c.execute('INSERT INTO organizations(name,plan) VALUES(?,?)', (org_name, m.limits.default_plan())).lastrowid
             member_role = 'owner'
-        uid = c.execute('INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,?,?,?,?,?)', (email, '', body.name.strip(), role, org_id, member_role)).lastrowid
+        # users.role is a legacy column (V6-V10 brand/creator workspaces); every V11 account is 'brand'.
+        uid = c.execute('INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,?,?,?,?,?)', (email, '', body.name.strip(), 'brand', org_id, member_role)).lastrowid
         if p['provider'] == 'google' and p['subject']:
             c.execute('INSERT INTO user_identities(user_id,provider,subject,email) VALUES(?,?,?,?)', (uid, 'google', p['subject'], email))
         c.execute('DELETE FROM pending_signups WHERE token_hash=?', (p['token_hash'],))
-        user = {'id': uid, 'email': email, 'name': body.name.strip(), 'role': role, 'org_id': org_id, 'member_role': member_role,
+        user = {'id': uid, 'email': email, 'name': body.name.strip(), 'org_id': org_id, 'member_role': member_role,
                 'organization': c.execute('SELECT name FROM organizations WHERE id=?', (org_id,)).fetchone()['name']}
         m.event(c, user, 'user.signed_up', 'user', uid, {'method': p['provider'], 'via_invitation': bool(body.invitation_id)})
         token = _start_session(c, uid)

@@ -1,3 +1,5 @@
+> **V11 note:** per-workspace plans set these limits now, and the defaults below are lower than the current platform ceilings. See [docs/v11/pricing.md](../v11/pricing.md) and `.env.example`.
+
 # Multi-tenant readiness: first 10 organizations
 
 ## Model

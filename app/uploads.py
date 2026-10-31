@@ -30,12 +30,14 @@ class UploadInit(BaseModel):
 
 @router.post('/api/uploads/video')
 def init_video_upload(body: UploadInit, request: Request):
-    u = m.current_user(request); m.require_role(u, 'creator')
+    u = m.current_user(request)
     if not body.license_confirmed: raise HTTPException(400, 'Confirm that you own or are authorized to license this video')
     if body.content_type not in DIRECT_TYPES: raise HTTPException(415, 'Supported formats: MP4, MOV, WebM')
     if body.size_bytes > limits.max_video_bytes(): raise HTTPException(413, f'Video upload limit is {limits.max_video_bytes() // 1048576} MB')
+    with m.db() as c:
+        limits.check_video_size(c, u['org_id'], body.size_bytes); max_bytes = limits.effective_video_bytes(c, u['org_id'])
     if not storage.enabled():
-        return {'method': 'server', 'upload_url': '/api/videos', 'max_bytes': limits.max_video_bytes()}
+        return {'method': 'server', 'upload_url': '/api/videos', 'max_bytes': max_bytes}
     if not m.rate_limit(f'upload-init:{u["org_id"]}', 60, 3600): raise HTTPException(429, 'Too many uploads started this hour')
     ttl = limits.upload_session_ttl()
     path = m.UPLOADS / f'video_{secrets.token_hex(8)}_{m.safe_name(body.filename)}'
@@ -45,7 +47,7 @@ def init_video_upload(body: UploadInit, request: Request):
                         (u['org_id'], u['id'], 'video', str(path), body.title.strip(), body.content_type, body.size_bytes, body.license_expires, int(time.time()) + ttl)).lastrowid
         m.event(c, u, 'upload.started', 'upload', sid, {'bytes': body.size_bytes})
     return {'method': 'direct', 'upload_id': sid, 'put_url': storage.presigned_put(str(path), body.content_type, ttl=min(ttl, 3600)),
-            'headers': {'Content-Type': body.content_type}, 'expires_in_seconds': min(ttl, 3600), 'max_bytes': limits.max_video_bytes()}
+            'headers': {'Content-Type': body.content_type}, 'expires_in_seconds': min(ttl, 3600), 'max_bytes': max_bytes}
 
 
 def _session(c, sid, org_id):
@@ -63,7 +65,7 @@ def _fail(sid, u, code, message, delete_path=None):
 
 @router.post('/api/uploads/{sid}/complete')
 def complete_upload(sid: int, request: Request):
-    u = m.current_user(request); m.require_role(u, 'creator')
+    u = m.current_user(request)
     with m.db() as c:
         s = _session(c, sid, u['org_id'])
         if s['status'] == 'COMPLETED': return {'id': s['result_id'], 'upload_id': sid, 'status': 'COMPLETED'}
@@ -95,7 +97,7 @@ def complete_upload(sid: int, request: Request):
 
 @router.post('/api/uploads/{sid}/cancel')
 def cancel_upload(sid: int, request: Request):
-    u = m.current_user(request); m.require_role(u, 'creator')
+    u = m.current_user(request)
     with m.db() as c:
         s = _session(c, sid, u['org_id'])
         if c.execute("UPDATE upload_sessions SET status='CANCELLED',finished_at=CURRENT_TIMESTAMP WHERE id=? AND status='PENDING'", (sid,)).rowcount != 1:

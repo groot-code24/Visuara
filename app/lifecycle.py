@@ -1,31 +1,27 @@
 """Server-enforced placement lifecycle. Every status change goes through transition()."""
 import hashlib, json
 
-STATES = ('DRAFT', 'PROPOSED', 'CREATOR_APPROVED', 'BRAND_APPROVED', 'RIGHTS_VERIFIED', 'QUALITY_VERIFIED',
-          'READY_FOR_RENDER', 'RENDERING', 'RENDERED', 'DELIVERED',
+STATES = ('DRAFT', 'APPROVED', 'RENDERING', 'RENDERED', 'DELIVERED',
           'REJECTED', 'RENDER_FAILED', 'REVOKED', 'EXPIRED', 'CANCELLED')
 
+# A workspace owns both its products and its videos, so one approval by a manager (bound to the exact version
+# and content hash, after the automated quality check passed) authorises rendering.
 # Revision (any state except CANCELLED -> DRAFT with a new version) is handled by revise(), not here.
 TRANSITIONS = {
-    'DRAFT':            {'PROPOSED', 'CANCELLED'},
-    'PROPOSED':         {'CREATOR_APPROVED', 'REJECTED', 'CANCELLED', 'REVOKED'},
-    'CREATOR_APPROVED': {'BRAND_APPROVED', 'REJECTED', 'CANCELLED', 'REVOKED'},
-    'BRAND_APPROVED':   {'RIGHTS_VERIFIED', 'EXPIRED', 'CANCELLED', 'REVOKED'},
-    'RIGHTS_VERIFIED':  {'QUALITY_VERIFIED', 'CANCELLED', 'REVOKED'},
-    'QUALITY_VERIFIED': {'READY_FOR_RENDER', 'CANCELLED', 'REVOKED'},
-    'READY_FOR_RENDER': {'RENDERING', 'EXPIRED', 'CANCELLED', 'REVOKED'},
-    'RENDERING':        {'RENDERED', 'RENDER_FAILED', 'CANCELLED', 'REVOKED'},
-    'RENDER_FAILED':    {'READY_FOR_RENDER', 'CANCELLED', 'REVOKED'},
-    'RENDERED':         {'DELIVERED', 'EXPIRED', 'REVOKED', 'CANCELLED'},
-    'DELIVERED':        {'EXPIRED', 'REVOKED'},
-    'REJECTED':         set(),
-    'REVOKED':          set(),
-    'EXPIRED':          set(),
-    'CANCELLED':        set(),
+    'DRAFT':         {'APPROVED', 'REJECTED', 'CANCELLED'},
+    'APPROVED':      {'RENDERING', 'EXPIRED', 'CANCELLED', 'REVOKED'},
+    'RENDERING':     {'RENDERED', 'RENDER_FAILED', 'CANCELLED', 'REVOKED'},
+    'RENDER_FAILED': {'RENDERING', 'CANCELLED', 'REVOKED'},
+    'RENDERED':      {'DELIVERED', 'EXPIRED', 'REVOKED', 'CANCELLED'},
+    'DELIVERED':     {'EXPIRED', 'REVOKED'},
+    'REJECTED':      set(),
+    'REVOKED':       set(),
+    'EXPIRED':       set(),
+    'CANCELLED':     set(),
 }
 REVISABLE = set(STATES) - {'CANCELLED'}
-# States in which the current version's approvals are complete.
-APPROVED_STATES = {'BRAND_APPROVED', 'RIGHTS_VERIFIED', 'QUALITY_VERIFIED', 'READY_FOR_RENDER', 'RENDERING', 'RENDERED', 'DELIVERED', 'RENDER_FAILED'}
+# States in which the current version is approved.
+APPROVED_STATES = {'APPROVED', 'RENDERING', 'RENDERED', 'DELIVERED', 'RENDER_FAILED'}
 
 
 class TransitionError(Exception):

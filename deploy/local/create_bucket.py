@@ -11,4 +11,7 @@ bucket = os.getenv('BUCKET', 'context-commerce-dev')
 try: s3.create_bucket(Bucket=bucket)
 except Exception as e:
     if 'BucketAlready' not in str(e): raise
+# Browsers upload videos straight into the bucket from the web app's origin (presigned PUT).
+s3.put_bucket_cors(Bucket=bucket, CORSConfiguration={'CORSRules': [{'AllowedOrigins': [os.getenv('APP_ORIGIN', 'http://localhost:3000')],
+                   'AllowedMethods': ['PUT', 'GET', 'HEAD'], 'AllowedHeaders': ['Content-Type'], 'MaxAgeSeconds': 3600}]})
 print(f'bucket ready: {bucket}')

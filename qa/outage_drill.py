@@ -12,6 +12,8 @@ from pathlib import Path
 import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'qa'))
+from qa_session import Session   # noqa: E402
 LEAK = re.compile(r'Traceback|psycopg|postgresql://|cc-local|context-commerce-dev|seaweed|mailpit|botocore|File "/', re.I)
 results = []
 
@@ -36,9 +38,8 @@ def wait_ready(api, want, timeout=90):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--api', default='http://localhost:8000'); a = ap.parse_args(); api = a.api
-    c = httpx.Client(base_url=api, timeout=60); c.get('/app'); tag = str(int(time.time()))
-    r = c.post('/api/auth/register', json={'name': 'Drill', 'email': f'drill{tag}@qa.test', 'password': 'drill-password-123', 'role': 'creator', 'organization': f'Drill {tag}'})
-    assert r.status_code == 200, r.text
+    tag = str(int(time.time()))
+    s = Session(api, f'drill{tag}@qa.test'); s.sign_up('Drill', f'Drill {tag}'); c = s.c
     hdr = lambda: {'X-CSRF-Token': c.cookies.get('cc_csrf')}
 
     # 1. Database outage (crash/restart: connections reset, new connections refused)
@@ -85,7 +86,7 @@ def main():
     e = httpx.post(api + '/api/auth/email/start', json={'email': f'smtp2{tag}@qa.test'}, timeout=60)
     check('smtp back: email sign-in works again', e.status_code == 200, e.text[:120])
 
-    out = ROOT / 'docs' / 'v10' / 'evidence' / 'outage_drill.json'; out.parent.mkdir(parents=True, exist_ok=True)
+    out = ROOT / 'docs' / 'v11' / 'evidence' / 'outage_drill.json'; out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({'results': results}, indent=1))
     print(f"{sum(r['ok'] for r in results)}/{len(results)} checks passed")
     sys.exit(0 if all(r['ok'] for r in results) else 1)

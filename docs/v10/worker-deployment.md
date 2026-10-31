@@ -32,4 +32,4 @@ Each worker writes `/data/run/worker-<host>-<pid>.json` at least every 30 s and 
 - One worker renders one job at a time. Rendering is CPU-bound (OpenCV + the software rasteriser + x264).
 - Give each worker 2 CPUs and 2–3 GB RAM.
 - Raise `CC_WORKER_REPLICAS` when `/api/ops/metrics` shows `oldest_queued_age_seconds` above a few minutes during working hours.
-- `CC_ORG_MAX_ACTIVE_JOBS` (default 2) stops any one organization from occupying every worker.
+- `CC_ORG_MAX_ACTIVE_JOBS` (a ceiling of 50 since V11; each plan sets a lower limit of 2 to 10) stops any one organization from occupying every worker.

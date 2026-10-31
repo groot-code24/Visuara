@@ -6,8 +6,7 @@ import pytest
 from moto import mock_aws
 
 from app import main, storage
-from test_api import CSRSTestClient, TestDB, register, isolated_db  # noqa: F401  (shared fixtures)
-from test_integrity import manual, login, needs_media, drive_to_ready  # noqa: F401
+from helpers import TestDB, owner, needs_media, drive_to_approved
 
 BUCKET = 'cc-test-private'
 
@@ -38,7 +37,7 @@ def test_object_keys_are_relative_to_media_directories(monkeypatch):
 
 @needs_media
 def test_write_through_restore_and_presigned_delivery(s3, manual, tmp_path):
-    pl, _ = drive_to_ready(manual, tmp_path, 'static', 3)
+    pl, _ = drive_to_approved(manual, tmp_path, 'static', 3)
     stored = keys(s3)
     for prefix in ('uploads/video_', 'uploads/product_', 'frames/', 'analyses/'):
         assert any(k.startswith(prefix) for k in stored), (prefix, stored)
@@ -68,7 +67,7 @@ def test_write_through_restore_and_presigned_delivery(s3, manual, tmp_path):
     assert hashlib.sha256(s3.get_object(Bucket=BUCKET, Key=out_key)['Body'].read()).hexdigest() == expected
     manual.post('/api/auth/logout')
     assert manual.get(f'/api/jobs/{jid}/download', follow_redirects=False).status_code == 401
-    register(manual, 'Rival', 'rival@example.com', 'brand', 'Rival Org')      # another organization never gets a URL
+    owner(manual, 'rival@example.com', 'Rival Org')      # another organization never gets a URL
     assert manual.get(f'/api/jobs/{jid}/download', follow_redirects=False).status_code == 404
 
 
