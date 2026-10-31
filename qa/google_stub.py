@@ -47,6 +47,7 @@ class GoogleStub:
                 self._json(200, {'id_token': stub._id_token(c['nonce']), 'token_type': 'Bearer'})
 
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.server.handle_error = lambda *a: None                 # a browser closing an idle connection is not a failure
         self.url = f'http://127.0.0.1:{self.server.server_address[1]}'
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 

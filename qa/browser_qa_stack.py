@@ -106,7 +106,7 @@ def main():
 
         def render():
             pg.click_text('Create placement'); pg.wait("location.pathname.startsWith('/dashboard/placements/')", what='placement page')
-            pg.click_text('Run quality check'); pg.wait_text('frames validated', timeout=240); assert 'Passed' in pg.text()
+            pg.wait_text('Run quality check', timeout=60); pg.click_text('Run quality check'); pg.wait_text('frames validated', timeout=240); assert 'Passed' in pg.text()
             pg.click_text('Approve'); pg.wait_text('Approved for version 1')
             pg.click_text('Start render'); pg.wait_text('Download video', timeout=300)
             status = pg.js("fetch(location.pathname.replace('/dashboard/placements/','/api/placements/')).then(r=>r.json()).then(d=>fetch('/api/jobs/'+d.jobs[0].id+'/download')).then(r=>r.status+' '+r.headers.get('content-type'))")

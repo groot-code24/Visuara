@@ -17,8 +17,8 @@ Stand-ins:
 ## Automated backend tests
 | Command | Observed |
 |---|---|
-| `PYTHONPATH=".;tests" pytest -q` (SQLite) | **77 passed**, 1 warning, 611.4 s (final code, 31 October) |
-| Same with `CC_TEST_DATABASE_URL` → PostgreSQL 16 (compose, database `cc_test`) | **77 passed**, 1 warning, 763.9 s (final code, 31 October) |
+| `PYTHONPATH=".;tests" pytest -q` (SQLite) | **80 passed**, 1 warning, 608.7 s (31 October) |
+| Same with `CC_TEST_DATABASE_URL` → PostgreSQL 16 (compose, database `cc_test`) | **80 passed**, 1 warning, 777.0 s (31 October) |
 | `tests/test_decisions.py` alone, run after the consistency fix | 7 passed, 199.9 s |
 
 The warning is Starlette's test-client deprecation notice.
@@ -42,11 +42,20 @@ What the suite covers:
 | `test_e2e_processes.py` | real uvicorn plus a separate `worker.py` over HTTP: sign-up by emailed code, a decision on the worker, apply, reject, correct, approve, render, validated download, edit → invalidation, and worker kill → lease recovery |
 | `test_assets_3d.py`, `test_storage.py`, `test_dbtransfer.py`, `test_real_footage.py` | 3D asset path, S3 storage, SQLite → PostgreSQL transfer, and benchmark tooling (on clips marked synthetic) |
 
-## Pre-deployment audit (31 October 2026, final code)
+## Sign-in and white hero (31 October 2026, final code)
 | Check | Observed |
 |---|---|
-| `qa/browser_qa_stack.py`: Chrome against the compose stack (PostgreSQL, S3 gateway, SMTP, separate workers) | **8/8**, 0 CSP violations: security headers and SEO files; sign-up over SMTP; **browser video upload straight to the bucket**; decision on a worker; previews and thumbnails through presigned redirects; check, approval, render, download through storage; API stopped (polite error page, marketing pages stay up, session recovers) |
-| `qa/browser_qa_web.py` | **11/11**, no page errors |
+| `qa/browser_qa_web.py` | **12/12**, no page errors. Includes the hero being pure white and fitting 320, 390, 768, 1024 and 1440 px, and the whole Google flow through the web app's proxy: new person → onboarding → dashboard, returning person → dashboard, cancelled, forged callback |
+| `qa/browser_qa_stack.py` | **8/8**, 0 CSP violations |
+| `next dev` on :3000 with the API on :8000 and no email provider, in Chrome, on `localhost` and on `127.0.0.1` | Magic link → onboarding → dashboard on both, no page errors |
+| The existing local database and account (on a copy, then live) | Signs in, reaches the dashboard |
+
+**Google is tested against a local stand-in (`qa/google_stub.py`), not real Google.** The stand-in checks the client id, redirect URI and PKCE, and it signs a real RS256 token, so our side of the flow is exercised. A real Google sign-in has never happened: it needs an OAuth client that only the account owner can create. **Real email has also never been sent:** it needs an SMTP provider. Without one, the sign-in page shows the link and code itself, in development only.
+
+## Pre-deployment audit (31 October 2026)
+| Check | Observed |
+|---|---|
+| `qa/browser_qa_stack.py`: Chrome against the compose stack (PostgreSQL, S3 gateway, SMTP, separate workers) | 8/8, 0 CSP violations: security headers and SEO files; sign-up over SMTP; **browser video upload straight to the bucket**; decision on a worker; previews and thumbnails through presigned redirects; check, approval, render, download through storage; API stopped (polite error page, marketing pages stay up, session recovers) |
 | Clean-copy build as Vercel would run it: only files that would be committed, `npm ci`, `VERCEL=1 VERCEL_ENV=production` | Fails with a clear message when `CC_API_ORIGIN` is missing or `http://`; builds with the right values, and the rewrites point at the configured API. Run on Windows, not Vercel's Linux; the lockfile lists the Linux packages |
 | `npm audit`, `pip-audit -r requirements.txt`, `qa/secret_scan.py`, `ruff`, `tsc` | 0 vulnerabilities, none known, 178 files with 0 findings, clean, clean |
 

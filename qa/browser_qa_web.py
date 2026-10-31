@@ -255,7 +255,7 @@ def main():
         def placement():
             pg.click_text('Create placement')
             pg.wait("location.pathname.startsWith('/dashboard/placements/')", what='placement page')
-            pg.click_text('Run quality check'); pg.wait_text('frames validated', timeout=180)
+            pg.wait_text('Run quality check', timeout=60); pg.click_text('Run quality check'); pg.wait_text('frames validated', timeout=180)
             assert 'Passed' in pg.text()
             pg.wait("[...document.images].some(i=>i.src.includes('/preview?t=')&&i.complete&&i.naturalWidth>0)", what='frame preview')
             pg.click_text('Approve'); pg.wait_text('Approved for version 1')
@@ -293,7 +293,7 @@ def main():
                 assert pg.js("getComputedStyle(document.querySelector('main section')).backgroundColor") == 'rgb(255, 255, 255)', 'hero is not pure white'
                 assert pg.js('document.documentElement.scrollWidth<=window.innerWidth+1'), f'horizontal scroll at {w}px'
                 assert pg.js("document.querySelector('h1').getBoundingClientRect().right<=innerWidth"), f'headline cut off at {w}px'
-                if w < 768: assert pg.js("(()=>{const b=document.querySelector('button[aria-label=\\"Open menu\\"]').getBoundingClientRect();return b.width>0&&b.right<=innerWidth})()"), f'menu button off screen at {w}px'
+                if w < 768: assert pg.js("""(()=>{const b=document.querySelector('button[aria-label="Open menu"]').getBoundingClientRect();return b.width>0&&b.right<=innerWidth})()"""), f'menu button off screen at {w}px'
                 pg.shot(out / f'16-hero-{w}.png')
             pg.viewport(1440, 900)
         step('hero is pure white and fits 320 to 1440 px', hero)

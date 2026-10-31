@@ -2,37 +2,37 @@
  {
   "step": "public pages, security headers, SEO files, dashboard guard",
   "ok": true,
-  "seconds": 17.8
+  "seconds": 29.6
  },
  {
   "step": "sign-up over real SMTP",
   "ok": true,
-  "seconds": 3.5
+  "seconds": 10.0
  },
  {
   "step": "browser uploads the video straight to the bucket (CORS, CSP)",
   "ok": true,
-  "seconds": 4.5
+  "seconds": 7.1
  },
  {
   "step": "decision on a worker, preview through storage",
   "ok": true,
-  "seconds": 76.5
+  "seconds": 92.7
  },
  {
   "step": "library thumbnails load",
   "ok": true,
-  "seconds": 1.6
+  "seconds": 2.3
  },
  {
   "step": "quality check, approval, render, download through storage",
   "ok": true,
-  "seconds": 19.5
+  "seconds": 27.4
  },
  {
   "step": "API outage: polite error, marketing stays up, session recovers",
   "ok": true,
-  "seconds": 25.5
+  "seconds": 27.1
  },
  {
   "step": "no CSP violations or page errors",

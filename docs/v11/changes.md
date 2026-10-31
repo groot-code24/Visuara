@@ -38,6 +38,13 @@ V11 refocuses the product on one self-serve job: **put your products into the vi
   - **The API refuses to start in production with no way to sign in,** and it hides its API explorer there.
   - **New QA:** `qa/browser_qa_stack.py` tests the browser against real object storage.
 
+- **Sign-in fixes and white hero (31 October 2026):**
+  - **Hero:** pure white, including the interactive demo.
+  - **Magic links** default to the web app's address instead of the API's, and with no email provider the development sign-in page shows the link and code. Production never does.
+  - **Local sign-in** no longer fails as cross-origin on `127.0.0.1`, and Google's start redirects to the configured host so its state cookie matches.
+  - **The Google button** stays visible in development with setup instructions, and a stopped API now says so.
+  - **`scripts/dev.ps1 all`** starts the API, a worker and the web app. It prefers the working `.venv311`.
+
 ## Simplified
 - **One kind of workspace.** A workspace owns both its products and its videos. The V6–V10 split into brand and creator accounts is gone. The `users.role` column remains only for older databases.
 - **One approval.** A manager approves a version after its quality check passes, attesting fit (at least 0.75). This replaces propose → creator consent → creator approval → brand approval → verify.
