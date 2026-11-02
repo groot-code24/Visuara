@@ -28,9 +28,8 @@ export function SiteHeader() {
       <div className={cx('pointer-events-auto mx-2 overflow-hidden rounded-b-[22px] border border-t-0 border-white/10 bg-black text-white transition-shadow duration-300 sm:mx-auto sm:max-w-[920px]',
         scrolled ? 'shadow-[0_18px_50px_-12px_rgba(10,10,18,.55)]' : 'shadow-[0_8px_30px_-16px_rgba(10,10,18,.5)]')}>
         <div className="flex h-16 items-center justify-between gap-3 pl-3.5 pr-2 sm:pl-6 sm:pr-2.5">
-          <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Context Commerce home">
+          <Link href="/" className="flex shrink-0 items-center" aria-label="Visora home">
             <LogoMark size={28} inverted />
-            <span className="text-[15px] font-bold tracking-[-0.03em] sm:text-[17px]">Context Commerce<span className="text-brand">.</span></span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
             {NAV.map((n) => (
@@ -90,7 +89,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-xs text-muted sm:px-6">
-          <p>© {new Date().getFullYear()} Context Commerce · Now in pilot</p>
+          <p>© {new Date().getFullYear()} Visora · Now in pilot</p>
           <div className="flex gap-4">
             <Link href="/terms" className="hover:text-ink">Terms</Link>
             <Link href="/privacy" className="hover:text-ink">Privacy</Link>

@@ -6,7 +6,7 @@ fresh database: a temp SQLite file, or a new PostgreSQL schema when CC_TEST_DATA
 import os
 
 os.environ['CC_DOTENV'] = '0'
-for _k in ('DATABASE_URL', 'CC_DATABASE_URL', 'CC_DATABASE_SCHEMA', 'CC_S3_BUCKET', 'CC_SMTP_HOST', 'CC_MAIL_BACKEND',
+for _k in ('DATABASE_URL', 'CC_DATABASE_URL', 'CC_DATABASE_SCHEMA', 'CC_S3_BUCKET', 'BLOB_READ_WRITE_TOKEN', 'CC_WORKER_MODE', 'CC_SMTP_HOST', 'CC_MAIL_BACKEND',
            'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CC_APP_URL', 'CC_VISION_MODEL'):
     os.environ.pop(_k, None)
 # Workspaces created in tests are on the Team plan unless a test sets another; plan limits have their own tests.

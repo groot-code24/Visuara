@@ -1,4 +1,4 @@
-"""Engine-neutral logical export/import of the Context Commerce database (SQLite or PostgreSQL/Neon).
+"""Engine-neutral logical export/import of the Visora database (SQLite or PostgreSQL/Neon).
 
   python -m ops.dbtransfer export  --out ./backups/db-2026-10-30            # from DATABASE_URL, else --sqlite
   python -m ops.dbtransfer import  --dump ./backups/db-2026-10-30            # into DATABASE_URL (must be empty)
@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from app import db as dbm  # noqa: E402
 
 BATCH = 500
+NOT_DATA = {'schema_fingerprint'}   # set up by init_db on each database, so it never travels in a dump
 
 
 def _sha(path):
@@ -44,6 +45,7 @@ def _read_tables(c):
     else: c.raw.execute('BEGIN')
     out = {}
     for t in c.tables():
+        if t in NOT_DATA: continue
         cols = c.columns(t)
         order = 'id' if 'id' in cols else cols[0]
         rows = [list(r) for r in c.execute(f'SELECT {",".join(cols)} FROM {t} ORDER BY {order}').fetchall()]

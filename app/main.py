@@ -8,8 +8,9 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import secrets, hashlib, hmac, os, json, shutil, subprocess, time, mimetypes, threading, socket, struct, base64, urllib.request, urllib.parse, logging, re
 
 ROOT = Path(__file__).resolve().parent.parent
-from .config import load_dotenv, check_production
+from .config import load_dotenv, apply_platform_defaults, check_production
 load_dotenv()
+apply_platform_defaults()
 check_production()
 
 class _RedactSignedLinks(logging.Filter):
@@ -24,12 +25,12 @@ UPLOADS = DATA / 'uploads'; OUTPUTS = DATA / 'outputs'; FRAMES = DATA / 'frames'
 for p in (DATA, UPLOADS, OUTPUTS, FRAMES): p.mkdir(parents=True, exist_ok=True)
 DB = DATA / 'context_commerce.sqlite3'
 from . import lifecycle, renderers, media
-from . import db as dbm, storage, limits, obs
+from . import db as dbm, storage, limits, obs, jobrunner
 obs.configure_logging()
 from .compositor import RenderCancelled, render_plan
 from .validation import validate_plan
 _prod=os.getenv('CC_ENV','').lower()=='production'     # no public API explorer in production
-app = FastAPI(title='Context Commerce API', version='1.1.0', description='Product placement in your own videos: decision engine, validated rendering, delivery',
+app = FastAPI(title='Visora API', version='1.1.0', description='Product placement in your own videos: decision engine, validated rendering, delivery',
               docs_url=None if _prod else '/docs', redoc_url=None if _prod else '/redoc', openapi_url=None if _prod else '/openapi.json')
 
 def _origin(url):
@@ -197,6 +198,12 @@ _INDEXES=['CREATE INDEX IF NOT EXISTS idx_users_org ON users(org_id)','CREATE IN
           'CREATE INDEX IF NOT EXISTS idx_products_org ON products(org_id)','CREATE INDEX IF NOT EXISTS idx_placements_org ON placements(org_id)',
           'CREATE INDEX IF NOT EXISTS idx_placements_video ON placements(video_id)','CREATE INDEX IF NOT EXISTS idx_frames_video ON frames(video_id,second)',
           'CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email)','CREATE INDEX IF NOT EXISTS idx_queue_events_job ON queue_events(job_id)']
+_MIGRATIONS=[('placements','render_options',"TEXT NOT NULL DEFAULT '{}'"),('jobs','mode',"TEXT NOT NULL DEFAULT 'COMPOSITE'"),('placements','fit_confidence','REAL NOT NULL DEFAULT 0.0'),('placements','fit_status',"TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED'"),('jobs','attempts','INTEGER NOT NULL DEFAULT 0'),('jobs','max_attempts','INTEGER NOT NULL DEFAULT 3'),('jobs','cancel_requested','INTEGER NOT NULL DEFAULT 0'),('jobs','lease_until','REAL'),('jobs','lease_token','TEXT'),('jobs','placement_version','INTEGER'),('jobs','analysis_id','INTEGER'),('jobs','renderer','TEXT'),('jobs','validation_json','TEXT'),('placements','quality_status',"TEXT NOT NULL DEFAULT 'NOT_EVALUATED'"),('placements','analysis_id','INTEGER'),('placements','content_hash','TEXT'),('placement_approvals','content_hash','TEXT'),('products','sha256','TEXT'),('products','derived_path','TEXT'),('products','asset_report',"TEXT NOT NULL DEFAULT '{}'"),('products','model_path','TEXT'),('products','model_sha256','TEXT'),('products','model_report','TEXT'),
+                                          ('users','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('users','suspended_at','TEXT'),('users','removed_at','TEXT'),
+                                          ('invitations','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('invitations','revoked_at','TEXT'),
+                                          ('videos','size_bytes','INTEGER NOT NULL DEFAULT 0'),('products','size_bytes','INTEGER NOT NULL DEFAULT 0'),
+                                          ('jobs','output_bytes','INTEGER NOT NULL DEFAULT 0'),
+                                          ('products','category',"TEXT NOT NULL DEFAULT 'other'"),('decisions','checkpoint_json','TEXT'),('organizations','plan','TEXT'),('placements','decision_id','INTEGER')]
 DB_SCHEMA=os.getenv('CC_DATABASE_SCHEMA') or None   # PostgreSQL schema (search_path); tests use one per test
 _ID_TABLES=frozenset()
 def db():
@@ -213,22 +220,23 @@ def init_db(connect=None):
     global _ID_TABLES
     _, AUTH_SCHEMA, DECISIONS_SCHEMA = all_schemas()
     _ID_TABLES=frozenset(dbm.id_tables(SCHEMA+DECISIONS_SCHEMA+AUTH_SCHEMA))
+    fingerprint=hashlib.sha256((SCHEMA+AUTH_SCHEMA+DECISIONS_SCHEMA+repr(_MIGRATIONS)+repr(_INDEXES)).encode()).hexdigest()
     with (connect or db)() as c:
-        if c.kind=='postgres': c.lock('schema-init')   # API and workers may start together
+        if c.kind=='postgres':
+            # A new serverless instance starts often: when this exact schema is already applied, skip the DDL round trips.
+            if c.raw.execute("SELECT to_regclass('schema_fingerprint')").fetchone()[0] and c.execute('SELECT value FROM schema_fingerprint').fetchone() == (fingerprint,): return
+            c.lock('schema-init')   # API and workers may start together
         c.executescript(SCHEMA)
         c.executescript(AUTH_SCHEMA)
         c.executescript(DECISIONS_SCHEMA)
         # Idempotent migrations for databases created by earlier MVP versions.
-        for table, column, definition in [('placements','render_options',"TEXT NOT NULL DEFAULT '{}'"),('jobs','mode',"TEXT NOT NULL DEFAULT 'COMPOSITE'"),('placements','fit_confidence','REAL NOT NULL DEFAULT 0.0'),('placements','fit_status',"TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED'"),('jobs','attempts','INTEGER NOT NULL DEFAULT 0'),('jobs','max_attempts','INTEGER NOT NULL DEFAULT 3'),('jobs','cancel_requested','INTEGER NOT NULL DEFAULT 0'),('jobs','lease_until','REAL'),('jobs','lease_token','TEXT'),('jobs','placement_version','INTEGER'),('jobs','analysis_id','INTEGER'),('jobs','renderer','TEXT'),('jobs','validation_json','TEXT'),('placements','quality_status',"TEXT NOT NULL DEFAULT 'NOT_EVALUATED'"),('placements','analysis_id','INTEGER'),('placements','content_hash','TEXT'),('placement_approvals','content_hash','TEXT'),('products','sha256','TEXT'),('products','derived_path','TEXT'),('products','asset_report',"TEXT NOT NULL DEFAULT '{}'"),('products','model_path','TEXT'),('products','model_sha256','TEXT'),('products','model_report','TEXT'),
-                                          ('users','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('users','suspended_at','TEXT'),('users','removed_at','TEXT'),
-                                          ('invitations','member_role',"TEXT NOT NULL DEFAULT 'manager'"),('invitations','revoked_at','TEXT'),
-                                          ('videos','size_bytes','INTEGER NOT NULL DEFAULT 0'),('products','size_bytes','INTEGER NOT NULL DEFAULT 0'),
-                                          ('jobs','output_bytes','INTEGER NOT NULL DEFAULT 0'),
-                                          ('products','category',"TEXT NOT NULL DEFAULT 'other'"),('organizations','plan','TEXT'),('placements','decision_id','INTEGER')]:
+        for table, column, definition in _MIGRATIONS:
             c.add_column(table,column,definition)
         # V10: every workspace has exactly one owner (the earliest member of workspaces created before member roles).
         c.execute("UPDATE users SET member_role='owner' WHERE id IN (SELECT MIN(id) FROM users GROUP BY org_id) AND org_id NOT IN (SELECT org_id FROM users WHERE member_role='owner')")
         for ddl in _INDEXES: c.execute(ddl)
+        if c.kind=='postgres':
+            c.execute('CREATE TABLE IF NOT EXISTS schema_fingerprint(value TEXT NOT NULL)'); c.execute('DELETE FROM schema_fingerprint'); c.execute('INSERT INTO schema_fingerprint(value) VALUES(?)',(fingerprint,))
 init_db()
 
 _RATE_BUCKETS = {}
@@ -329,15 +337,18 @@ def extract_frames(video_id, path, duration):
     try:
         import cv2
         cap=cv2.VideoCapture(str(path)); fps=cap.get(cv2.CAP_PROP_FPS) or 1; total=int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        prev=None; changes=[]; step=max(1,int(fps*.75)); idx=0
-        while idx<total:
-            cap.set(cv2.CAP_PROP_POS_FRAMES,idx); ok,frame=cap.read()
+        prev=None; changes=[]; step=max(1,int(fps*.75))
+        # One pass through the file: seeking to each sample would decode from the previous keyframe every time.
+        for idx in range(total):
+            if not cap.grab(): break
+            if idx%step: continue
+            ok,frame=cap.retrieve()
             if not ok: break
             small=cv2.resize(frame,(96,54)); hist=cv2.calcHist([small],[0,1,2],None,[8,8,8],[0,256,0,256,0,256]); cv2.normalize(hist,hist)
             if prev is not None:
                 score=float(cv2.compareHist(prev,hist,cv2.HISTCMP_BHATTACHARYYA))
                 if score>.18: changes.append((score,idx/max(fps,1)))
-            prev=hist; idx+=step
+            prev=hist
         cap.release(); targets=[t for _,t in sorted(changes,reverse=True)[:5]]
     except Exception: pass
     if not targets: targets=[duration*.12,duration*.32,duration*.52,duration*.72,max(.1,duration-.5)]
@@ -368,7 +379,7 @@ class ApproveIn(BaseModel):
 @app.get('/')
 def root():
     """The web app (Next.js, web/) is a separate service; this process serves the API only."""
-    return {'service':'context-commerce-api','version':app.version,'docs':'/docs'}
+    return {'service':'visora-api','version':app.version,'docs':'/docs'}
 
 @app.get('/api/health/live')
 def health_live():
@@ -384,12 +395,19 @@ def _readiness():
         checks['object_storage']=storage.probe()
     else: checks['object_storage']='local_disk'
     checks['ffmpeg']='ok' if tool_exists('ffmpeg') and tool_exists('ffprobe') else 'missing'
-    try: checks['disk']='ok' if obs.disk_status()['free_gb']>=float(os.getenv('CC_MIN_FREE_DISK_GB','2')) else 'low'
+    try: checks['disk']='ok' if obs.disk_status()['free_gb']>=float(os.getenv('CC_MIN_FREE_DISK_GB','2')) else 'low'; checks['disk_free_gb']=obs.disk_status()['free_gb']
     except Exception: checks['disk']='unknown'
-    if os.getenv('CC_INLINE_WORKER','1')!='1': checks['workers_alive']=obs.worker_status()['alive']
+    if os.getenv('CC_INLINE_WORKER','1')!='1' and not jobrunner.enabled(): checks['workers_alive']=obs.worker_status()['alive']
     ready=checks['database']=='ok' and checks['object_storage'] in ('ok','local_disk') and checks['ffmpeg']=='ok'
     _READY.update(at=time.time(),result=({'status':'ready' if ready else 'not_ready','checks':checks},ready))
     return _READY['result']
+
+@app.post('/api/internal/run-jobs')
+def run_jobs(request:Request):
+    """Run one queued job (see jobrunner.py). Only ever called by this deployment, with a key derived from CC_SIGNING_KEY."""
+    if not jobrunner.enabled(): raise HTTPException(404,'Not found')
+    if not jobrunner.authorised(request.headers.get('authorization')): raise HTTPException(401,'Not authorised')
+    return jobrunner.run_one()
 
 @app.get('/api/health/ready')
 def health_ready():
@@ -401,7 +419,7 @@ def health_ready():
 def health():
     body,_=_readiness(); db_ok=body['checks']['database']=='ok'
     d=dbm.describe(); st=storage.describe()   # public endpoint: no hostnames, bucket names or credentials
-    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_approval_min_0.75','decision_engine':__import__('app.decisions',fromlist=['x']).ENGINE_VERSION,'rights_versioning':'placement_version_bound','mode':'production' if os.getenv('CC_ENV')=='production' else 'development','workers_alive':obs.worker_status()['alive'] if os.getenv('CC_INLINE_WORKER','1')!='1' else 'inline'}
+    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'on_demand_runner' if jobrunner.enabled() else 'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_approval_min_0.75','decision_engine':__import__('app.decisions',fromlist=['x']).ENGINE_VERSION,'rights_versioning':'placement_version_bound','mode':'production' if os.getenv('CC_ENV')=='production' else 'development','workers_alive':'on_demand' if jobrunner.enabled() else obs.worker_status()['alive'] if os.getenv('CC_INLINE_WORKER','1')!='1' else 'inline'}
 @app.post('/api/auth/logout')
 def logout(request:Request):
     token=request.cookies.get('cc_session')
@@ -705,6 +723,9 @@ def quality_check(pid:int,request:Request):
             run=_QC_RUNS[key]=(_QC_POOL.submit(_run_quality_check,pid,u),time.time())
     try: out=run[0].result(timeout=quality_wait_seconds())
     except FutureTimeout:
+        if jobrunner.enabled():     # work stops when the request ends, so asking again would only start over
+            with _QC_LOCK: _QC_RUNS.pop(key,None)
+            raise _err(422,'QUALITY_CHECK_TOO_LONG','This placement is too long to measure in one check. Choose a shorter time range and try again.')
         return JSONResponse({'status':'RUNNING','placement_id':pid,'message':'Still measuring every frame of the placement.'},status_code=202)
     except BaseException:
         with _QC_LOCK: _QC_RUNS.pop(key,None)
@@ -933,7 +954,9 @@ def start_render(pid:int,request:Request):
 @app.get('/api/jobs')
 def jobs(request:Request):
     u=current_user(request)
-    with db() as c: rows=c.execute('SELECT j.*,p.video_id,p.product_id,v.title video_title,pr.name product_name FROM jobs j JOIN placements p ON p.id=j.placement_id JOIN videos v ON v.id=p.video_id JOIN products pr ON pr.id=p.product_id WHERE j.org_id=? ORDER BY j.id DESC',(u['org_id'],)).fetchall()
+    with db() as c:
+        jobrunner.nudge(c,u['org_id'])
+        rows=c.execute('SELECT j.*,p.video_id,p.product_id,v.title video_title,pr.name product_name FROM jobs j JOIN placements p ON p.id=j.placement_id JOIN videos v ON v.id=p.video_id JOIN products pr ON pr.id=p.product_id WHERE j.org_id=? ORDER BY j.id DESC',(u['org_id'],)).fetchall()
     return [dict({k:r[k] for k in r.keys() if k not in ('validation_json','lease_token','output_path')},validation=(json.loads(r['validation_json']) if r['validation_json'] else None),download_url=f'/api/jobs/{r["id"]}/download' if r['status']=='SUCCEEDED' else None) for r in rows]
 LINK_TTL_SECONDS=int(os.getenv('CC_DOWNLOAD_LINK_TTL','300'))
 

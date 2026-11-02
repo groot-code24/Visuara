@@ -1,18 +1,11 @@
 import type { NextConfig } from 'next';
 
 // The FastAPI backend. The browser only ever talks to this app's origin: /api/* and the Google OAuth callback are
-// proxied, so the session cookie is first-party and the auth guard (proxy.ts) can see it.
+// routed to it, so the session cookie is first-party and the auth guard (proxy.ts) can see it. On Vercel the root
+// vercel.json does that routing; everywhere else these rewrites do.
 const API_ORIGIN = (process.env.CC_API_ORIGIN || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
-// Rewrites are fixed at build time, so a wrong address here means a site that builds and then fails every request.
-if (process.env.VERCEL) {
-  const problem = !process.env.CC_API_ORIGIN
-    ? 'CC_API_ORIGIN is not set'
-    : !API_ORIGIN.startsWith('https://') ? `CC_API_ORIGIN must use https:// (session cookies travel over it), got ${API_ORIGIN}` : '';
-  if (problem && process.env.VERCEL_ENV === 'production') throw new Error(`${problem}. Set it in the Vercel project (docs/v11/deployment.md).`);
-  if (problem) console.warn(`Warning: ${problem}. Sign-in and the dashboard will not work on this preview.`);
-  if (!process.env.NEXT_PUBLIC_CONTACT_EMAIL) console.warn('Warning: NEXT_PUBLIC_CONTACT_EMAIL is not set, so "Talk to us" and upgrade links have nowhere to go.');
-}
+if (process.env.VERCEL && !process.env.NEXT_PUBLIC_CONTACT_EMAIL) console.warn('Warning: NEXT_PUBLIC_CONTACT_EMAIL is not set, so "Talk to us" and upgrade links have nowhere to go.');
 
 // Presigned storage URLs are https in production; the local S3 stand-in is plain http on the loopback address.
 const storage = process.env.VERCEL ? 'https:' : 'https: http://127.0.0.1:* http://localhost:*';
@@ -47,6 +40,7 @@ const nextConfig: NextConfig = {
   output: process.env.CC_STANDALONE === '1' ? 'standalone' : undefined,
   experimental: { proxyTimeout: 120_000 },
   async rewrites() {
+    if (process.env.VERCEL) return [];
     return [
       { source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` },
       { source: '/auth/google/:path*', destination: `${API_ORIGIN}/auth/google/:path*` },

@@ -8,13 +8,13 @@ const serif = Instrument_Serif({ subsets: ['latin'], weight: '400', style: ['nor
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jbmono', display: 'swap' });
 
 const description =
-  'Upload your product images and videos. Context Commerce finds the surfaces in every scene, decides which product fits where, and renders placements that pass a frame-by-frame quality check.';
+  'Upload your product images and videos. Visora finds the surfaces in every scene, decides which product fits where, and renders placements that pass a frame-by-frame quality check.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  openGraph: { type: 'website', siteName: 'Context Commerce', url: '/', title: 'Context Commerce: product placement in the videos you already have', description },
-  twitter: { card: 'summary_large_image', title: 'Context Commerce: product placement in the videos you already have', description },
-  title: { default: 'Context Commerce — product placement in the videos you already have', template: '%s · Context Commerce' },
+  openGraph: { type: 'website', siteName: 'Visora', url: '/', title: 'Visora: product placement in the videos you already have', description },
+  twitter: { card: 'summary_large_image', title: 'Visora: product placement in the videos you already have', description },
+  title: { default: 'Visora — product placement in the videos you already have', template: '%s · Visora' },
   description,
   icons: { icon: '/icon.svg' },
 };

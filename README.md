@@ -1,13 +1,13 @@
-# Context Commerce
+# Visora
 
-**Put your products in the videos you already have.** Upload two to four product images and your videos. Context Commerce finds the flat surfaces in every scene, decides which product fits where, and explains why. It then renders placements that pass a frame-by-frame quality check. There are no reshoots and no generative redrawing of your product.
+**Put your products in the videos you already have.** Upload two to four product images and your videos. Visora finds the flat surfaces in every scene, decides which product fits where, and explains why. It then renders placements that pass a frame-by-frame quality check. There are no reshoots and no generative redrawing of your product.
 
 - **Sign in** with Google, or with an emailed magic link and code. There are no passwords.
 - **Decision engine:** 1–4 products × many videos → the best product for each video, its surface, its time window, a preview, a score and the reasons. See [docs/v11/decision-engine.md](docs/v11/decision-engine.md).
 - **Check, approve, render:** every placement is measured on every frame and approved by a manager for that exact version. The output is validated before it can be downloaded through short-lived links.
 - **Plans:** Free, Pro ($39, or $29 billed annually), Agency ($159, or $119 billed annually) and Enterprise, enforced by the API. See [docs/v11/pricing.md](docs/v11/pricing.md), which includes the competitor analysis.
 
-**Status (V11):** runs locally and in Docker, with tests passing. Neon, Cloudflare R2, a real SMTP provider, Google sign-in and Vercel have never been connected, because no accounts were available. No real creator footage has been evaluated. See [docs/v11/known-limitations.md](docs/v11/known-limitations.md).
+**Status:** runs locally and in Docker, with tests passing. It is ready to deploy on Vercel: follow [docs/vercel.md](docs/vercel.md), which lists every step you do by hand. Vercel, Neon, Vercel Blob, Google sign-in and real email have never been connected, because they need your accounts. No real creator footage has been evaluated. See [docs/v11/known-limitations.md](docs/v11/known-limitations.md).
 
 ## Run it
 **Docker** (PostgreSQL, S3 stand-in, email inbox, API, two workers, web app):

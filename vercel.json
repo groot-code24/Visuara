@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "api": {
+      "root": "./",
+      "runtime": "container",
+      "entrypoint": "Dockerfile.vercel",
+      "bindings": [{ "type": "service", "service": "runner", "format": "url", "env": "CC_WORKER_URL" }]
+    },
+    "runner": {
+      "root": "./",
+      "runtime": "container",
+      "entrypoint": "Dockerfile.vercel"
+    },
+    "web": {
+      "root": "web/",
+      "framework": "nextjs",
+      "bindings": [{ "type": "service", "service": "api", "format": "url", "env": "CC_API_ORIGIN" }]
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/auth/google/(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

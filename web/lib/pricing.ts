@@ -7,15 +7,15 @@ export type Plan = {
 export const PLANS: Plan[] = [
   {
     id: 'free', name: 'Free', monthly: 0, annual: 0, renders: 3, tagline: 'Run the decision engine on your own footage.', cta: 'Start free',
-    features: ['5 decisions a month', '3 rendered videos a month', 'Up to 3 videos per decision', 'Videos up to 60 seconds and 250 MB', '2 GB storage', '1 seat'],
+    features: ['5 decisions a month', '3 rendered videos a month', 'Up to 3 videos per decision', 'Videos up to 45 seconds and 200 MB', '2 GB storage', '1 seat'],
   },
   {
     id: 'pro', name: 'Pro', monthly: 39, annual: 29, renders: 40, tagline: 'For creators and in-house marketers placing products every week.', cta: 'Start with Pro',
-    features: ['60 decisions a month', '40 rendered videos a month', 'Up to 10 videos per decision', 'Videos up to 5 minutes and 1 GB', '50 GB storage', '3 seats'],
+    features: ['60 decisions a month', '40 rendered videos a month', 'Up to 10 videos per decision', 'Videos up to 3 minutes and 500 MB', '50 GB storage', '3 seats'],
   },
   {
     id: 'team', name: 'Agency', monthly: 159, annual: 119, renders: 200, badge: 'Best for agencies', tagline: 'For agencies running placements across several clients.', cta: 'Start with Agency',
-    features: ['300 decisions a month', '200 rendered videos a month', 'Up to 20 videos per decision', 'Videos up to 10 minutes and 2 GB', '250 GB storage', '15 seats; invite clients as viewers', 'Manager approval before any render'],
+    features: ['300 decisions a month', '200 rendered videos a month', 'Up to 20 videos per decision', 'Videos up to 4 minutes and 1 GB', '250 GB storage', '15 seats; invite clients as viewers', 'Manager approval before any render'],
   },
   {
     id: 'enterprise', name: 'Enterprise', monthly: null, annual: null, renders: null, tagline: 'Volume, dedicated render capacity and your own cloud.', cta: 'Talk to us',
@@ -37,8 +37,8 @@ export const COMPARISON_ROWS: { label: string; values: [string, string, string, 
   { label: 'Rendered videos per month', values: ['3', '40', '200', 'Custom'] },
   { label: 'Products per decision', values: ['Up to 4', 'Up to 4', 'Up to 4', 'Up to 4'] },
   { label: 'Videos per decision', values: ['3', '10', '20', '50'] },
-  { label: 'Maximum video length', values: ['60 s', '5 min', '10 min', 'Platform limit'] },
-  { label: 'Maximum file size', values: ['250 MB', '1 GB', '2 GB', 'Custom'] },
+  { label: 'Maximum video length', values: ['45 s', '3 min', '4 min', 'Platform limit'] },
+  { label: 'Maximum file size', values: ['200 MB', '500 MB', '1 GB', 'Custom'] },
   { label: 'Video uploads per day', values: ['10', '50', '200', 'Custom'] },
   { label: 'Renders running at once', values: ['2', '4', '10', 'Custom'] },
   { label: 'Storage', values: ['2 GB', '50 GB', '250 GB', 'Custom'] },

@@ -1,6 +1,6 @@
 > **Superseded (V10, 30 Oct 2026):** this is the V9 report. Several items it lists as open were addressed in V10 (Neon idle polling, cache cleanup, Docker build, 3D tolerance). See [README.md](README.md) and [docs/v10/release-readiness.md](docs/v10/release-readiness.md).
 
-# Context Commerce — Project Report (V9)
+# Visora — Project Report (V9)
 
 **Date:** 30 October 2026  
 **Release status:** **BLOCKED** for pilot and production. Suitable for supervised demos on synthetic or self-owned footage.  
@@ -10,7 +10,7 @@
 
 ## 1. Summary
 
-Context Commerce lets brands place their products into creator videos with the creator's permission. The flow runs from sign-up, through the marketplace and licensing, to placement, a quality check, consent, rendering and delivery. It all works end to end on a local machine, and the automated tests pass on both supported databases.
+Visora lets brands place their products into creator videos with the creator's permission. The flow runs from sign-up, through the marketplace and licensing, to placement, a quality check, consent, rendering and delivery. It all works end to end on a local machine, and the automated tests pass on both supported databases.
 
 Two things block a public launch:
 

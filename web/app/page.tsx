@@ -21,7 +21,7 @@ const OPTIONS = [
     points: [['Fast and cheap per clip', true], ['The product is regenerated, so labels and logos can drift', false], ['No check that it holds up on every frame', false]],
   },
   {
-    title: 'Context Commerce', tone: 'ours',
+    title: 'Visora', tone: 'ours',
     points: [['Minutes, on footage you already own', true], ['Your exact product image, composited, never redrawn', true], ['Measured on every frame, approved before render', true]],
   },
 ] as const;
@@ -63,7 +63,7 @@ export default function Landing() {
               Put your products in the videos <span className="mk-gradient-ink inline-block pr-[.12em] italic">you already have.</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-ink-2 sm:text-lg">
-              Drop in two to four product shots and a batch of videos. Context Commerce scans every scene, decides which product fits where, and renders
+              Drop in two to four product shots and a batch of videos. Visora scans every scene, decides which product fits where, and renders
               placements that pass a frame-by-frame check. No reshoot, and no generative redraw.
             </p>
             <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
@@ -212,7 +212,7 @@ export default function Landing() {
               <p className="text-sm font-medium text-[#b9b0ff]">For agencies</p>
               <h2 className="mt-2 font-display text-4xl tracking-tight sm:text-6xl">Why agencies spend their time here.</h2>
               <p className="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
-                Your clients already sit on hours of usable footage. Context Commerce turns it into placements you can pitch, approve and deliver
+                Your clients already sit on hours of usable footage. Visora turns it into placements you can pitch, approve and deliver
                 in an afternoon, on a plan that costs less than one reshoot day.
               </p>
             </Reveal>

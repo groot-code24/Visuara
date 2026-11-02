@@ -2,14 +2,14 @@ import type { Metadata } from 'next';
 import { ContactLine, LegalPage } from '@/components/legal';
 import { CONTACT_EMAIL } from '@/lib/site';
 
-export const metadata: Metadata = { title: 'Privacy Policy', description: 'What Context Commerce collects, why, and how long it keeps it.' };
+export const metadata: Metadata = { title: 'Privacy Policy', description: 'What Visora collects, why, and how long it keeps it.' };
 
 export default function Privacy() {
   return (
     <LegalPage
       title="Privacy Policy"
       updated="31 October 2026"
-      intro={<p>This policy explains what Context Commerce collects when you use the service, why we collect it, and the choices you have.</p>}
+      intro={<p>This policy explains what Visora collects when you use the service, why we collect it, and the choices you have.</p>}
       sections={[
         {
           heading: 'What we collect',
@@ -39,7 +39,7 @@ export default function Privacy() {
           heading: 'Who else handles your data',
           body: (
             <>
-              <p>We use these service providers to run Context Commerce. They process data only to provide their service to us:</p>
+              <p>We use these service providers to run Visora. They process data only to provide their service to us:</p>
               <ul>
                 <li>Vercel: hosts the website.</li>
                 <li>Neon: hosts the database.</li>

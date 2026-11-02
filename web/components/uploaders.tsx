@@ -62,7 +62,7 @@ export function ProductUploader({ onDone, compact }: { onDone: (id: number) => v
         <DropZone accept="image/png,image/jpeg,image/webp" onFiles={pick} className={compact ? 'py-6' : ''}>
           <IconUpload className="text-muted" />
           <p className="mt-2 text-sm font-medium">Add a product image</p>
-          <p className="text-xs text-muted">PNG with transparency works best · up to 10 MB</p>
+          <p className="text-xs text-muted">PNG with transparency works best · up to 4 MB</p>
         </DropZone>
         {error && <Alert className="mt-3">{error}</Alert>}
       </div>

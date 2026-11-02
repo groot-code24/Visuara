@@ -61,7 +61,7 @@ export default function Settings() {
           ) : <Skeleton className="mt-6 h-40" />}
           <div className="mt-6 rounded-xl bg-soft p-4 text-sm text-ink-2">
             Need more? During the pilot, upgrades are set up by our team and billed by invoice.{' '}
-            {CONTACT ? <a className="font-medium text-ink underline" href={`mailto:${CONTACT}?subject=Upgrade%20${encodeURIComponent(me.organization || '')}`}>Contact us</a> : 'Contact your Context Commerce representative'}
+            {CONTACT ? <a className="font-medium text-ink underline" href={`mailto:${CONTACT}?subject=Upgrade%20${encodeURIComponent(me.organization || '')}`}>Contact us</a> : 'Contact your Visora representative'}
             {' '}· <Link href="/pricing" className="underline">Compare plans</Link>
           </div>
         </Card>

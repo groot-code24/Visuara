@@ -22,5 +22,5 @@ export function LegalPage({ title, updated, intro, sections }: { title: string; 
 }
 
 export function ContactLine({ email }: { email: string }) {
-  return email ? <a className="underline" href={`mailto:${email}`}>{email}</a> : <>your Context Commerce contact</>;
+  return email ? <a className="underline" href={`mailto:${email}`}>{email}</a> : <>your Visora contact</>;
 }

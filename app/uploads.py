@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from . import main as m, limits, storage
+from . import main as m, blobstore, limits, storage
 
 router = APIRouter()
 DIRECT_TYPES = ('video/mp4', 'video/quicktime', 'video/webm')
@@ -46,6 +46,10 @@ def init_video_upload(body: UploadInit, request: Request):
         sid = c.execute('INSERT INTO upload_sessions(org_id,user_id,kind,path,title,content_type,expected_bytes,license_expires,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',
                         (u['org_id'], u['id'], 'video', str(path), body.title.strip(), body.content_type, body.size_bytes, body.license_expires, int(time.time()) + ttl)).lastrowid
         m.event(c, u, 'upload.started', 'upload', sid, {'bytes': body.size_bytes})
+    if storage.uses_blob():
+        key = storage.key_for(str(path))
+        return {'method': 'blob', 'upload_id': sid, 'pathname': key, 'content_type': body.content_type, 'client_token': blobstore.client_token(key, body.content_type, body.size_bytes, min(ttl, 3600)),
+                'expires_in_seconds': min(ttl, 3600), 'max_bytes': max_bytes}
     return {'method': 'direct', 'upload_id': sid, 'put_url': storage.presigned_put(str(path), body.content_type, ttl=min(ttl, 3600)),
             'headers': {'Content-Type': body.content_type}, 'expires_in_seconds': min(ttl, 3600), 'max_bytes': max_bytes}
 

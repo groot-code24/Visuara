@@ -1,4 +1,4 @@
-# Context Commerce web app (Next.js, standalone server). On Vercel this file is not used.
+# Visora web app (Next.js, standalone server). On Vercel this file is not used.
 #   docker build --build-arg CC_API_ORIGIN=http://api:8000 -t context-commerce-web web
 FROM node:22-alpine AS build
 WORKDIR /web

@@ -12,9 +12,9 @@ export async function getMe(): Promise<Me | null> {
   try {
     r = await fetch(`${API_ORIGIN}/api/me`, { headers: { cookie: `cc_session=${session}` }, cache: 'no-store' });
   } catch {
-    throw new Error('The Context Commerce API is unreachable.');
+    throw new Error('The Visora API is unreachable.');
   }
   if (r.status === 401 || r.status === 403) return null;
-  if (!r.ok) throw new Error(`The Context Commerce API returned ${r.status}.`);
+  if (!r.ok) throw new Error(`The Visora API returned ${r.status}.`);
   return (await r.json()) as Me;
 }

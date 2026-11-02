@@ -1,6 +1,7 @@
 # Known limitations (V11)
 
 ## Not verified (no accounts or credentials were available)
+- **The Vercel deployment:** the app has never run on Vercel, real Blob or Neon. `qa/vercel_rehearsal.py` runs the same containers under the same limits with local stand-ins. Vercel lists Services and the Container runtime as beta. [docs/vercel.md](../vercel.md) lists what only a real deployment can settle.
 - **Live services:** Neon, Cloudflare R2, a real SMTP provider, a real Google sign-in and a Vercel deployment have never been connected. Every integration is implemented and was exercised against local stand-ins:
   - PostgreSQL 16 for Neon;
   - the SeaweedFS S3 gateway for R2;
@@ -43,3 +44,11 @@
 - The worker wake-up file needs the API and workers on one host or volume.
 - A database that freezes without dropping connections holds requests until the proxy times out.
 - Direct uploads are a single PUT (up to 5 GB, no resume).
+
+## Running entirely on Vercel
+- **Video length:** a render must finish in one request. By default that is 1080p at 30 fps for about 45 seconds, or 720p for about 100 seconds. The 3- and 4-minute paid-plan limits need Vercel Pro with the settings in [docs/vercel.md](../vercel.md), and those are estimated from one-core timings, not measured at two cores.
+- **Queueing:** jobs run one at a time by default, so customers wait behind each other at busy times.
+- **Recovery:** a job whose runner died is restarted by dashboard polling or the next queued job. With nobody on the dashboard, it waits.
+- **Hobby:** Vercel forbids commercial use, and 4 CPU-hours a month covers about 17 of the longest videos.
+- **Disk:** the size of `/tmp` on the container runtime isn't documented. `/api/health/ready` reports it once deployed.
+- **Render files are larger:** the faster encoder preset roughly doubles output size at the same quality setting, which uses storage and Blob transfer.

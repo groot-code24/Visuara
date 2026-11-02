@@ -1,4 +1,5 @@
-# Deploys the backend (API + workers) to the production VM after CI succeeds on main.
+# Deploys the backend (API + workers) to a production VM after CI succeeds on main. Off unless the repository variable
+# DEPLOY_TO_VM is 'true': the default deployment is Vercel (docs/vercel.md), which deploys itself.
 # Requires repository secrets DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (and the server prepared as described in
 # docs/v10/backend-deployment.md). The server runs scripts/deploy.sh, which migrates, rolls out and health-checks,
 # and rolls back automatically if the new version is not healthy.
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (vars.DEPLOY_TO_VM == 'true' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-24.04
     environment: production
     steps:

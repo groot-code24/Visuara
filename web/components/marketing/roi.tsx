@@ -70,7 +70,7 @@ export function AgencyCalculator() {
         </dl>
         <p className="relative text-[11px] leading-relaxed text-white/45">
           An estimate from your inputs, not a quote. It leaves out your team’s review time. Every render you start counts toward the allowance, including re-renders after edits.
-          {cost == null && <> Above 200 placements a month, <Link href={contactHref('Context Commerce Enterprise', '/login?plan=enterprise')} className="underline">talk to us</Link>.</>}
+          {cost == null && <> Above 200 placements a month, <Link href={contactHref('Visora Enterprise', '/login?plan=enterprise')} className="underline">talk to us</Link>.</>}
         </p>
       </div>
     </div>

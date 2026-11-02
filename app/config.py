@@ -25,6 +25,16 @@ def load_dotenv(path=None):
     return loaded
 
 
+def apply_platform_defaults():
+    """On Vercel the public address is known, so it does not have to be configured twice. CC_PUBLIC_URL still wins (custom domains)."""
+    if os.getenv('CC_WORKER_MODE') != 'http': return
+    host = os.getenv('VERCEL_PROJECT_PRODUCTION_URL', '').strip()
+    if host and not os.getenv('CC_PUBLIC_URL'): os.environ['CC_PUBLIC_URL'] = f'https://{host}'
+    # Work has to finish, and report, inside one request: stop short of the function's time limit (CC_FUNCTION_SECONDS).
+    budget = str(max(30, int(os.getenv('CC_FUNCTION_SECONDS', '300')) - 30))
+    for key in ('CC_JOB_MAX_SECONDS', 'CC_RUNNER_BUDGET_SECONDS', 'CC_QUALITY_WAIT_SECONDS'): os.environ.setdefault(key, budget)
+
+
 def production_problems(env=None):
     """Settings that are acceptable in development but unsafe in production (CC_ENV=production).
 
@@ -35,9 +45,9 @@ def production_problems(env=None):
     get = lambda k, default='': (env.get(k) or default).strip()
     problems = []
     if not (get('DATABASE_URL') or get('CC_DATABASE_URL')): problems.append('DATABASE_URL is not set (SQLite is development-only)')
-    if not get('CC_S3_BUCKET'): problems.append('CC_S3_BUCKET is not set (local-disk media storage is single-host development only)')
+    if not get('CC_S3_BUCKET') and not get('BLOB_READ_WRITE_TOKEN'): problems.append('No media storage: set BLOB_READ_WRITE_TOKEN (Vercel Blob) or CC_S3_BUCKET (local-disk media storage is single-host development only)')
     if get('CC_MAIL_BACKEND').lower() == 'outbox': problems.append('CC_MAIL_BACKEND=outbox writes sign-in emails to disk (development only)')
-    if len(get('CC_SIGNING_KEY')) < 32: problems.append('CC_SIGNING_KEY must be set to at least 32 random characters, identical on every host')
+    if len(get('CC_SIGNING_KEY')) < 32: problems.append('CC_SIGNING_KEY must be set to at least 32 random characters, identical on every host (it also protects the job runner)')
     if get('CC_SECURE_COOKIES') != '1': problems.append('CC_SECURE_COOKIES must be 1 (HTTPS-only cookies)')
     if not get('CC_PUBLIC_URL').startswith('https://'): problems.append('CC_PUBLIC_URL must be the public https:// address people use (the web app origin that proxies /api and /auth/google)')
     mail = get('CC_MAIL_BACKEND').lower() or ('smtp' if get('CC_SMTP_HOST') else '')

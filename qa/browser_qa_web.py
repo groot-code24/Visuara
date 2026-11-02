@@ -160,7 +160,7 @@ def main():
         def landing():
             pg.go(APP + '/')
             pg.wait_text('you already have.')
-            assert 'Why agencies spend their time here.' in pg.text() and pg.js("document.title").startswith('Context Commerce')
+            assert 'Why agencies spend their time here.' in pg.text() and pg.js("document.title").startswith('Visora')
             # The interactive demo: choosing the food product moves the recommendation to the tabletop.
             pg.click_text('Granola', exact=False); pg.wait_text('Granola → Tabletop', timeout=10)
             pg.wait("document.body.innerText.includes('Placed')", timeout=10, what='placement in the demo')

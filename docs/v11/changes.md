@@ -5,6 +5,16 @@ V11 refocuses the product on one self-serve job: **put your products into the vi
 - let the decision engine choose which product goes where;
 - check, approve and render.
 
+## Visora, and the whole platform on Vercel (2 November 2026)
+- **Renamed to Visora**, with the dot-V mark as the logo. The interface shows the mark alone. `CC_*` settings and internal image names keep the old name.
+- **One Vercel project** runs the web app, API and jobs: `vercel.json`, `Dockerfile.vercel`, and [docs/vercel.md](../vercel.md) for the steps.
+- **Vercel Blob** is supported as private storage (`app/blobstore.py`). Browser uploads and signed links use tokens that match Vercel's JavaScript SDK byte for byte.
+- **On-demand job runner** (`app/jobrunner.py`) replaces the worker process when `CC_WORKER_MODE=http`. Dashboard polling restarts lost work.
+- **Decisions resume** after each surface, so they can span several requests.
+- **Faster:** the scene scan makes one pass through the file, and tracking and validation skip colour conversion for frames they never read. Results are unchanged.
+- **Plan limits changed to what this hosting can deliver:** Free 45 s and 200 MB, Pro 3 min and 500 MB, Agency 4 min and 1 GB. They were 60 s and 250 MB, 5 min and 1 GB, and 10 min and 2 GB.
+- **Fixed:** decision previews were never written to object storage, so they only worked where API and worker shared a disk. `web/` was committed as a broken submodule pointer, so the frontend never reached GitHub.
+
 ## Added
 - **Next.js web app** (`web/`): landing, pricing, Anthropic-style sign-in (Google, or email with a magic link and code), onboarding, and the dashboard (overview, new decision, decision results, library, placements, renders, settings). The dashboard is protected by the proxy and a server-side session check. See [web-app.md](web-app.md).
 - **Decision engine** (`app/decisions.py`): 1–4 products × many videos. It finds surfaces, tracks them, scores each product with the quality policy and six fit factors, assigns products across videos exactly, and explains each choice. It runs on the workers and is turned into placements on request. See [decision-engine.md](decision-engine.md).

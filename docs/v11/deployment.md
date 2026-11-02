@@ -1,4 +1,6 @@
-# Deployment (V11)
+# Deployment on your own server (V11)
+
+**The default is now one Vercel project: see [docs/vercel.md](../vercel.md).** This page covers the alternative, which suits longer videos: the web app on Vercel with the API and workers on a server, Neon and Cloudflare R2.
 
 ```
 browser ──► app.example.com  (Vercel: Next.js)

@@ -2,18 +2,18 @@ import type { Metadata } from 'next';
 import { ContactLine, LegalPage } from '@/components/legal';
 import { CONTACT_EMAIL } from '@/lib/site';
 
-export const metadata: Metadata = { title: 'Terms of Service', description: 'The terms for using Context Commerce.' };
+export const metadata: Metadata = { title: 'Terms of Service', description: 'The terms for using Visora.' };
 
 export default function Terms() {
   return (
     <LegalPage
       title="Terms of Service"
       updated="31 October 2026"
-      intro={<p>These terms apply when you use Context Commerce. By creating an account or using the service, you agree to them. If you use it for a company, you confirm that you may accept these terms on its behalf.</p>}
+      intro={<p>These terms apply when you use Visora. By creating an account or using the service, you agree to them. If you use it for a company, you confirm that you may accept these terms on its behalf.</p>}
       sections={[
         {
           heading: 'The service',
-          body: <p>Context Commerce analyses the videos and product images you upload, recommends where products fit, and renders the placements you approve. It is in pilot, so features and limits may change as we improve it.</p>,
+          body: <p>Visora analyses the videos and product images you upload, recommends where products fit, and renders the placements you approve. It is in pilot, so features and limits may change as we improve it.</p>,
         },
         {
           heading: 'Your account',

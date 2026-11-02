@@ -36,8 +36,8 @@ None does self-serve product placement into existing footage.
 | Decisions per month | 5 | 60 | 300 | Custom |
 | Rendered videos per month | 3 | 40 | 200 | Custom |
 | Videos per decision (products: up to 4) | 3 | 10 | 20 | 50 |
-| Longest video | 60 s | 5 min | 10 min | Platform limit (10 min default) |
-| Largest video file | 250 MB | 1 GB | 2 GB | Platform limit (2 GB default) |
+| Longest video (1080p, 30 fps) | 45 s | 3 min | 4 min | Platform limit |
+| Largest video file | 200 MB | 500 MB | 1 GB | Platform limit |
 | Video uploads per day | 10 | 50 | 200 | Platform limit |
 | Renders queued or running at once | 2 | 4 | 10 | Platform limit |
 | Storage | 2 GB | 50 GB | 250 GB | Custom |

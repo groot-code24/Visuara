@@ -127,13 +127,13 @@ def test_every_plan_delivers_what_the_pricing_page_promises(manual):
     # Platform defaults must sit above every plan, or a customer silently gets less than they pay for.
     owner(manual, 'owner@brand.io', 'Brand Co')
     org = TestDB().execute("SELECT org_id FROM users WHERE email='owner@brand.io'").fetchone()['org_id']
-    promised = {'free': (2048, 1, 250, 10, 2), 'pro': (51200, 3, 1024, 50, 4), 'team': (256000, 15, 2048, 200, 10)}
+    promised = {'free': (2048, 1, 200, 10, 2), 'pro': (51200, 3, 500, 50, 4), 'team': (256000, 15, 1024, 200, 10)}
     for plan, (storage_mb, members, video_mb, daily, active) in promised.items():
         TestDB().execute('UPDATE organizations SET plan=? WHERE id=?', (plan, org))
         e = manual.get('/api/usage').json()['effective']
         assert (e['storage_mb'], e['members'], e['max_video_mb'], e['daily_video_uploads'], e['active_jobs']) == (storage_mb, members, video_mb, daily, active), plan
     TestDB().execute("UPDATE organizations SET plan='free' WHERE id=?", (org,))
-    body = {'title': 'big', 'filename': 'big.mp4', 'content_type': 'video/mp4', 'size_bytes': 251 * 1048576, 'license_confirmed': True}
+    body = {'title': 'big', 'filename': 'big.mp4', 'content_type': 'video/mp4', 'size_bytes': 201 * 1048576, 'license_confirmed': True}
     r = manual.post('/api/uploads/video', json=body)
     assert r.status_code == 402 and r.json()['detail']['code'] == 'PLAN_VIDEO_TOO_LARGE'
     TestDB().execute("UPDATE organizations SET plan='pro' WHERE id=?", (org,))

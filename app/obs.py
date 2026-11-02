@@ -91,6 +91,8 @@ def wake_workers():
     """Tell workers sharing this data volume that a job is waiting (a file touch; no database round trip)."""
     try: (run_dir() / 'worker.wake').write_text(str(time.time()))
     except OSError: pass
+    from . import jobrunner
+    if jobrunner.enabled(): jobrunner.kick()
 
 
 def wake_mtime():

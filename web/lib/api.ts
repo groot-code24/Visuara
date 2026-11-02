@@ -31,7 +31,7 @@ export function errorMessage(body: unknown, fallback: string): { message: string
 
 function fallbackMessage(status: number) {
   if (status === 413) return 'That file is too large to upload. Try a smaller one.';
-  if (status === 502 || status === 503 || status === 504) return 'Context Commerce is taking too long to respond. Please try again in a moment.';
+  if (status === 502 || status === 503 || status === 504) return 'Visora is taking too long to respond. Please try again in a moment.';
   return status >= 500 ? 'Something went wrong on our side. Please try again.' : `Request failed (${status})`;
 }
 
@@ -48,7 +48,7 @@ export async function api<T = unknown>(path: string, opts: Opts = {}): Promise<T
   try {
     res = await fetch(path, { method, headers, body, credentials: 'same-origin', signal: opts.signal, cache: 'no-store' });
   } catch {
-    throw new ApiError(0, 'Could not reach Context Commerce. Check your connection and try again.');
+    throw new ApiError(0, 'Could not reach Visora. Check your connection and try again.');
   }
   const text = await res.text();
   let data: unknown = null;
@@ -111,9 +111,22 @@ export async function runQualityCheck(placementId: number) {
 /** Upload one video: straight to private storage when the server offers it, otherwise through the API. */
 export async function uploadVideo(file: File, title: string, onProgress: (f: number) => void, signal?: AbortSignal) {
   const type = file.type || 'video/mp4';
-  const init = await api<{ method: string; upload_id?: number; put_url?: string; headers?: Record<string, string> }>('/api/uploads/video', {
+  const init = await api<{ method: string; upload_id?: number; put_url?: string; headers?: Record<string, string>; pathname?: string; client_token?: string }>('/api/uploads/video', {
     json: { title, filename: file.name, content_type: type, size_bytes: file.size, license_confirmed: true },
   });
+  if (init.method === 'blob' && init.pathname && init.client_token && init.upload_id) {
+    const { put } = await import('@vercel/blob/client');
+    try {
+      await put(init.pathname, file, {
+        access: 'private', token: init.client_token, contentType: type, multipart: file.size > 32 * 1048576, abortSignal: signal,
+        onUploadProgress: (e) => onProgress(e.percentage / 100),
+      });
+    } catch (e) {
+      if (signal?.aborted) throw new ApiError(0, 'Upload cancelled');
+      throw new ApiError(0, e instanceof Error && e.message.includes('large') ? 'That file is too large for your plan.' : 'Storage refused the upload. Check your connection and try again.');
+    }
+    return completeUpload(init.upload_id, signal);
+  }
   if (init.method === 'direct' && init.put_url && init.upload_id) {
     const put = await xhrUpload(init.put_url, 'PUT', file, init.headers || { 'Content-Type': type }, onProgress, signal);
     if (put.status < 200 || put.status >= 300) throw new ApiError(put.status, 'Storage refused the upload. Try again.');

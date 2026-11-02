@@ -1,0 +1,25 @@
+# The API and the job runner on Vercel (container runtime). Same application as Dockerfile, with the settings Vercel implies,
+# so they do not have to be configured as environment variables. Only secrets and addresses are left: see docs/vercel.md.
+FROM python:3.12-slim
+
+# Functions can only write to /tmp and refuse request bodies over 4.5 MB (videos go straight to Blob; images do not).
+# The limits fit 1 vCPU and Vercel's default 300 s per request, on every plan. They come from measurements: docs/vercel.md.
+# A faster encoder preset keeps renders inside the limit; quality is held by the CRF and checked by validation.
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    CC_ENV=production CC_DOTENV=0 CC_LOG_FORMAT=json CC_DATA_DIR=/tmp/cc-data \
+    CC_SECURE_COOKIES=1 CC_INLINE_WORKER=0 CC_WORKER_MODE=http \
+    CC_DB_POOL_SIZE=5 CC_DB_POOL_MAX_IDLE=30 CC_MIN_FREE_DISK_GB=0 \
+    CC_RENDER_PRESET=superfast CC_DECISION_CANDIDATES_PER_VIDEO=3 \
+    CC_MAX_IMAGE_MB=4 CC_MAX_VIDEO_MB=200 CC_MAX_VIDEO_GIGAPIXELS=2.9 CC_CACHE_MAX_MB=256 FORWARDED_ALLOW_IPS=*
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg tini \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --upgrade "pip>=26.2" && pip install -r requirements.txt
+COPY app ./app
+COPY ops ./ops
+# Vercel sends traffic to port 80 unless the project sets PORT, and only root can bind port 80.
+EXPOSE 80
+ENTRYPOINT ["tini", "--"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-80} --proxy-headers --timeout-keep-alive 75 --timeout-graceful-shutdown 25 --no-server-header"]

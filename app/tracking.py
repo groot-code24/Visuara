@@ -104,10 +104,10 @@ def track_surface(source, quad_norm, reference_second, start_second, end_second,
     # Sequential decode keeps frame indices identical to the renderer and validator.
     idx = 0; ref = None
     while idx <= ref_idx:
-        ok, frame = cap.read()
+        ok = cap.grab()     # decodes without converting to BGR: frames before the reference are never looked at
+        if ok and idx == ref_idx: ok, ref = cap.retrieve()
         if not ok:
             cap.release(); raise RuntimeError('Could not read tracking reference frame')
-        if idx == ref_idx: ref = frame
         idx += 1
     ref_gray = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
     ref_pts = _detect(ref_gray, quad_ref)

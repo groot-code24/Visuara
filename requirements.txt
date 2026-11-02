@@ -12,3 +12,5 @@ psycopg[binary]>=3.2,<4
 psycopg-pool>=3.2,<4
 # Private S3-compatible object storage when CC_S3_BUCKET is set.
 boto3>=1.35,<2
+# Private Vercel Blob storage when BLOB_READ_WRITE_TOKEN is set. Earlier vercel-blob releases on PyPI are an unrelated package.
+vercel-blob>=0.5,<0.6

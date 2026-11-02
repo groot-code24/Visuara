@@ -1,4 +1,4 @@
-# Context Commerce backend image: FastAPI web process or video worker (same image, different command).
+# Visora backend image: FastAPI web process or video worker (same image, different command).
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \

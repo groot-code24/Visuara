@@ -20,6 +20,7 @@ def max_video_seconds(): return _num('CC_MAX_VIDEO_SECONDS', 600.0)
 def max_video_width(): return _num('CC_MAX_VIDEO_WIDTH', 3840)
 def max_video_height(): return _num('CC_MAX_VIDEO_HEIGHT', 2160)
 def max_video_fps(): return _num('CC_MAX_VIDEO_FPS', 120.0)
+def max_video_gigapixels(): return _num('CC_MAX_VIDEO_GIGAPIXELS', 0.0)     # width x height x fps x seconds; 0 = no ceiling
 def max_image_bytes(): return _num('CC_MAX_IMAGE_MB', 10) * 1024 * 1024
 # Processing limits
 def job_max_seconds(): return _num('CC_JOB_MAX_SECONDS', 1800)
@@ -38,14 +39,14 @@ def org_max_members(): return _num('CC_ORG_MAX_MEMBERS', 25)
 # billing is handled outside the app (invoices) until a payment provider is integrated.
 PLANS = {
     'free':       {'name': 'Free', 'price_usd_month': 0, 'decisions_per_month': 5, 'renders_per_month': 3, 'storage_mb': 2048,
-                   'members': 1, 'max_video_seconds': 60, 'max_products_per_decision': 4, 'max_videos_per_decision': 3,
-                   'max_video_mb': 250, 'daily_video_uploads': 10, 'active_jobs': 2},
+                   'members': 1, 'max_video_seconds': 45, 'max_products_per_decision': 4, 'max_videos_per_decision': 3,
+                   'max_video_mb': 200, 'daily_video_uploads': 10, 'active_jobs': 2},
     'pro':        {'name': 'Pro', 'price_usd_month': 39, 'decisions_per_month': 60, 'renders_per_month': 40, 'storage_mb': 51200,
-                   'members': 3, 'max_video_seconds': 300, 'max_products_per_decision': 4, 'max_videos_per_decision': 10,
-                   'max_video_mb': 1024, 'daily_video_uploads': 50, 'active_jobs': 4},
+                   'members': 3, 'max_video_seconds': 180, 'max_products_per_decision': 4, 'max_videos_per_decision': 10,
+                   'max_video_mb': 500, 'daily_video_uploads': 50, 'active_jobs': 4},
     'team':       {'name': 'Agency', 'price_usd_month': 159, 'decisions_per_month': 300, 'renders_per_month': 200, 'storage_mb': 256000,
-                   'members': 15, 'max_video_seconds': 600, 'max_products_per_decision': 4, 'max_videos_per_decision': 20,
-                   'max_video_mb': 2048, 'daily_video_uploads': 200, 'active_jobs': 10},
+                   'members': 15, 'max_video_seconds': 240, 'max_products_per_decision': 4, 'max_videos_per_decision': 20,
+                   'max_video_mb': 1024, 'daily_video_uploads': 200, 'active_jobs': 10},
     'enterprise': {'name': 'Enterprise', 'price_usd_month': None, 'decisions_per_month': None, 'renders_per_month': None, 'storage_mb': None,
                    'members': None, 'max_video_seconds': None, 'max_products_per_decision': 4, 'max_videos_per_decision': 50,
                    'max_video_mb': None, 'daily_video_uploads': None, 'active_jobs': None},
@@ -175,3 +176,6 @@ def check_video_metadata(duration, width, height, fps):
         raise HTTPException(413, f'Video must be between 0 and {int(max_video_seconds())} seconds and no larger than {max_video_width()}x{max_video_height()}')
     if fps > max_video_fps():
         raise HTTPException(413, f'Video frame rate must be at most {int(max_video_fps())} fps')
+    cap = max_video_gigapixels()
+    if cap and width * height * fps * duration / 1e9 > cap:
+        raise HTTPException(413, f'This video is too long to process at {width}x{height} and {round(fps)} fps. Keep it to {int(cap * 1e9 / (width * height * fps))} seconds, or export it at a lower resolution or frame rate.')

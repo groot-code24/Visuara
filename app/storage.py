@@ -4,19 +4,23 @@ Without CC_S3_BUCKET the local data directory is the only store (single host). W
   * every durable file (uploads, keyframes, analyses, renders) is written through to the private bucket;
   * a host that lacks a file restores it from the bucket on first use, so API and worker hosts need no shared disk;
   * downloads and streams are served by redirecting to short-lived presigned URLs, after all access checks pass.
-Works with AWS S3, Cloudflare R2, Backblaze B2, MinIO and other S3-compatible services (CC_S3_ENDPOINT_URL).
+Works with AWS S3, Cloudflare R2, Backblaze B2, MinIO and other S3-compatible services (CC_S3_ENDPOINT_URL), or with a
+private Vercel Blob store when BLOB_READ_WRITE_TOKEN is set and no bucket is (see blobstore.py).
 """
-import mimetypes, os, threading, time
+import mimetypes, os, shutil, threading, time
 from pathlib import Path
 
-KNOWN_DIRS = ('uploads', 'outputs', 'frames', 'analyses')
+from . import blobstore
+
+KNOWN_DIRS = ('uploads', 'outputs', 'frames', 'analyses', 'decisions')
 _client = None
 _public_client = None
 _lock = threading.Lock()
 
 
 def bucket(): return os.getenv('CC_S3_BUCKET', '')
-def enabled(): return bool(bucket())
+def uses_blob(): return not bucket() and blobstore.enabled()
+def enabled(): return bool(bucket()) or blobstore.enabled()
 def presign_ttl(): return int(os.getenv('CC_S3_PRESIGN_TTL', '300'))
 
 
@@ -66,6 +70,7 @@ def quick_client():
 def probe():
     """Fast reachability check for readiness. Returns 'ok', 'access_denied' or 'unavailable'.
     Lists at most one key, which object-scoped tokens (e.g. R2 "Object Read & Write") may do, unlike HeadBucket."""
+    if uses_blob(): return blobstore.probe()
     try:
         quick_client().list_objects_v2(Bucket=bucket(), MaxKeys=1)
         return 'ok'
@@ -77,6 +82,7 @@ def probe():
 def reset():
     global _client, _public_client, _quick
     with _lock: _client = None; _public_client = None; _quick = None
+    blobstore.reset()
 
 
 def _data():
@@ -106,7 +112,9 @@ def persist(path):
     if not enabled() or not path: return
     key = key_for(path)
     if not key: return
-    extra = {'ContentType': mimetypes.guess_type(str(path))[0] or 'application/octet-stream'}
+    content_type = mimetypes.guess_type(str(path))[0] or 'application/octet-stream'
+    if uses_blob(): return blobstore.put_file(key, path, content_type)
+    extra = {'ContentType': content_type}
     if os.getenv('CC_S3_SSE', 'AES256'): extra['ServerSideEncryption'] = os.getenv('CC_S3_SSE', 'AES256')
     client().upload_file(str(path), bucket(), key, ExtraArgs=extra)
 
@@ -122,7 +130,11 @@ def local(path):
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(target.name + f'.{os.getpid()}.{threading.get_ident()}.dl')
         try:
-            client().download_file(bucket(), key_for(path), str(tmp)); os.replace(tmp, target)
+            if uses_blob():
+                make_room(head(path) or 0)
+                blobstore.download(key_for(path), tmp)
+            else: client().download_file(bucket(), key_for(path), str(tmp))
+            os.replace(tmp, target)
             return str(target)
         except Exception:
             Path(tmp).unlink(missing_ok=True)
@@ -134,6 +146,7 @@ def exists(path):
     if not path: return False
     if Path(path).exists() or _local_for_key(path).exists(): return True
     if enabled() and key_for(path):
+        if uses_blob(): return blobstore.size(key_for(path)) is not None
         try: quick_client().head_object(Bucket=bucket(), Key=key_for(path)); return True
         except Exception: return False
     return False
@@ -143,11 +156,15 @@ def delete(path):
     if not path: return
     Path(path).unlink(missing_ok=True)
     if enabled() and key_for(path):
-        try: client().delete_object(Bucket=bucket(), Key=key_for(path))
+        try:
+            if uses_blob(): blobstore.delete(key_for(path))
+            else: client().delete_object(Bucket=bucket(), Key=key_for(path))
         except Exception: pass
 
 
 def presigned_url(path, filename=None, media_type=None, ttl=None):
+    # A Blob object keeps the type it was stored with; `download` asks the CDN to send it as an attachment under its stored name.
+    if uses_blob(): return blobstore.signed_url(key_for(path), ttl or presign_ttl(), download=bool(filename))
     params = {'Bucket': bucket(), 'Key': key_for(path)}
     if filename: params['ResponseContentDisposition'] = f'attachment; filename="{filename}"'
     if media_type: params['ResponseContentType'] = media_type
@@ -162,6 +179,7 @@ def presigned_put(path, content_type, ttl=None):
 
 def head(path):
     """Size in bytes of the stored object, or None when it does not exist."""
+    if uses_blob(): return blobstore.size(key_for(path))
     try: return int(quick_client().head_object(Bucket=bucket(), Key=key_for(path))['ContentLength'])
     except Exception: return None
 
@@ -169,6 +187,20 @@ def head(path):
 def _touch(p):
     try: os.utime(p)        # marks the cached copy as recently used for cleanup_cache()
     except OSError: pass
+
+
+def make_room(size):
+    """On a small temporary disk, drop the least recently used media copies until `size` bytes fit. Every durable file is in
+    object storage, so an evicted copy is only a re-download. Files touched in the last minute may belong to a running job."""
+    from . import main
+    room = lambda: shutil.disk_usage(main.DATA).free
+    if room() > size * 1.1: return
+    files = [f for d in KNOWN_DIRS if (main.DATA / d).exists() for f in (main.DATA / d).rglob('*') if f.is_file()]
+    now = time.time()
+    for f in sorted(files, key=lambda f: f.stat().st_mtime):
+        if now - f.stat().st_mtime < 60: continue
+        f.unlink(missing_ok=True)
+        if room() > size * 1.1: return
 
 
 def cleanup_cache(max_age_hours=None, max_total_mb=None, min_idle_seconds=None, dry_run=False):
@@ -216,5 +248,6 @@ def response(path, media_type=None, filename=None, headers=None):
 
 def describe():
     if not enabled(): return {'backend': 'local_disk', 'private': True, 'note': 'single host; configure CC_S3_BUCKET for object storage'}
+    if uses_blob(): return {'backend': 'vercel_blob', 'private': True, 'presigned_ttl_seconds': presign_ttl()}
     return {'backend': 's3_compatible', 'bucket': bucket(), 'endpoint': os.getenv('CC_S3_ENDPOINT_URL') or 'aws', 'presigned_ttl_seconds': presign_ttl(),
             'server_side_encryption': os.getenv('CC_S3_SSE', 'AES256') or None}

@@ -1,4 +1,4 @@
-"""Backup and restore for a Context Commerce deployment (database + media directory).
+"""Backup and restore for a Visora deployment (database + media directory).
 
   python ops/backup.py backup  --data ./data --out ./backups/2026-10-30
   python ops/backup.py restore --backup ./backups/2026-10-30 --data ./data-restored

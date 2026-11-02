@@ -234,7 +234,7 @@ def render_plan(source, plan, output, progress=None, crf=18):
     log = tempfile.TemporaryFile()
     cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{w}x{h}',
            '-r', info['fps_str'], '-i', '-', '-i', str(source), '-map', '0:v:0', '-map', '1:a?',
-           '-c:v', 'libx264', '-preset', 'veryfast', '-crf', str(crf), '-pix_fmt', 'yuv420p',
+           '-c:v', 'libx264', '-preset', os.getenv('CC_RENDER_PRESET', 'veryfast'), '-crf', str(crf), '-pix_fmt', 'yuv420p',
            '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', str(output)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log)
     idx = composited = 0
@@ -275,9 +275,9 @@ def render_frame(source, plan, idx):
     """Single composited frame for previews: same plan and compositor as the final render."""
     cap = cv2.VideoCapture(str(source)); frame = None; i = 0
     while i <= idx:
-        ok, f = cap.read()
+        ok = cap.grab()
+        if ok and i == idx: ok, frame = cap.retrieve()
         if not ok: break
-        if i == idx: frame = f
         i += 1
     cap.release()
     if frame is None:

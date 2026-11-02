@@ -24,7 +24,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from . import main as m, limits, obs, storage
+from . import main as m, jobrunner, limits, obs, storage
 
 router = APIRouter()
 ENGINE_VERSION = 'decision-v1.0-heuristic'
@@ -259,8 +259,9 @@ def _preview(did, vid, kf_path, product, quad_norm):
     return str(path)
 
 
-def analyse_video(did, v, products, creator, renew, ms):
-    """Options for every product on this video (best surface per product), with previews."""
+def analyse_video(did, v, products, creator, renew, ms, resume=None, save=None):
+    """Options for every product on this video (best surface per product), with previews. `save` records progress after each
+    surface and `resume` continues from it, so an analysis can span several requests where each has a time limit."""
     from .tracking import track_surface, validate_quad
     from .compositor import product_quad_in_surface
     with m.db() as c: rows = [dict(r) for r in c.execute('SELECT second,image_path,description FROM frames WHERE video_id=? ORDER BY second', (v['id'],)).fetchall()]
@@ -277,9 +278,10 @@ def analyse_video(did, v, products, creator, renew, ms):
             k.update(frame=r, lab=_lab(img[k['mask'] > 0])); cands.append(k)
     cands.sort(key=lambda k: k['confidence'], reverse=True)
     cands = cands[:max_candidates()]
-    best = {}                                    # product id -> best option
-    examined = []
-    for k in cands:
+    best = {int(pid): o for pid, o in (resume or {}).get('best', {}).items()}     # product id -> best option
+    examined = list((resume or {}).get('examined', []))
+    for i, k in enumerate(cands):
+        if i < (resume or {}).get('next', 0): continue
         renew()
         kf = round(k['frame']['second'] * fps) / fps
         end = min(v['duration'] - 1 / fps, kf + window_seconds())
@@ -290,7 +292,9 @@ def analyse_video(did, v, products, creator, renew, ms):
             track = track_surface(src, quad, kf, kf, end, progress=lambda _i: renew())
         except (_Cancelled, _Shutdown): raise
         except Exception as e:
-            examined.append({'frame_second': kf, 'quad': quad, 'error': str(e)[:160]}); continue
+            examined.append({'frame_second': kf, 'quad': quad, 'error': str(e)[:160]})
+            if save: save({'video_id': v['id'], 'next': i + 1, 'best': best, 'examined': examined})
+            continue
         examined.append({'frame_second': round(kf, 3), 'quad': quad, 'orientation': k['orientation'], 'surface_confidence': round(k['confidence'], 3)})
         for p in products:
             pq = product_quad_in_surface(track['quad_ref'], p['width'], p['height'])
@@ -304,6 +308,7 @@ def analyse_video(did, v, products, creator, renew, ms):
                        keyframe=k['frame']['image_path'])
             if p['id'] not in best or (opt['passes_quality'], opt['score']) > (best[p['id']]['passes_quality'], best[p['id']]['score']):
                 best[p['id']] = opt
+        if save: save({'video_id': v['id'], 'next': i + 1, 'best': best, 'examined': examined})
     options = sorted(best.values(), key=lambda o: (o['passes_quality'], o['score']), reverse=True)
     for o in options:
         prod = next(p for p in products if p['id'] == o['product_id'])
@@ -318,10 +323,11 @@ def run(did, token, stop=None):
         pids, vids = json.loads(d['product_ids']), json.loads(d['video_ids'])
         prods = [dict(r) for r in c.execute(f'SELECT * FROM products WHERE org_id=? AND id IN ({",".join("?" * len(pids))})', (d['org_id'], *pids)).fetchall()]
         vrows = {r['id']: dict(r) for r in c.execute(f'SELECT * FROM videos WHERE org_id=? AND id IN ({",".join("?" * len(vids))})', (d['org_id'], *vids)).fetchall()}
-    state = {'last': 0.0}
+    state = {'last': 0.0, 'advanced': False}
 
     def renew(progress=None, stage=None):
-        if stop is not None and stop.is_set(): raise _Shutdown()
+        if stop is not None and stop.is_set():
+            e = _Shutdown(); e.progressed = state['advanced']; raise e
         now = time.time()
         if progress is None and now - state['last'] < 3: return
         state['last'] = now
@@ -334,18 +340,26 @@ def run(did, token, stop=None):
 
     ms = min_seconds()
     products = [_product_info(p) for p in sorted(prods, key=lambda p: pids.index(p['id']))]
-    videos = []
+    checkpoint = json.loads(d['checkpoint_json'] or '{}')  # what an earlier run finished before it ran out of time
+    videos, partial = checkpoint.get('videos', []), checkpoint.get('partial')
+
+    def save(part=None):
+        with m.db() as c: c.execute('UPDATE decisions SET checkpoint_json=? WHERE id=? AND lease_token=?', (json.dumps({'videos': videos, 'partial': part}), did, token))
+        state['advanced'] = True
+
     for n, vid in enumerate(vids):
+        if n < len(videos): continue
         v = vrows.get(vid)
         renew(progress=n / len(vids), stage=f'Analysing {v["title"] if v else "video"} ({n + 1} of {len(vids)})')
         if not v: videos.append({'video_id': vid, 'options': [], 'error': 'Video no longer exists'}); continue
-        try: res = analyse_video(did, v, products, creator, renew, ms)
+        try: res = analyse_video(did, v, products, creator, renew, ms, resume=partial if partial and partial['video_id'] == vid else None, save=save)
         except (_Cancelled, _Shutdown): raise
         except Exception as e:
             obs.warn('decision video failed', decision=did, video=vid, error=str(e)[:200])
             res = {'video_id': vid, 'options': [], 'error': f'Analysis failed: {str(e)[:160]}'}
         res.update(title=v['title'], duration=v['duration'], width=v['width'], height=v['height'])
         videos.append(res)
+        save()
     renew(progress=.97, stage='Choosing the best product for each video')
     picks = assign(videos, [p['id'] for p in products], bool(d['spread']))
     for v, pid in zip(videos, picks):
@@ -376,7 +390,7 @@ def claim(c):
         if r['attempts'] < MAX_ATTEMPTS:
             c.execute("UPDATE decisions SET status='QUEUED',lease_token=NULL WHERE id=? AND status='RUNNING'", (r['id'],))
         else:
-            c.execute("UPDATE decisions SET status='FAILED',error='The analysis worker stopped repeatedly; try again',finished_at=CURRENT_TIMESTAMP WHERE id=? AND status='RUNNING'", (r['id'],))
+            c.execute("UPDATE decisions SET status='FAILED',error='The analysis stopped repeatedly, usually because a video is too long to analyse. Try again, or use a shorter video.',finished_at=CURRENT_TIMESTAMP WHERE id=? AND status='RUNNING'", (r['id'],))
     row = c.execute("SELECT id FROM decisions WHERE status='QUEUED' ORDER BY id LIMIT 1").fetchone()
     if not row: return None, None
     token = secrets.token_hex(12)
@@ -396,8 +410,11 @@ def run_next(stop=None):
             c.execute("UPDATE decisions SET status='SUCCEEDED',result_json=?,progress=1,stage='Done',finished_at=CURRENT_TIMESTAMP,lease_until=NULL WHERE id=? AND lease_token=? AND status='RUNNING'",
                       (json.dumps(result), did, token))
         obs.info('decision succeeded', decision=did, seconds=round(time.time() - started, 1), assigned=result['summary']['assigned'])
-    except _Shutdown:
-        with m.db() as c: c.execute("UPDATE decisions SET status='QUEUED',lease_token=NULL,attempts=CASE WHEN attempts>0 THEN attempts-1 ELSE 0 END WHERE id=? AND lease_token=?", (did, token))
+    except _Shutdown as e:
+        # A worker stopping is not the decision's fault, and neither is running out of time after finishing a surface. Running out
+        # of time on one surface repeatedly would never end, so that uses up attempts.
+        free = not isinstance(stop, jobrunner.OutOfTime) or getattr(e, 'progressed', False)
+        with m.db() as c: c.execute("UPDATE decisions SET status='QUEUED',lease_token=NULL,attempts=CASE WHEN ?=1 AND attempts>0 THEN attempts-1 ELSE attempts END WHERE id=? AND lease_token=?", (int(free), did, token))
     except _Cancelled:
         with m.db() as c: c.execute("UPDATE decisions SET status='CANCELLED',finished_at=CURRENT_TIMESTAMP,lease_until=NULL WHERE id=? AND lease_token=?", (did, token))
     except Exception as e:
@@ -454,7 +471,9 @@ def create_decision(body: DecisionIn, request: Request):
 @router.get('/api/decisions')
 def list_decisions(request: Request):
     u = m.current_user(request)
-    with m.db() as c: rows = c.execute('SELECT * FROM decisions WHERE org_id=? ORDER BY id DESC LIMIT 100', (u['org_id'],)).fetchall()
+    with m.db() as c:
+        jobrunner.nudge(c, u['org_id'])
+        rows = c.execute('SELECT * FROM decisions WHERE org_id=? ORDER BY id DESC LIMIT 100', (u['org_id'],)).fetchall()
     return [_summary(r) for r in rows]
 
 
@@ -468,6 +487,7 @@ def _owned_decision(c, did, org_id):
 def get_decision(did: int, request: Request):
     u = m.current_user(request)
     with m.db() as c:
+        jobrunner.nudge(c, u['org_id'])
         r = _owned_decision(c, did, u['org_id'])
         placements = {(p['video_id'], p['product_id']): p['id'] for p in c.execute(
             "SELECT id,video_id,product_id FROM placements WHERE org_id=? AND decision_id=? AND status NOT IN ('CANCELLED','REJECTED')", (u['org_id'], did)).fetchall()}

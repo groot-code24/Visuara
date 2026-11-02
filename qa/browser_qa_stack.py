@@ -118,7 +118,7 @@ def main():
             subprocess.run(['docker', 'compose', 'stop', 'api'], cwd=ROOT, check=True, capture_output=True, timeout=120)
             try:
                 assert get(APP + '/').status_code == 200 and get(APP + '/pricing').status_code == 200      # marketing stays up
-                pg.go(APP + '/dashboard'); pg.wait_text('reach Context Commerce right now', timeout=60)
+                pg.go(APP + '/dashboard'); pg.wait_text('reach Visora right now', timeout=60)
                 assert 'Try again' in pg.text()
             finally:
                 subprocess.run(['docker', 'compose', 'start', 'api'], cwd=ROOT, check=True, capture_output=True, timeout=120)

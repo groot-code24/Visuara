@@ -70,11 +70,13 @@ def validate_plan(source, output, plan, policy=VALIDATION_POLICY, progress=None)
     areas = []
     try:
         while True:
-            ok_a, fa = a.read(); ok_b, fb = b.read()
-            if not ok_a or not ok_b:
+            if not a.grab() or not b.grab():
                 break
             inside = idx in plan.indices
             if inside or idx % p['outside_interval_stride'] == 0:
+                ok_a, fa = a.retrieve(); ok_b, fb = b.retrieve()
+                if not ok_a or not ok_b:
+                    break
                 checked += 1
                 if inside:
                     interval_checked += 1

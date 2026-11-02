@@ -160,4 +160,4 @@ def test_stalled_decision_is_requeued_then_failed(manual):
     TestDB().execute('UPDATE decisions SET lease_until=? WHERE id=?', (time.time() - 1, did))
     with main.db() as con: assert decisions.claim(con) == (None, None)
     row = TestDB().execute('SELECT status,error FROM decisions WHERE id=?', (did,)).fetchone()
-    assert row['status'] == 'FAILED' and 'worker' in row['error']
+    assert row['status'] == 'FAILED' and 'stopped repeatedly' in row['error']
