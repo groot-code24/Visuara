@@ -53,6 +53,10 @@ def production_problems(env=None):
     mail = get('CC_MAIL_BACKEND').lower() or ('smtp' if get('CC_SMTP_HOST') else '')
     if not (mail == 'smtp' and get('CC_SMTP_HOST')) and not (get('GOOGLE_CLIENT_ID') and get('GOOGLE_CLIENT_SECRET')):
         problems.append('Nobody could sign in: configure SMTP (CC_MAIL_BACKEND=smtp, CC_SMTP_HOST) or Google (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)')
+    if get('CC_SMTP_HOST') and get('CC_MAIL_BACKEND').lower() != 'outbox':
+        if bool(get('CC_SMTP_USER')) != bool(get('CC_SMTP_PASSWORD')) or ('gmail' in get('CC_SMTP_HOST') and not get('CC_SMTP_USER')):
+            problems.append('Magic links cannot be sent: set both CC_SMTP_USER and CC_SMTP_PASSWORD, or remove CC_SMTP_HOST to offer Google sign-in only')
+        if 'you@' in get('CC_MAIL_FROM'): problems.append('CC_MAIL_FROM still has the placeholder address: use the address emails are sent from')
     if any(get(k) for k in ('CC_GOOGLE_AUTH_URL', 'CC_GOOGLE_TOKEN_URL', 'CC_GOOGLE_JWKS_URL')): problems.append('CC_GOOGLE_*_URL replaces Google with another sign-in server (test setups only)')
     if get('CC_APP_URL') and not get('CC_APP_URL').startswith('https://'): problems.append('CC_APP_URL must use https://')
     if any(o.strip().startswith('http://') for o in get('CC_CORS_ORIGINS').split(',') if o.strip()): problems.append('CC_CORS_ORIGINS must list https:// origins only')

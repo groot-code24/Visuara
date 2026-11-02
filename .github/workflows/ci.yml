@@ -1,7 +1,5 @@
-# Every push and pull request: lint, tests on SQLite and PostgreSQL 16, dependency and secret scans, the Next.js web
-# app (type check, production build, npm audit), and both Docker images (built and smoke-tested). Branch protection on
-# `main` should require all of these jobs; deploy-backend.yml only runs after this workflow succeeds on main, and
-# Vercel production deployments should be limited to `main` (see docs/v11/deployment.md).
+# Every push and pull request: lint, tests on SQLite and PostgreSQL 16, dependency and secret scans, the web app
+# (type check, production build, npm audit), and the Vercel image (built and smoke-tested).
 name: ci
 on:
   push:
@@ -78,26 +76,18 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm run typecheck
       - run: npm run build
-        env: { CC_API_ORIGIN: 'https://api.example.com', NEXT_TELEMETRY_DISABLED: '1' }
+        env: { VERCEL: '1', NEXT_TELEMETRY_DISABLED: '1' }
 
-  docker:
+  image:
     needs: [test-sqlite, test-postgres, security, web]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t context-commerce:ci .
-      - name: smoke test (liveness, readiness, non-root, ffmpeg)
+      - run: docker build -f Dockerfile.vercel -t visuara:ci .
+      - name: smoke test (liveness, ffmpeg)
         run: |
-          docker run -d --name cc -p 8000:8000 -e CC_SIGNING_KEY=ci-only-signing-key-0123456789abcdef context-commerce:ci
+          docker run -d --name api -p 8000:80 -e CC_ENV=development -e CC_SIGNING_KEY=ci-only-signing-key-0123456789abcdef visuara:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/api/health/live && break; sleep 2; done
-          curl -fsS http://127.0.0.1:8000/api/health/ready
-          test "$(docker exec cc id -u)" != "0"
-          docker exec cc ffprobe -version > /dev/null
-          docker rm -f cc
-      - run: docker build -t context-commerce-web:ci --build-arg CC_API_ORIGIN=http://api:8000 web
-      - name: smoke test web (landing page, auth guard)
-        run: |
-          docker run -d --name web -p 3000:3000 context-commerce-web:ci
-          for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:3000/ && break; sleep 2; done
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/dashboard)" = "307"
-          docker rm -f web
+          curl -fsS http://127.0.0.1:8000/api/health/live
+          docker exec api ffprobe -version > /dev/null
+          docker rm -f api

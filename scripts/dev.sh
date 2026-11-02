@@ -4,7 +4,7 @@
 #   scripts/dev.sh run      start the API on http://127.0.0.1:8000 and one worker; Ctrl+C stops both
 #   scripts/dev.sh web      start the web app on http://localhost:3000 (in a second terminal); open this one
 #   scripts/dev.sh test     run the backend test suite
-# For the production-shaped stack (PostgreSQL, S3 stand-in, real SMTP inbox, two workers) use: docker compose up --build
+# For PostgreSQL and a real SMTP inbox locally: docker compose up -d
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY="${PYTHON:-python3}"

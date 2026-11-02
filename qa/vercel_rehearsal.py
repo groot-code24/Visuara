@@ -80,13 +80,34 @@ def edge_routes():
     return [r['source'].replace('(.*)', '') for r in cfg['rewrites'][:-1] if r['destination']['service'] == 'api']
 
 
+WEB_DOCKERFILE = '''FROM node:22-alpine AS build
+WORKDIR /web
+ENV NEXT_TELEMETRY_DISABLED=1 CC_STANDALONE=1
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+ARG CC_API_ORIGIN
+ENV CC_API_ORIGIN=${CC_API_ORIGIN}
+ENV NEXT_PUBLIC_VERCEL_BLOB_API_URL=http://localhost:@BLOB_PORT@/api/blob
+RUN npm run build
+
+FROM node:22-alpine
+WORKDIR /web
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+ARG CC_API_ORIGIN
+ENV CC_API_ORIGIN=${CC_API_ORIGIN}
+COPY --from=build /web/.next/standalone ./
+COPY --from=build /web/.next/static ./.next/static
+COPY --from=build /web/public ./public
+USER node
+CMD ["node", "server.js"]
+'''
+
+
 def web_image(tmp):
     """The web app built as in production, with only the Blob API address pointed at the stand-in."""
-    text = (ROOT / 'web' / 'Dockerfile').read_text()
     # The SDK streams uploads (HTTP/2 only in Chrome) except when its API address starts with http://localhost; this stand-in speaks HTTP/1.1.
-    arg = f'ENV NEXT_PUBLIC_VERCEL_BLOB_API_URL=http://localhost:{BLOB_PORT}/api/blob\nRUN npm run build'
-    assert 'RUN npm run build' in text
-    f = tmp / 'Dockerfile.web'; f.write_text(text.replace('RUN npm run build', arg))
+    f = tmp / 'Dockerfile.web'; f.write_text(WEB_DOCKERFILE.replace('@BLOB_PORT@', str(BLOB_PORT)))
     sh('docker', 'build', '-q', '-f', str(f), '--build-arg', f'CC_API_ORIGIN=http://{API}:80', '-t', 'context-commerce-web:rehearsal', str(ROOT / 'web'), timeout=900)
 
 

@@ -36,7 +36,7 @@ def test_email_code_signup_onboarding_and_return_signin(mail):
     body = r.json(); body.pop('dev')                                               # the outbox backend hands development the link; see below
     assert r.status_code == 200 and body == {'sent': True, 'email': 'new.person@acme-foods.com', 'expires_in_seconds': auth.CODE_TTL}
     msg, code, token = last_mail()
-    assert msg['to'] == 'new.person@acme-foods.com' and msg['subject'] == 'Sign in to Visora'
+    assert msg['to'] == 'new.person@acme-foods.com' and msg['subject'] == 'Sign in to Visuara'
     assert f'/verify#token={token}' in msg['text']                      # token in the fragment, never sent to servers
     assert mail.post('/api/auth/email/verify', json={'email': 'new.person@acme-foods.com', 'code': code}).json() == {'status': 'signup_required'}
     assert mail.get('/api/me').status_code == 401                       # no session before onboarding
@@ -196,7 +196,7 @@ def test_secure_cookie_flag(mail, monkeypatch):
 
 
 def test_api_root_is_not_a_web_page(client):
-    assert client.get('/').json()['service'] == 'visora-api'
+    assert client.get('/').json()['service'] == 'visuara-api'
     assert client.get('/app').status_code == 404
 
 

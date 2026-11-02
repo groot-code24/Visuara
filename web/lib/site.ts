@@ -9,6 +9,10 @@ export const SITE_URL = (
 /** Where sales, upgrade, privacy and support requests go. */
 export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || '';
 
+/** Who the legal pages name. Set these once the business is registered. */
+export const LEGAL_NAME = process.env.NEXT_PUBLIC_LEGAL_NAME || 'Visuara';
+export const LEGAL_JURISDICTION = process.env.NEXT_PUBLIC_LEGAL_JURISDICTION || '';
+
 /** A link that starts a conversation with us; sign-in when no contact address is configured. */
 export function contactHref(subject: string, fallback = '/login') {
   return CONTACT_EMAIL ? `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}` : fallback;

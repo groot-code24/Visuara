@@ -5,7 +5,7 @@
   python -m benchmark.real_footage sheet    --run real/runs/dev-1                      # writes ratings.html for raters
   python -m benchmark.real_footage report   --run real/runs/dev-1 --ratings r1.json r2.json
 
-Rules enforced here (see docs/v9/real-footage-protocol.md):
+Rules enforced here:
   * every clip needs a consent record whose scope includes "benchmark", a licence, a creator id and a SHA-256;
     clips without them are refused, and footage is never copied or uploaded by this tool;
   * splits are by creator (a creator's clips are all dev or all test), so thresholds tuned on dev are tested on

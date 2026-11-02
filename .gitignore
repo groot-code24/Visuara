@@ -13,7 +13,6 @@ benchmark/real/manifest.json
 .env
 .env.*
 !.env.example
-!.env.vercel.example
 .claude/
 *.sqlite3
 *.signing_key

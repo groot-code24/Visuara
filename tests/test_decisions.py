@@ -161,3 +161,17 @@ def test_stalled_decision_is_requeued_then_failed(manual):
     with main.db() as con: assert decisions.claim(con) == (None, None)
     row = TestDB().execute('SELECT status,error FROM decisions WHERE id=?', (did,)).fetchone()
     assert row['status'] == 'FAILED' and 'stopped repeatedly' in row['error']
+
+
+def test_a_lease_is_renewed_during_slow_work_and_not_after_it(manual, monkeypatch):
+    import time
+    u = owner(manual); monkeypatch.setattr(main, 'LEASE_SECONDS', 0.3)
+    with main.db() as con:
+        did = con.execute("INSERT INTO decisions(org_id,product_ids,video_ids,created_by,status,attempts,lease_until,lease_token) VALUES(?,'[1]','[1]',?,'RUNNING',1,?,'tok')",
+                          (u['org_id'], u['id'], time.time() + 0.3)).lastrowid
+    lease = lambda: TestDB().execute('SELECT lease_until FROM decisions WHERE id=?', (did,)).fetchone()['lease_until']
+    with main.keep_lease('decisions', did, 'tok', 60):
+        time.sleep(1.2)
+        assert lease() > time.time()                                          # would have expired twice over without renewal
+    time.sleep(1.0)
+    assert lease() < time.time()                                              # a finished or dead runner stops renewing

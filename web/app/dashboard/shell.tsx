@@ -74,14 +74,14 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
         <div className="min-h-screen lg:grid lg:grid-cols-[256px_1fr]">
           <aside className="hidden h-screen flex-col justify-between border-r border-line bg-soft/60 px-4 py-5 lg:sticky lg:top-0 lg:flex">
             <div>
-              <Link href="/dashboard" className="mb-7 flex items-center px-2" aria-label="Visora dashboard"><LogoMark /></Link>
+              <Link href="/dashboard" className="mb-7 flex items-center px-2" aria-label="Visuara dashboard"><LogoMark /></Link>
               <Nav />
             </div>
             <Account me={me} />
           </aside>
 
           <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-canvas/90 px-4 backdrop-blur lg:hidden">
-            <Link href="/dashboard" className="flex items-center" aria-label="Visora dashboard"><LogoMark size={24} /></Link>
+            <Link href="/dashboard" className="flex items-center" aria-label="Visuara dashboard"><LogoMark size={24} /></Link>
             <button onClick={() => setOpen(true)} aria-label="Open menu" className="rounded-lg p-2 hover:bg-soft"><IconMenu /></button>
           </div>
           {open && (

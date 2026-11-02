@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from pathlib import Path
 from typing import Optional
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import secrets, hashlib, hmac, os, json, shutil, subprocess, time, mimetypes, threading, socket, struct, base64, urllib.request, urllib.parse, logging, re
 
@@ -30,7 +30,7 @@ obs.configure_logging()
 from .compositor import RenderCancelled, render_plan
 from .validation import validate_plan
 _prod=os.getenv('CC_ENV','').lower()=='production'     # no public API explorer in production
-app = FastAPI(title='Visora API', version='1.1.0', description='Product placement in your own videos: decision engine, validated rendering, delivery',
+app = FastAPI(title='Visuara API', version='1.1.0', description='Product placement in your own videos: decision engine, validated rendering, delivery',
               docs_url=None if _prod else '/docs', redoc_url=None if _prod else '/redoc', openapi_url=None if _prod else '/openapi.json')
 
 def _origin(url):
@@ -379,7 +379,7 @@ class ApproveIn(BaseModel):
 @app.get('/')
 def root():
     """The web app (Next.js, web/) is a separate service; this process serves the API only."""
-    return {'service':'visora-api','version':app.version,'docs':'/docs'}
+    return {'service':'visuara-api','version':app.version,'docs':'/docs'}
 
 @app.get('/api/health/live')
 def health_live():
@@ -866,11 +866,28 @@ def _placement_render_failed(c, pid, version, reason, actor_id=None):
     if row and row['status']=='RENDERING' and row['version']==version:
         lifecycle.transition(c,dict(row),'RENDER_FAILED',actor_id or row['created_by'],reason[:300])
 
+@contextmanager
+def keep_lease(table, row_id, token, max_seconds):
+    """Renews a lease from its own thread, so work with no progress callback (download, planning, upload) cannot lose it on a slow CPU.
+    The thread dies with the process, so a dead runner's lease still expires, and it gives up at max_seconds, so a hung job does too."""
+    stop=threading.Event(); started=time.time()
+    def renew():
+        while not stop.wait(LEASE_SECONDS/3) and time.time()-started<max_seconds:
+            try:
+                with db() as c: c.execute(f"UPDATE {table} SET lease_until=? WHERE id=? AND status='RUNNING' AND lease_token=?",(time.time()+LEASE_SECONDS,row_id,token))
+            except Exception as e: obs.warn('lease renewal failed',error=type(e).__name__)
+    threading.Thread(target=renew,daemon=True,name='lease').start()
+    try: yield
+    finally: stop.set()
+
 def render_job(job_id, token=None):
     with db() as c:
         j=c.execute('SELECT * FROM jobs WHERE id=?',(job_id,)).fetchone()
     if not j: return
     j=dict(j); token=token or j['lease_token']
+    with keep_lease('jobs',job_id,token,limits.job_max_seconds()): _render_job(j,job_id,token)
+
+def _render_job(j, job_id, token):
     obs.job_id.set(f'job-{job_id}'); started=time.time(); max_seconds=limits.job_max_seconds()
     obs.info('job started',job=job_id,attempt=j['attempts'],renderer=j['renderer'])
     def heartbeat(_frame=0):
@@ -939,7 +956,7 @@ def _queue_render(c, u, p):
     except _GateError as e: raise _err(409,e.code,str(e))
     routing=renderers.route(a['scene_class'],v['duration'],v['width'],v['height'])
     if not routing['selected']: raise _err(409,routing['reason_code'],routing['message'],routing=routing)
-    limits.check_active_jobs(c,u['org_id']); limits.check_monthly(c,u['org_id'],'renders')
+    limits.check_platform_storage(c); limits.check_active_jobs(c,u['org_id']); limits.check_monthly(c,u['org_id'],'renders')
     jid=c.execute("INSERT INTO jobs(placement_id,org_id,status,mode,placement_version,analysis_id,renderer) VALUES(?,?,'QUEUED','COMPOSITE',?,?,?)",(p['id'],u['org_id'],p['version'],a['id'],routing['selected'])).lastrowid
     _transition(c,p,'RENDERING',u,details={'job_id':jid,'renderer':routing['selected']})
     event(c,u,'render.queued','job',jid,{'renderer':routing['selected'],'placement_version':p['version']})
@@ -1029,7 +1046,7 @@ def _authorize_delivery(jid, u, record=True):
         if p['status']=='RENDERED':
             lifecycle.transition(c,p,'DELIVERED',u['id'],details={'job_id':jid})
         c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',(u['org_id'],u['id'],'asset.downloaded','job',jid,json.dumps({'placement_version':p['version']})))
-    return storage.response(path,media_type='video/mp4',filename=f'context-commerce-placement-{p["id"]}-v{p["version"]}.mp4')
+    return storage.response(path,media_type='video/mp4',filename=f'visuara-placement-{p["id"]}-v{p["version"]}.mp4')
 
 @app.patch('/api/placements/{pid}/revise')
 def revise_placement(pid:int, request:Request, frame_second:float=Form(...), x:float=Form(...), y:float=Form(...), width:float=Form(...), start_second:float=Form(...), end_second:float=Form(...), tracking_quad:str=Form(''), color_match:bool=Form(True), adjust:str=Form(''), model3d:str=Form('')):

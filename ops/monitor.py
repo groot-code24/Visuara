@@ -46,7 +46,7 @@ if __name__ == '__main__':
     alerts = check(a.api.rstrip('/'), os.getenv('CC_OPS_TOKEN'))
     print(json.dumps({'healthy': not alerts, 'alerts': alerts}))
     if alerts and a.webhook:
-        body = json.dumps({'text': 'Visora alert: ' + '; '.join(alerts)}).encode()
+        body = json.dumps({'text': 'Visuara alert: ' + '; '.join(alerts)}).encode()
         try: urllib.request.urlopen(urllib.request.Request(a.webhook, data=body, headers={'Content-Type': 'application/json'}), timeout=10)
         except Exception as e: print(f'webhook failed: {e}', file=sys.stderr)
     sys.exit(1 if alerts else 0)

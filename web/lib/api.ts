@@ -31,7 +31,7 @@ export function errorMessage(body: unknown, fallback: string): { message: string
 
 function fallbackMessage(status: number) {
   if (status === 413) return 'That file is too large to upload. Try a smaller one.';
-  if (status === 502 || status === 503 || status === 504) return 'Visora is taking too long to respond. Please try again in a moment.';
+  if (status === 502 || status === 503 || status === 504) return 'Visuara is taking too long to respond. Please try again in a moment.';
   return status >= 500 ? 'Something went wrong on our side. Please try again.' : `Request failed (${status})`;
 }
 
@@ -48,7 +48,7 @@ export async function api<T = unknown>(path: string, opts: Opts = {}): Promise<T
   try {
     res = await fetch(path, { method, headers, body, credentials: 'same-origin', signal: opts.signal, cache: 'no-store' });
   } catch {
-    throw new ApiError(0, 'Could not reach Visora. Check your connection and try again.');
+    throw new ApiError(0, 'Could not reach Visuara. Check your connection and try again.');
   }
   const text = await res.text();
   let data: unknown = null;

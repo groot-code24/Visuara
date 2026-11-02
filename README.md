@@ -1,53 +1,46 @@
-# Visora
+# Visuara
 
-**Put your products in the videos you already have.** Upload two to four product images and your videos. Visora finds the flat surfaces in every scene, decides which product fits where, and explains why. It then renders placements that pass a frame-by-frame quality check. There are no reshoots and no generative redrawing of your product.
+**Put your products in the videos you already have.** Upload product images and your videos. Visuara finds the flat surfaces in every scene, decides which product fits where, and renders placements that pass a frame-by-frame check. There are no reshoots and no generative redrawing of your product.
 
-- **Sign in** with Google, or with an emailed magic link and code. There are no passwords.
-- **Decision engine:** 1–4 products × many videos → the best product for each video, its surface, its time window, a preview, a score and the reasons. See [docs/v11/decision-engine.md](docs/v11/decision-engine.md).
-- **Check, approve, render:** every placement is measured on every frame and approved by a manager for that exact version. The output is validated before it can be downloaded through short-lived links.
-- **Plans:** Free, Pro ($39, or $29 billed annually), Agency ($159, or $119 billed annually) and Enterprise, enforced by the API. See [docs/v11/pricing.md](docs/v11/pricing.md), which includes the competitor analysis.
+- **Sign in** with Google or an emailed magic link and code. There are no passwords.
+- **Decision engine:** 1–4 products × many videos gives the best product for each video, its surface, its time window, a preview, a score and the reasons. See [docs/decision-engine.md](docs/decision-engine.md).
+- **Check, approve, render:** every placement is measured on every frame and approved for that exact version. Renders are validated before they can be downloaded through short-lived links.
+- **Plans:** Free, Pro, Agency and Enterprise, enforced by the API. See [docs/pricing.md](docs/pricing.md).
 
-**Status:** runs locally and in Docker, with tests passing. It is ready to deploy on Vercel: follow [docs/vercel.md](docs/vercel.md), which lists every step you do by hand. Vercel, Neon, Vercel Blob, Google sign-in and real email have never been connected, because they need your accounts. No real creator footage has been evaluated. See [docs/v11/known-limitations.md](docs/v11/known-limitations.md).
+## Deploy
+The website, API and video jobs all run in one Vercel project, on the free plan by default. Follow [docs/vercel.md](docs/vercel.md).
 
-## Run it
-**Docker** (PostgreSQL, S3 stand-in, email inbox, API, two workers, web app):
-```bash
-docker compose up --build
-# app http://localhost:3000 · sign-in emails http://localhost:8025 · API docs http://localhost:8000/docs
-```
-**Without Docker** (Python 3.11+, Node 20+, FFmpeg). This uses SQLite, local disk and an email outbox in `data/outbox/`:
+## Run it locally
+You need Python 3.11+, Node 20+ and FFmpeg. This uses SQLite, local disk and an email outbox in `data/outbox/`:
 ```bash
 scripts/dev.sh setup
-scripts/dev.sh run        # API + worker on :8000
+scripts/dev.sh run        # API and worker on :8000
 scripts/dev.sh web        # second terminal: web app on http://localhost:3000
 ```
-On Windows, use `.\scripts\dev.ps1 setup`, then `.\scripts\dev.ps1 all`, which starts the API, a worker and the web app. Open **http://localhost:3000**.
-
-Sign-in locally: with no email provider configured, the sign-in page shows the magic link and code itself. For real email or Google, add your SMTP or Google OAuth settings to `.env` (see `.env.example`) and restart the API.
+On Windows, use `.\scripts\dev.ps1 setup`, then `.\scripts\dev.ps1 all`. With no email provider configured, the sign-in page shows the magic link and code itself. `docker compose up -d` adds a local PostgreSQL and an email inbox.
 
 ## Layout
 | Path | What |
 |---|---|
-| `web/` | Next.js 16 app: landing, pricing, sign-in, dashboard ([docs/v11/web-app.md](docs/v11/web-app.md)) |
-| `app/` | FastAPI API: auth, workspaces and roles, uploads, decisions, placements, quality policy, renderer, validation |
-| `worker.py` | Render and decision worker (run one or more) |
-| `ops/` | Migrations, backups, maintenance, plans, monitoring |
-| `tests/`, `qa/` | Backend tests; browser QA, load test, outage drill |
-| `benchmark/` | Synthetic fixtures and visual-quality benchmarks |
-| `deploy/`, `docker-compose.yml`, `Dockerfile`, `web/Dockerfile` | Deployment |
+| `web/` | Next.js app: landing, pricing, legal, sign-in, dashboard |
+| `app/` | FastAPI API: auth, workspaces and roles, uploads, decisions, placements, quality, renderer, validation |
+| `worker.py` | Job worker for running outside Vercel, and for local development |
+| `ops/` | Migrations, backups, maintenance, plans |
+| `tests/`, `qa/`, `benchmark/` | Backend tests, browser and deployment checks, synthetic test footage |
+| `vercel.json`, `Dockerfile.vercel` | The deployment |
 
 ## Test
 ```bash
 PYTHONPATH=".:tests" python -m pytest -q        # Windows: PYTHONPATH=".;tests"
 cd web && npm run typecheck && npm run build
-python qa/browser_qa_web.py                     # needs a web build whose CC_API_ORIGIN matches --api-port
-python qa/browser_qa_stack.py --app http://localhost:3000    # browser against the docker compose stack
+python qa/browser_qa_web.py                     # needs a web build; see the top of the file
+python qa/vercel_rehearsal.py                   # the whole deployment, locally, under Vercel's limits
+python qa/check_env.py                          # your .env.vercel: format and real logins, no values printed
 ```
 
-## Deploy
-Vercel hosts only the web app (root directory `web`). The API and workers run on a VM with Neon and R2, and they must be live first. See the step-by-step order in [docs/v11/deployment.md](docs/v11/deployment.md); the backend guides are in [docs/v10/](docs/v10/).
+## Security
+Real settings belong only in `.env.vercel` and in Vercel. Git ignores that file, and the `.githooks/pre-commit` hook stops a commit containing a credential. Turn the hook on in a new clone with `git config core.hooksPath .githooks`.
 
-## Documentation
-- [docs/v11/changes.md](docs/v11/changes.md): what V11 added, simplified and removed
-- [docs/v11/test-evidence.md](docs/v11/test-evidence.md): what was tested and the results
-- [docs/v11/known-limitations.md](docs/v11/known-limitations.md)
+## More
+- [docs/known-limitations.md](docs/known-limitations.md)
+- [docs/test-evidence.md](docs/test-evidence.md)

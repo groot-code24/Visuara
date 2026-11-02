@@ -1,7 +1,7 @@
 """Browser QA for the Next.js web app against the real API, in headless Chrome over the DevTools protocol.
 
     cd web && npm ci && npx next build        # CC_API_ORIGIN must match --api-port (default http://127.0.0.1:8000)
-    python qa/browser_qa_web.py [--out docs/qa/v11]
+    python qa/browser_qa_web.py [--out data/qa]
 
 Starts the FastAPI API (SQLite, inline worker, sign-in emails written to an outbox) and `next start`, then walks the
 product as a person would: landing and pricing; the dashboard refusing unauthenticated and forged sessions; sign-up
@@ -97,7 +97,7 @@ class Page:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--out', default=str(ROOT / 'docs' / 'qa' / 'v11')); ap.add_argument('--api-port', type=int, default=8000); ap.add_argument('--web-port', type=int, default=3000)
+    ap.add_argument('--out', default=str(ROOT / 'data' / 'qa')); ap.add_argument('--api-port', type=int, default=8000); ap.add_argument('--web-port', type=int, default=3000)
     args = ap.parse_args()
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     chrome = next(c for c in CHROMES if Path(c).exists())
@@ -160,7 +160,7 @@ def main():
         def landing():
             pg.go(APP + '/')
             pg.wait_text('you already have.')
-            assert 'Why agencies spend their time here.' in pg.text() and pg.js("document.title").startswith('Visora')
+            assert 'into sponsor inventory.' in pg.text() and pg.js("document.title").startswith('Visuara')
             # The interactive demo: choosing the food product moves the recommendation to the tabletop.
             pg.click_text('Granola', exact=False); pg.wait_text('Granola → Tabletop', timeout=10)
             pg.wait("document.body.innerText.includes('Placed')", timeout=10, what='placement in the demo')
@@ -268,7 +268,7 @@ def main():
         step('placement: quality check, approval, render, download', placement)
 
         def settings():
-            pg.go(APP + '/dashboard/settings'); pg.wait_text('Team')
+            pg.go(APP + '/dashboard/settings'); pg.wait_text('Team'); pg.wait_text('Decisions this month')
             assert 'Free' in pg.text() and 'Decisions this month' in pg.text()
             pg.type('input[aria-label="Email to invite"]', 'leo@aurasound.io'); pg.click_text('Invite')
             pg.wait("document.body.innerText.includes('Upgrade your plan')||document.body.innerText.includes('Pending invitations')", what='invite outcome')

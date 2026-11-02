@@ -57,6 +57,13 @@ def nudge(c, org_id):
         kick()
 
 
+def housekeeping():
+    """Called on sign-in: where no job is running, nothing else would clear expired sign-ins and abandoned uploads."""
+    if not enabled(): return
+    from . import main, maintenance
+    if main.rate_limit('housekeeping', 1, maintenance.db_interval()): kick()
+
+
 class OutOfTime(threading.Event):
     """Set when this request's time is nearly up. A decision stops at its next checkpoint and continues in a new request."""
 

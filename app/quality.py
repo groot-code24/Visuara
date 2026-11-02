@@ -1,7 +1,7 @@
 """Placement quality evaluator: applies a versioned threshold policy to tracker measurements.
 
 Thresholds are heuristic and were tuned only on the synthetic development split of
-benchmark/ (see docs/visual-quality-benchmark.md). They are NOT calibrated probabilities,
+benchmark/. They are NOT calibrated probabilities,
 so every PASSED result still requires human fit acceptance before proposal.
 """
 import numpy as np

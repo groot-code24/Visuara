@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Logo, LogoMark } from './logo';
 import { cx } from './ui';
 import { IconMenu, IconSpark, IconUser, IconX } from './icons';
-import { CONTACT_EMAIL } from '@/lib/site';
+import { CONTACT_EMAIL, LEGAL_NAME } from '@/lib/site';
 
 const NAV = [
   { href: '/#demo', label: 'Product' },
@@ -28,7 +28,7 @@ export function SiteHeader() {
       <div className={cx('pointer-events-auto mx-2 overflow-hidden rounded-b-[22px] border border-t-0 border-white/10 bg-black text-white transition-shadow duration-300 sm:mx-auto sm:max-w-[920px]',
         scrolled ? 'shadow-[0_18px_50px_-12px_rgba(10,10,18,.55)]' : 'shadow-[0_8px_30px_-16px_rgba(10,10,18,.5)]')}>
         <div className="flex h-16 items-center justify-between gap-3 pl-3.5 pr-2 sm:pl-6 sm:pr-2.5">
-          <Link href="/" className="flex shrink-0 items-center" aria-label="Visora home">
+          <Link href="/" className="flex shrink-0 items-center" aria-label="Visuara home">
             <LogoMark size={28} inverted />
           </Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -68,7 +68,7 @@ export function SiteFooter() {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 text-sm sm:px-6 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <Logo />
-          <p className="mt-3 max-w-xs text-muted">The decision engine for product placement in the videos you already have.</p>
+          <p className="mt-3 max-w-xs text-muted">Product placement for the videos you already have. Every frame measured, nothing redrawn.</p>
         </div>
         <div>
           <p className="font-medium">Product</p>
@@ -87,9 +87,10 @@ export function SiteFooter() {
           </ul>
         </div>
       </div>
+      <div aria-hidden className="mk-wordmark overflow-hidden px-2 pb-6">Visuara</div>
       <div className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-xs text-muted sm:px-6">
-          <p>© {new Date().getFullYear()} Visora · Now in pilot</p>
+          <p>© {new Date().getFullYear()} {LEGAL_NAME} · Now in pilot</p>
           <div className="flex gap-4">
             <Link href="/terms" className="hover:text-ink">Terms</Link>
             <Link href="/privacy" className="hover:text-ink">Privacy</Link>

@@ -1,45 +1,35 @@
 # Test evidence
 
-Environment: Windows 11, Python 3.10.11 (`.venv`), FFmpeg/FFprobe 8.1, OpenCV 4.11, Chrome (headless, DevTools protocol). Date: 2026-10-30. Every result below was observed in this session; nothing is reported that was not executed.
+Results from 3 November 2026, on the code in this repository. Nothing has been deployed to Vercel yet.
 
-## Baseline (before changes)
-`PYTHONPATH=. python -m pytest -q` → **8 passed**, 5 deprecation warnings.
+| Check | Result |
+|---|---|
+| Backend tests, SQLite | 112 passed, 1 skipped (it needs PostgreSQL) |
+| Backend tests, PostgreSQL 16 | 113 passed |
+| `qa/browser_qa_web.py`, Chrome, sign-up to download | 12/12, no page errors |
+| `qa/vercel_rehearsal.py` ([log](evidence/vercel_rehearsal.json)) | 14/14, no CSP violations or page errors |
 
-## Final automated suite
-`PYTHONPATH=. python -m pytest -v` → **24 passed** in 98.5 s (1 third-party deprecation warning from Starlette's test client).
+## The rehearsal
+It runs containers from `Dockerfile.vercel` with production settings: API and runner share no disk, the filesystem is read-only except `/tmp`, each has 1 vCPU and 2 GB, routing is read from `vercel.json`, and it uses HTTPS, the 4.5 MB request limit, Chrome, and Vercel's own JavaScript and Python Blob SDKs. It includes killing the runner mid-render (`claimed, lease_recovered, claimed, succeeded`) and a 36 MB upload in 5 parts.
 
-| File | Tests | What it proves |
-|---|---|---|
-| `tests/test_api.py` | 8 | Original suite, updated for the quality gate. The tracking test now uses a planar fixture with ground truth and asserts ≤3 px placement error on every interval frame plus output validation. |
-| `tests/test_integrity.py` | 15 | Transition table; renderer routing refusals; quality gate on 7 labelled fixtures; full tracked workflow (unsuitable refusal with evidence, rights-holder enforcement, approval order, rights lock, validated render, channel enforcement, cross-org 404, revision invalidates approvals and old render, full audit trail); track tampering blocked; revocation cancels and blocks; mid-render cancel; lease recovery with a stale worker unable to touch the job; dead-letter; consent reset on term change; Secure cookie; UTF-8 page; invited sign-up. |
-| `tests/test_e2e_processes.py` | 1 | **Real processes**: uvicorn API plus a separate `worker.py` over HTTP, nothing mocked. Covers the 16 workflow steps from the brief, then a 24 s 1280×720 render where the worker process is **killed mid-job**; a new worker recovers the lease and completes it (`attempts == 2`, `lease_recovered` event), and the output downloads. |
+**What stands in:** PostgreSQL for Neon, `qa/blob_stub.py` for Blob, Mailpit for email. Google was checked only as far as the redirect in this run; `qa/browser_qa_web.py` runs the whole flow against `qa/google_stub.py`.
 
-Changed test expectations (none weakened):
-- `test_tracking_quad_validation_and_real_perspective_render`: the old source (`testsrc2`) is not a planar surface, so success on it was the bug. It now asserts correct placement against ground truth.
-- The workflow test calls the new mandatory `quality-check` and expects `READY_FOR_RENDER` after brand approval.
+**What it doesn't cover:**
+- Chrome's HTTP/2 streaming upload to real Blob, because the stand-in forces the SDK's non-streaming path.
+- The tighter content security policy used on Vercel, because the stand-in runs on a local address. Its destinations come from `@vercel/blob` 2.8.2's source.
 
-## Benchmark
-`python -m benchmark.run_benchmark --split all` → test split 42/42 correct, 0 false accepts, 21/21 outputs validated. Details: [visual-quality-benchmark.md](visual-quality-benchmark.md).
+**One earlier rehearsal run failed before the product's logic started:** the first health request timed out while the machine was slow (48 s to start, against 7.7 s on the passing run).
 
-## Browser QA
-`python qa/browser_qa.py` → **10/10 steps passed, no console errors or uncaught exceptions**. Log: [`qa/browser-qa-log.json`](qa/browser-qa-log.json); screenshots in [`docs/qa/`](qa/).
+## Real services
+Read-only checks with the real credentials, using `qa/check_env.py`:
+- **Neon:** connection through the pooled address, and the advisory lock the app relies on.
+- **Google:** the client ID and secret were accepted (`invalid_grant` for a code that cannot exist). A real sign-in hasn't been completed.
 
-1. Brand registers through the UI.
-2. Brand creates an invitation.
-3. Creator registers with the token (this step found bug A13), uploads a real video via the file input, analyses scenes.
-4. Brand uploads a product image.
-5. Corner editor: the video loads, the product preview sits on the surface, a real pointer drag moves a corner, undo restores it, an arrow key nudges by 0.002. Create, then the quality report shows PASSED with 61/61 frames.
-6. Fit review accepted; proposed.
-7. Creator consent screen; consent and approve.
-8. Brand approves, giving READY_FOR_RENDER; render; the page auto-refreshes to SUCCEEDED with validation PASSED; download returns 200.
-9. Audit trail shows DELIVERED.
-10. At 390 px: no horizontal page scroll on the placements page or in the editor.
+Blob, email delivery and Vercel itself haven't been exercised for real.
 
-Screenshots were reviewed by eye. One layout defect (navigation clipped at 390 px) was found and fixed.
+## Bugs these runs found
+- **Lost leases:** a render renewed its lease only while processing frames, so a slow download, plan or upload could lose it, and dashboard polling would then restart the job until it was given up. The lease now renews from its own thread (`main.keep_lease`).
+- **Backups:** the `schema_fingerprint` table was copied into logical backups, which broke restore and migration on PostgreSQL.
 
-## Not tested
-- Real-world footage; long or high-resolution videos beyond 24 s at 720p; concurrent workers under load.
-- PostgreSQL, object storage, backup/restore (not implemented).
-- Live generative provider (not configured).
-- Screen readers and other assistive technology; Safari or Firefox.
-- Dependency vulnerability scan (`pip-audit` not installed in the venv).
+## Not repeated on this code
+The 10-workspace load test and outage drill were removed along with the VM deployment they exercised. There has been no independent penetration test.

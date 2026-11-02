@@ -1,4 +1,4 @@
-"""Engine-neutral logical export/import of the Visora database (SQLite or PostgreSQL/Neon).
+"""Engine-neutral logical export/import of the Visuara database (SQLite or PostgreSQL/Neon).
 
   python -m ops.dbtransfer export  --out ./backups/db-2026-10-30            # from DATABASE_URL, else --sqlite
   python -m ops.dbtransfer import  --dump ./backups/db-2026-10-30            # into DATABASE_URL (must be empty)

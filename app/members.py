@@ -178,8 +178,8 @@ def create_invitation(body: InvitationIn, request: Request):
         from .auth import app_url
         link = f'{app_url()}/login?invited=1'
         try:
-            mailer.send(email, f'{u["name"]} invited you to {org} on Visora',
-                        f'{u["name"]} invited you to join the {org} workspace on Visora as {body.member_role}.\n\nSign in with this email address to accept: {link}\n\nThe invitation expires in {invitation_ttl() // 86400} days.',
+            mailer.send(email, f'{u["name"]} invited you to {org} on Visuara',
+                        f'{u["name"]} invited you to join the {org} workspace on Visuara as {body.member_role}.\n\nSign in with this email address to accept: {link}\n\nThe invitation expires in {invitation_ttl() // 86400} days.',
                         None, outbox_dir=m.DATA / 'outbox')
             emailed = True
         except mailer.MailError:

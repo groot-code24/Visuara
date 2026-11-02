@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import main as m, mailer
+from . import jobrunner, main as m, mailer
 
 router = APIRouter()
 SCHEMA = '''
@@ -152,6 +152,7 @@ def email_start(body: EmailStart, request: Request):
     if not mailer.enabled(): raise _err(503, 'EMAIL_SIGNIN_DISABLED', 'Email sign-in is not configured on this server')
     if not m.rate_limit('signin-email:' + email, 5, 3600) or not m.rate_limit('signin-ip:' + _ip(request), int(os.getenv('CC_SIGNIN_EMAILS_PER_IP_HOUR', '20')), 3600):
         raise _err(429, 'RATE_LIMITED', 'Too many sign-in emails requested. Wait a few minutes and try again.')
+    jobrunner.housekeeping()
     token = secrets.token_urlsafe(32); code = f'{secrets.randbelow(10 ** 6):06d}'
     with m.db() as c:
         c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE email=? AND consumed_at IS NULL', (email,))
@@ -160,17 +161,17 @@ def email_start(body: EmailStart, request: Request):
     # The token travels in the URL fragment, which browsers never send to servers (no tokens in proxy or CDN logs).
     link = f'{app_url()}/verify#token={token}'
     minutes = CODE_TTL // 60
-    text = (f'Sign in to Visora\n\nOpen this link to sign in:\n{link}\n\nOr enter this code: {code}\n\n'
+    text = (f'Sign in to Visuara\n\nOpen this link to sign in:\n{link}\n\nOr enter this code: {code}\n\n'
             f'The link and code expire in {minutes} minutes and work once. If you did not request this, ignore this email.')
     page = (f'<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:460px;margin:auto;padding:32px 24px;color:#1f1e1d">'
-            f'<p style="font-size:15px;font-weight:600;margin:0 0 24px">Visora</p>'
-            f'<h2 style="font-size:22px;font-weight:600;margin:0 0 16px">Sign in to Visora</h2>'
+            f'<p style="font-size:15px;font-weight:600;margin:0 0 24px">Visuara</p>'
+            f'<h2 style="font-size:22px;font-weight:600;margin:0 0 16px">Sign in to Visuara</h2>'
             f'<p style="margin:0 0 24px"><a href="{html.escape(link)}" style="background:#1f1e1d;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;display:inline-block;font-weight:600">Sign in</a></p>'
             f'<p style="color:#6b6a68;font-size:14px;margin:0 0 6px">Or enter this code:</p>'
             f'<p style="font-size:28px;letter-spacing:6px;font-weight:600;margin:0 0 24px">{code}</p>'
             f'<p style="color:#8a8986;font-size:13px">The link and code expire in {minutes} minutes and work once. If you did not request this, ignore this email.</p></div>')
     try:
-        mailer.send(email, 'Sign in to Visora', text, page, outbox_dir=m.DATA / 'outbox')
+        mailer.send(email, 'Sign in to Visuara', text, page, outbox_dir=m.DATA / 'outbox')
     except mailer.MailError as e:
         with m.db() as c:
             c.execute('UPDATE auth_challenges SET consumed_at=CURRENT_TIMESTAMP WHERE token_hash=?', (_h(token),))

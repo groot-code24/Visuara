@@ -38,7 +38,7 @@ export function AgencyCalculator() {
     <div className="grid overflow-hidden rounded-3xl border border-line bg-card shadow-card lg:grid-cols-[1.1fr_1fr]">
       <div className="space-y-7 p-6 sm:p-8">
         <div>
-          <p className="text-sm font-medium text-accent-ink">Estimate it for your agency</p>
+          <p className="mk-eyebrow">Estimate it for your agency</p>
           <p className="mt-1 text-sm text-muted">Move the sliders to match your book of business.</p>
         </div>
         <Slider label="Clients with video" value={clients} min={1} max={40} onChange={setClients} format={(v) => String(v)} />
@@ -70,7 +70,7 @@ export function AgencyCalculator() {
         </dl>
         <p className="relative text-[11px] leading-relaxed text-white/45">
           An estimate from your inputs, not a quote. It leaves out your team’s review time. Every render you start counts toward the allowance, including re-renders after edits.
-          {cost == null && <> Above 200 placements a month, <Link href={contactHref('Visora Enterprise', '/login?plan=enterprise')} className="underline">talk to us</Link>.</>}
+          {cost == null && <> Above 200 placements a month, <Link href={contactHref('Visuara Enterprise', '/login?plan=enterprise')} className="underline">talk to us</Link>.</>}
         </p>
       </div>
     </div>

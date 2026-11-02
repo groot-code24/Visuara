@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stops a commit that contains a credential or a real .env file. Turned on with: git config core.hooksPath .githooks
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+py=.venv311/Scripts/python.exe
+[ -x "$py" ] || py=$(command -v python3 || command -v python)
+[ -n "$py" ] || { echo "pre-commit: Python not found, so the secret scan could not run" >&2; exit 1; }
+git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 -r "$py" qa/secret_scan.py || {
+  echo "Commit stopped: remove the secret above. If it was ever pushed, change it too." >&2
+  exit 1
+}

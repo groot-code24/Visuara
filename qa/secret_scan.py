@@ -20,11 +20,14 @@ PATTERNS = {
     'resend_key': re.compile(r'\bre_[0-9A-Za-z]{8,}_[0-9A-Za-z]{16,}'),
     'sendgrid_key': re.compile(r'\bSG\.[0-9A-Za-z_-]{16,}\.[0-9A-Za-z_-]{16,}'),
     'postgres_url_with_password': re.compile(r'postgres(?:ql)?://[^:\s/]+:([^@\s]+)@([^/\s?]+)'),
+    'vercel_blob_token': re.compile(r'\bvercel_blob_rw_[0-9A-Za-z_-]{16,}'),
+    'neon_password': re.compile(r'\bnpg_[0-9A-Za-z]{8,}'),
     'cloudflare_tunnel_token': re.compile(r'\beyJhIjoi[0-9A-Za-z_-]{40,}'),
 }
 ASSIGN = re.compile(r'(?i)\b(?:secret|password|passwd|token|api_key|signing_key)\b\s*[:=]\s*["\']?([^\s"\'#,;]{20,})')
 ALLOWED_PASSWORDS = {'PASSWORD', 'cc-local-only', 'postgres', 'p', 'pass', 'password', 'test'}
 ALLOWED_VALUES = {'local-development-signing-key-not-for-production', 'cc-local-secret-only', 'change-me-to-a-long-random-secret'}
+ALLOWED_FIXTURES = {'vercel_blob_rw_TESTSTORE_secretsecretsecret', 'npg_X9y8Z7w6V5'}   # invented values the tests depend on
 SKIP_DIRS = {'.git', '.venv', '.venv311', 'node_modules', '__pycache__', 'data', '.vercel'}
 TEXT_EXT = {'.py', '.md', '.txt', '.json', '.yml', '.yaml', '.toml', '.cfg', '.ini', '.html', '.js', '.mjs', '.css', '.sh', '.ps1', '.example', '.env', ''}
 
@@ -39,6 +42,7 @@ def scan_text(name, text):
         for m in rx.finditer(text):
             if kind == 'postgres_url_with_password' and (m.group(1) in ALLOWED_PASSWORDS or m.group(1).startswith(('USER', '$', '{', '<')) or 'localhost' in m.group(2) or m.group(2).startswith(('postgres', '127.0.0.1'))):
                 continue
+            if m.group(0) in ALLOWED_FIXTURES: continue
             hits.append((name, kind, m.group(0)[:12] + '…'))
     for m in ASSIGN.finditer(text):
         v = m.group(1)
@@ -69,6 +73,7 @@ def main():
         for p in ([Path(x) for x in a.paths] or files_in_repo()):
             if not p.is_file() or (p.suffix.lower() not in TEXT_EXT and not p.name.startswith('.env')) or p.stat().st_size > 2_000_000: continue
             n += 1; hits += scan_text(str(p.relative_to(ROOT) if p.is_absolute() and ROOT in p.parents else p), p.read_text('utf-8', 'replace'))
+            if p.name.startswith('.env') and p.name != '.env.example': hits.append((p.name, 'env_file_must_not_be_committed', ''))
     for h in hits: print(f'{h[0]}: {h[1]} {h[2]}')
     print(f'secret scan: {n} files, {len(hits)} findings')
     sys.exit(1 if hits else 0)

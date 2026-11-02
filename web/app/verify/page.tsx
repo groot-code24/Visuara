@@ -43,7 +43,7 @@ export default function VerifyPage() {
       {state === 'checking' && <div className="flex justify-center py-16 text-muted"><Spinner size={24} /></div>}
       {(state === 'ready' || state === 'signing') && (
         <div className="text-center">
-          <h1 className="font-display text-[40px] leading-tight tracking-tight">Sign in to Visora</h1>
+          <h1 className="font-display text-[40px] leading-tight tracking-tight">Sign in to Visuara</h1>
           <p className="mt-2 text-[15px] text-muted">Continue as <span className="font-medium text-ink">{email}</span></p>
           <div className="mt-8 rounded-2xl border border-line bg-card p-6 text-left shadow-card">
             {error && <Alert className="mb-4">{error}</Alert>}

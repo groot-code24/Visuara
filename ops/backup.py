@@ -1,4 +1,4 @@
-"""Backup and restore for a Visora deployment (database + media directory).
+"""Backup and restore for a Visuara deployment (database + media directory).
 
   python ops/backup.py backup  --data ./data --out ./backups/2026-10-30
   python ops/backup.py restore --backup ./backups/2026-10-30 --data ./data-restored
@@ -7,8 +7,7 @@
 Database: with DATABASE_URL set (PostgreSQL/Neon) the backup holds a consistent logical export (ops/dbtransfer.py);
 otherwise a consistent SQLite online backup. Restore verifies every hash first, refuses a non-empty target (directory
 or database), then rewrites stored absolute media paths from the old data directory to the new one. With object
-storage, also enable bucket versioning; on Neon, point-in-time restore remains the first line of recovery
-(see docs/v9/production-runtime.md).
+storage, also enable bucket versioning; on Neon, point-in-time restore remains the first line of recovery.
 """
 import argparse, hashlib, json, shutil, sqlite3, sys, time
 from pathlib import Path

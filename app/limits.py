@@ -28,6 +28,7 @@ def upload_session_ttl(): return _num('CC_UPLOAD_SESSION_TTL', 3600)
 # Per-organization quotas
 # Platform ceilings above every plan. The plan's own value applies below them (the effective_* functions).
 def org_storage_bytes(): return _num('CC_ORG_STORAGE_QUOTA_MB', 1048576) * 1024 * 1024
+def platform_storage_bytes(): return _num('CC_PLATFORM_STORAGE_MB', 0) * 1024 * 1024     # all workspaces together; 0 = no ceiling
 def org_daily_video_uploads(): return _num('CC_ORG_DAILY_VIDEO_UPLOADS', 1000)
 def org_max_active_jobs(): return _num('CC_ORG_MAX_ACTIVE_JOBS', 50)
 def org_quality_checks_per_hour(): return _num('CC_ORG_QUALITY_CHECKS_PER_HOUR', 40)
@@ -35,7 +36,7 @@ def org_analyses_per_hour(): return _num('CC_ORG_ANALYSES_PER_HOUR', 30)
 def org_max_members(): return _num('CC_ORG_MAX_MEMBERS', 25)
 
 
-# Plans (docs/v11/pricing.md). None = unlimited within the platform caps above. Prices are list prices in USD;
+# Plans (docs/pricing.md). None = unlimited within the platform caps above. Prices are list prices in USD;
 # billing is handled outside the app (invoices) until a payment provider is integrated.
 PLANS = {
     'free':       {'name': 'Free', 'price_usd_month': 0, 'decisions_per_month': 5, 'renders_per_month': 3, 'storage_mb': 2048,
@@ -146,7 +147,20 @@ def check_video_size(c, org_id, size):
         raise _upgrade('PLAN_VIDEO_TOO_LARGE', f'Your {lim["name"]} plan accepts video files up to {cap // 1048576} MB.', key)
 
 
+def check_platform_storage(c, incoming_bytes=0):
+    """Vercel blocks a Hobby project's Blob store for up to 30 days once it passes its allowance, so stop well before that."""
+    cap = platform_storage_bytes()
+    if not cap: return
+    used = (c.execute('SELECT COALESCE(SUM(size_bytes),0) FROM videos').fetchone()[0]
+            + c.execute('SELECT COALESCE(SUM(size_bytes),0) FROM products').fetchone()[0]
+            + c.execute('SELECT COALESCE(SUM(output_bytes),0) FROM jobs').fetchone()[0]
+            + c.execute("SELECT COALESCE(SUM(expected_bytes),0) FROM upload_sessions WHERE status='PENDING'").fetchone()[0])
+    if used + incoming_bytes > cap:
+        raise _quota('QUOTA_PLATFORM_STORAGE', 'Visuara has run out of storage for new media. Please contact us to free up space.')
+
+
 def check_storage(c, org_id, incoming_bytes):
+    check_platform_storage(c, incoming_bytes)
     used = org_usage(c, org_id)['storage_bytes']; cap = effective_storage_bytes(c, org_id)
     if used + incoming_bytes > cap:
         raise _quota('QUOTA_STORAGE', f'This workspace has reached its storage quota ({cap // 1048576} MB). Delete media or upgrade your plan.',

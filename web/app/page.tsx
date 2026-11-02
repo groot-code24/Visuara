@@ -21,7 +21,7 @@ const OPTIONS = [
     points: [['Fast and cheap per clip', true], ['The product is regenerated, so labels and logos can drift', false], ['No check that it holds up on every frame', false]],
   },
   {
-    title: 'Visora', tone: 'ours',
+    title: 'Visuara', tone: 'ours',
     points: [['Minutes, on footage you already own', true], ['Your exact product image, composited, never redrawn', true], ['Measured on every frame, approved before render', true]],
   },
 ] as const;
@@ -59,12 +59,12 @@ export default function Landing() {
             <Link href="#demo" className="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-white px-3 py-1 text-[13px] text-ink-2 transition hover:bg-soft">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" /> The decision engine for in-video product placement <IconArrowRight size={13} className="shrink-0" />
             </Link>
-            <h1 className="mx-auto mt-7 max-w-4xl font-display text-[40px] leading-[1.04] tracking-tight sm:text-6xl lg:text-7xl">
-              Put your products in the videos <span className="mk-gradient-ink inline-block pr-[.12em] italic">you already have.</span>
+            <h1 className="mx-auto mt-7 max-w-5xl font-display text-[44px] leading-[1] sm:text-7xl lg:text-[88px]">
+              Put your products in the videos <span className="mk-gradient-ink inline-block pb-[.08em]">you already have.</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-ink-2 sm:text-lg">
-              Drop in two to four product shots and a batch of videos. Visora scans every scene, decides which product fits where, and renders
-              placements that pass a frame-by-frame check. No reshoot, and no generative redraw.
+              Upload your product shots and the footage you own. Visuara finds the surfaces in every scene, picks the product that fits, and
+              renders a placement measured on every frame. No reshoots. No generative redraws.
             </p>
             <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
               <Link href="/login" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-ink px-6 text-[15px] font-medium text-white transition hover:bg-ink-2">
@@ -82,7 +82,7 @@ export default function Landing() {
           </div>
           <div className="relative overflow-hidden border-y border-line bg-white py-4">
             <div className="mk-marquee flex w-max gap-10 whitespace-nowrap text-sm text-muted">
-              {[...MARQUEE, ...MARQUEE].map((m, i) => <span key={i} className="flex items-center gap-10">{m}<span className="text-line-2">✦</span></span>)}
+              {[...MARQUEE, ...MARQUEE].map((m, i) => <span key={i} className="flex items-center gap-10">{m}<span className="h-1 w-1 rounded-full bg-line-2" /></span>)}
             </div>
           </div>
         </section>
@@ -90,7 +90,7 @@ export default function Landing() {
         {/* THREE WAYS */}
         <section className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
           <Reveal className="max-w-2xl">
-            <p className="text-sm font-medium text-accent-ink">Why this exists</p>
+            <p className="mk-eyebrow">Why this exists</p>
             <h2 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">There are three ways to get a product into a video.</h2>
           </Reveal>
           <div className="mt-12 grid gap-5 md:grid-cols-3">
@@ -120,7 +120,7 @@ export default function Landing() {
         <section className="border-y border-line bg-card/60">
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[.85fr_1.15fr]">
             <Reveal>
-              <p className="text-sm font-medium text-accent-ink">Same footage, new sponsor</p>
+              <p className="mk-eyebrow">Same footage, new sponsor</p>
               <h2 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">The rest of the frame stays exactly as you shot it.</h2>
               <p className="mt-5 leading-relaxed text-ink-2">
                 The product is tracked onto the surface and composited in linear light. Nothing else in the frame is touched, and your product
@@ -139,7 +139,7 @@ export default function Landing() {
         {/* HOW IT WORKS */}
         <section id="how" className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
           <Reveal className="text-center">
-            <p className="text-sm font-medium text-accent-ink">How it works</p>
+            <p className="mk-eyebrow">How it works</p>
             <h2 className="mx-auto mt-2 max-w-2xl font-display text-4xl tracking-tight sm:text-5xl">From product shots to placed video in four steps.</h2>
           </Reveal>
           <div className="relative mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
@@ -147,7 +147,7 @@ export default function Landing() {
             {STEPS.map((s, i) => (
               <Reveal key={s.title} delay={i * 90} className="relative text-center">
                 <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-line bg-card text-ink shadow-card">{s.icon}</div>
-                <p className="mt-4 font-mono text-xs text-muted">STEP 0{i + 1}</p>
+                <p className="mt-4 font-mono text-xs text-muted">0{i + 1}</p>
                 <h3 className="mt-1 font-semibold">{s.title}</h3>
                 <p className="mx-auto mt-1.5 max-w-[240px] text-sm leading-relaxed text-muted">{s.body}</p>
               </Reveal>
@@ -158,10 +158,10 @@ export default function Landing() {
         {/* BENTO */}
         <section className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
           <Reveal className="max-w-2xl">
-            <p className="text-sm font-medium text-accent-ink">Built for the work after the demo</p>
+            <p className="mk-eyebrow">Built for the work after the demo</p>
             <h2 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">Decides across a library. Refuses what won’t hold up.</h2>
           </Reveal>
-          <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          <div className="mt-12 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-3">
             <Reveal className="lg:col-span-2">
               <div className="h-full rounded-3xl border border-line bg-card p-6 sm:p-7">
                 <h3 className="font-semibold">One decision, a whole library</h3>
@@ -209,10 +209,10 @@ export default function Landing() {
           <div className="mk-grid pointer-events-none absolute inset-0 opacity-60" />
           <div className="relative mx-auto max-w-6xl px-4 py-24 sm:px-6">
             <Reveal className="max-w-3xl">
-              <p className="text-sm font-medium text-[#b9b0ff]">For agencies</p>
-              <h2 className="mt-2 font-display text-4xl tracking-tight sm:text-6xl">Why agencies spend their time here.</h2>
+              <p className="mk-eyebrow mk-eyebrow-dark">For agencies</p>
+              <h2 className="mt-2 font-display text-4xl tracking-tight sm:text-6xl">Turn every client’s back catalogue into sponsor inventory.</h2>
               <p className="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
-                Your clients already sit on hours of usable footage. Visora turns it into placements you can pitch, approve and deliver
+                Your clients already sit on hours of usable footage. Visuara turns it into placements you can pitch, approve and deliver
                 in an afternoon, on a plan that costs less than one reshoot day.
               </p>
             </Reveal>
@@ -239,7 +239,7 @@ export default function Landing() {
         <section id="pricing" className="scroll-mt-16 border-t border-line">
           <div className="mx-auto max-w-6xl px-4 py-24 text-center sm:px-6">
             <Reveal>
-              <p className="text-sm font-medium text-accent-ink">Pricing</p>
+              <p className="mk-eyebrow">Pricing</p>
               <h2 className="mx-auto mt-2 max-w-3xl font-display text-4xl tracking-tight sm:text-5xl">Priced like a tool, not a production budget.</h2>
               <p className="mx-auto mt-4 max-w-2xl text-ink-2">Every plan includes the decision engine, the frame-by-frame check and version-bound approvals. Pay for the volume you need.</p>
             </Reveal>
@@ -248,7 +248,7 @@ export default function Landing() {
               <div className="rounded-3xl border border-line bg-card p-6 sm:p-8">
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
                   <div>
-                    <p className="text-sm font-medium text-accent-ink">How we priced it</p>
+                    <p className="mk-eyebrow">How we priced it</p>
                     <h3 className="mt-1 text-xl font-semibold">What the alternatives cost</h3>
                   </div>
                   <Link href="/pricing" className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline">Full comparison <IconArrowRight size={14} /></Link>
@@ -271,7 +271,7 @@ export default function Landing() {
         <section id="faq" className="scroll-mt-16 border-t border-line bg-card/60">
           <div className="mx-auto grid max-w-6xl gap-10 px-4 py-24 sm:px-6 lg:grid-cols-[.8fr_1.2fr]">
             <div>
-              <h2 className="font-display text-4xl tracking-tight sm:text-5xl">Questions</h2>
+              <h2 className="font-display text-4xl tracking-tight sm:text-5xl">Questions, answered.</h2>
               <p className="mt-4 text-ink-2">Something else? Start a free workspace and try it on your own footage.</p>
             </div>
             <div className="divide-y divide-line border-y border-line">
@@ -293,7 +293,7 @@ export default function Landing() {
           <div className="mk-grain pointer-events-none absolute inset-0" />
           <div className="relative mx-auto max-w-6xl px-4 py-28 text-center sm:px-6">
             <h2 className="mx-auto max-w-3xl font-display text-5xl leading-[1.05] tracking-tight sm:text-7xl">
-              Your next sponsored integration is <span className="mk-gradient-text inline-block pr-[.12em] italic">already filmed.</span>
+              Your next sponsored integration is <span className="mk-gradient-text inline-block pb-[.08em]">already filmed.</span>
             </h2>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href="/login" className="inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 text-[15px] font-medium text-[#0c0b10] transition hover:bg-white/90">Start free <IconArrowRight size={16} /></Link>

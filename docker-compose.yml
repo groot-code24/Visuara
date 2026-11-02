@@ -1,39 +1,6 @@
-# Local, production-shaped stack: PostgreSQL 16 (stands in for Neon), SeaweedFS's S3 gateway with access keys
-# (stands in for Cloudflare R2; anonymous access refused), Mailpit (a real SMTP server with a web inbox), the API, two
-# independent workers (renders and decisions) and the Next.js web app, which proxies /api to the API.
-#   docker compose up --build        app: http://localhost:3000   inbox: http://localhost:8025   API: http://localhost:8000/docs
-# Development credentials below are for this local stack only. Production uses deploy/docker-compose.prod.yml + .env.
-x-backend: &backend
-  build: .
-  image: context-commerce:local
-  depends_on:
-    postgres: { condition: service_healthy }
-    s3-init: { condition: service_completed_successfully }
-  environment: &backend-env
-    CC_ENV: development
-    DATABASE_URL: postgresql://cc:cc-local-only@postgres:5432/context_commerce
-    CC_S3_BUCKET: context-commerce-dev
-    CC_S3_ENDPOINT_URL: http://s3:8333
-    CC_S3_PUBLIC_ENDPOINT_URL: http://localhost:8333
-    CC_S3_REGION: us-east-1
-    CC_S3_ADDRESSING: path
-    CC_S3_SSE: ""
-    AWS_ACCESS_KEY_ID: cc-local
-    AWS_SECRET_ACCESS_KEY: cc-local-secret-only
-    CC_SMTP_HOST: mailpit
-    CC_SMTP_PORT: "1025"
-    CC_SMTP_TLS: none
-    CC_MAIL_FROM: Visora (local) <signin@localhost>
-    CC_PUBLIC_URL: "http://localhost:${CC_WEB_PORT:-3000}"   # the web app's origin: magic links and the Google callback go through it
-    CC_SIGNING_KEY: local-development-signing-key-not-for-production
-    CC_INLINE_WORKER: "0"
-    CC_LOG_FORMAT: text
-    FORWARDED_ALLOW_IPS: "*"   # client IPs from the web app's proxy (X-Forwarded-For), so sign-in limits are per person
-  volumes:
-    - cc-data:/data
-  restart: unless-stopped
-  stop_grace_period: 40s
-
+# Local stand-ins for development and qa/vercel_rehearsal.py: PostgreSQL for Neon, Mailpit for email (inbox at http://localhost:8025).
+#   docker compose up -d
+# These development credentials are for this local stack only.
 services:
   postgres:
     image: postgres:16-alpine
@@ -41,38 +8,9 @@ services:
     volumes: [ "pg-data:/var/lib/postgresql/data" ]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U cc -d postgres"], interval: 3s, timeout: 3s, retries: 30 }
     ports: [ "127.0.0.1:5433:5432" ]
-  s3:
-    image: chrislusf/seaweedfs:latest
-    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -volume.max=0 -master.volumeSizeLimitMB=1024
-    volumes: [ "s3-data:/data", "./deploy/local/s3.json:/etc/seaweedfs/s3.json:ro" ]
-    ports: [ "127.0.0.1:8333:8333" ]
-    healthcheck: { test: ["CMD-SHELL", "wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q 'HTTP/'"], interval: 3s, timeout: 3s, retries: 40 }
-  s3-init:   # private bucket, created with the app's own image and credentials
-    image: context-commerce:local
-    build: .
-    depends_on: { s3: { condition: service_healthy } }
-    environment: { AWS_ACCESS_KEY_ID: cc-local, AWS_SECRET_ACCESS_KEY: cc-local-secret-only, APP_ORIGIN: "http://localhost:${CC_WEB_PORT:-3000}" }
-    volumes: [ "./deploy/local/create_bucket.py:/init/create_bucket.py:ro" ]
-    entrypoint: ["python", "/init/create_bucket.py"]
   mailpit:
     image: axllent/mailpit:latest
     ports: [ "127.0.0.1:8025:8025" ]
-  api:
-    <<: *backend
-    ports: [ "127.0.0.1:${CC_API_PORT:-8000}:8000" ]   # API docs at /docs; set CC_API_PORT if 8000 is taken
-  worker:
-    <<: *backend
-    command: ["python", "worker.py"]
-    deploy: { replicas: 2 }
-    healthcheck: { test: ["CMD", "python", "-m", "ops.worker_health"], interval: 30s, timeout: 5s, retries: 3 }
-  web:
-    build: { context: ./web, args: { CC_API_ORIGIN: "http://api:8000" } }
-    image: context-commerce-web:local
-    depends_on: [ api ]
-    ports: [ "127.0.0.1:${CC_WEB_PORT:-3000}:3000" ]
-    restart: unless-stopped
 
 volumes:
-  cc-data:
   pg-data:
-  s3-data:

@@ -4,7 +4,7 @@
 #   .\scripts\dev.ps1 run     API on http://127.0.0.1:8000 plus one worker in a second window
 #   .\scripts\dev.ps1 web     web app on http://localhost:3000 (run in a second terminal); open this one
 #   .\scripts\dev.ps1 test    run the backend test suite
-# Production-shaped stack (PostgreSQL, S3 stand-in, SMTP inbox, two workers, web app): docker compose up --build
+# PostgreSQL and a real SMTP inbox locally: docker compose up --build
 param([ValidateSet('setup', 'all', 'run', 'web', 'test')][string]$Command = 'all')
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')

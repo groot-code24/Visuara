@@ -1,0 +1,23 @@
+# Never upload these, whichever way a deployment is started.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.signing_key
+*.sqlite3
+data/
+backups/
+.git/
+.githooks/
+.github/
+.claude/
+.venv*/
+**/node_modules/
+**/.next/
+**/__pycache__/
+docs/
+tests/
+qa/
+benchmark/
+scripts/

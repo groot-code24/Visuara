@@ -143,7 +143,7 @@ def test_render_on_a_host_with_an_empty_disk_and_redirected_download(blob, manua
 
 # ---------------------------------------------------------------- production settings
 BASE = {'CC_ENV': 'production', 'DATABASE_URL': 'postgresql://x', 'CC_SIGNING_KEY': 'k' * 40, 'CC_SECURE_COOKIES': '1', 'CC_INLINE_WORKER': '0',
-        'CC_PUBLIC_URL': 'https://x.vercel.app', 'CC_MAIL_BACKEND': 'smtp', 'CC_SMTP_HOST': 'smtp.gmail.com'}
+        'CC_PUBLIC_URL': 'https://x.vercel.app', 'CC_MAIL_BACKEND': 'smtp', 'CC_SMTP_HOST': 'smtp.gmail.com', 'CC_SMTP_USER': 'a@gmail.com', 'CC_SMTP_PASSWORD': 'x'}
 
 
 def test_production_accepts_blob_and_refuses_no_storage():
@@ -366,3 +366,28 @@ def test_quality_check_that_outlasts_its_request_says_so(manual, runner, tmp_pat
     monkeypatch.setenv('CC_QUALITY_WAIT_SECONDS', '0.001')
     r = manual.post(f'/api/placements/{pl}/quality-check')
     assert r.status_code == 422 and r.json()['detail']['code'] == 'QUALITY_CHECK_TOO_LONG'
+
+
+def test_sign_in_housekeeping_starts_the_runner_once_per_interval(manual, runner):
+    with main.db() as c: c.execute("DELETE FROM rate_limits WHERE bucket_key='housekeeping'")
+    jobrunner.housekeeping(); jobrunner.housekeeping()
+    assert runner == [1]
+
+
+def test_platform_storage_ceiling_stops_uploads_and_renders_before_the_free_blob_limit(manual, monkeypatch):
+    from app import limits
+    with main.db() as c:
+        limits.check_platform_storage(c, 10 ** 12)                            # no ceiling set
+        monkeypatch.setenv('CC_PLATFORM_STORAGE_MB', '1')
+        limits.check_platform_storage(c, 1024)
+        with pytest.raises(Exception) as e: limits.check_platform_storage(c, 2 * 1048576)
+    assert e.value.status_code == 413 and e.value.detail['code'] == 'QUOTA_PLATFORM_STORAGE'
+
+
+def test_half_configured_email_stops_a_production_start(monkeypatch):
+    monkeypatch.setenv('CC_SMTP_HOST', 'smtp.gmail.com'); monkeypatch.setenv('CC_MAIL_BACKEND', '')
+    monkeypatch.setenv('CC_SMTP_USER', ''); monkeypatch.setenv('CC_SMTP_PASSWORD', ''); monkeypatch.setenv('CC_MAIL_FROM', 'Visuara <you@gmail.com>')
+    problems = ' '.join(config.production_problems())
+    assert 'Magic links cannot be sent' in problems and 'placeholder address' in problems
+    monkeypatch.setenv('CC_SMTP_USER', 'a@gmail.com'); monkeypatch.setenv('CC_SMTP_PASSWORD', 'x'); monkeypatch.setenv('CC_MAIL_FROM', 'Visuara <a@gmail.com>')
+    assert 'Magic links' not in ' '.join(config.production_problems())

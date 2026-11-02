@@ -43,7 +43,7 @@ export function PlanCards() {
                 {unit && price !== 0 && (
                   <p className={cx('mt-3 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium', star ? 'bg-white/10 text-white' : 'bg-accent-soft text-accent-ink')}>{unit} per rendered video</p>
                 )}
-                <Link href={p.id === 'enterprise' ? contactHref('Visora Enterprise', '/login?plan=enterprise') : `/login?plan=${p.id}`}
+                <Link href={p.id === 'enterprise' ? contactHref('Visuara Enterprise', '/login?plan=enterprise') : `/login?plan=${p.id}`}
                   className={cx('mt-5 inline-flex h-11 w-full items-center justify-center rounded-xl text-sm font-medium transition',
                     star ? 'bg-white text-[#0c0b10] hover:bg-white/85' : p.id === 'pro' ? 'bg-ink text-white hover:bg-ink-2' : 'border border-line-2 bg-card text-ink hover:bg-soft')}>
                   {p.cta}
