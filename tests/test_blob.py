@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'qa'))
 from blob_stub import BlobStub  # noqa: E402
 
-from app import blobstore, config, decisions, jobrunner, main, storage  # noqa: E402
+from app import blobstore, config, decisions, jobrunner, limits, main, storage  # noqa: E402
 from helpers import TestDB, add_product, drive_to_approved, needs_media, owner, upload  # noqa: E402
 from benchmark.fixtures import generate  # noqa: E402
 
@@ -167,6 +167,7 @@ def runner(monkeypatch):
     """Runner mode with the outgoing request recorded instead of sent."""
     kicks = []
     monkeypatch.setenv('CC_WORKER_MODE', 'http'); monkeypatch.setenv('CC_SIGNING_KEY', 's' * 40); monkeypatch.setattr(jobrunner, 'kick', lambda: kicks.append(1))
+    monkeypatch.setattr(limits, 'check_storage_configured', lambda: None)     # these tests run the runner on local disk
     jobrunner._last_nudge.clear()
     return kicks
 
@@ -375,7 +376,6 @@ def test_sign_in_housekeeping_starts_the_runner_once_per_interval(manual, runner
 
 
 def test_platform_storage_ceiling_stops_uploads_and_renders_before_the_free_blob_limit(manual, monkeypatch):
-    from app import limits
     with main.db() as c:
         limits.check_platform_storage(c, 10 ** 12)                            # no ceiling set
         monkeypatch.setenv('CC_PLATFORM_STORAGE_MB', '1')
@@ -384,10 +384,27 @@ def test_platform_storage_ceiling_stops_uploads_and_renders_before_the_free_blob
     assert e.value.status_code == 413 and e.value.detail['code'] == 'QUOTA_PLATFORM_STORAGE'
 
 
-def test_half_configured_email_stops_a_production_start(monkeypatch):
-    monkeypatch.setenv('CC_SMTP_HOST', 'smtp.gmail.com'); monkeypatch.setenv('CC_MAIL_BACKEND', '')
-    monkeypatch.setenv('CC_SMTP_USER', ''); monkeypatch.setenv('CC_SMTP_PASSWORD', ''); monkeypatch.setenv('CC_MAIL_FROM', 'Visuara <you@gmail.com>')
-    problems = ' '.join(config.production_problems())
-    assert 'Magic links cannot be sent' in problems and 'placeholder address' in problems
-    monkeypatch.setenv('CC_SMTP_USER', 'a@gmail.com'); monkeypatch.setenv('CC_SMTP_PASSWORD', 'x'); monkeypatch.setenv('CC_MAIL_FROM', 'Visuara <a@gmail.com>')
-    assert 'Magic links' not in ' '.join(config.production_problems())
+def test_unfinished_email_or_storage_turns_off_that_feature_and_not_the_whole_api(monkeypatch):
+    from app import mailer
+    gmail_only = {'CC_ENV': 'production', 'DATABASE_URL': 'postgresql://x', 'CC_SIGNING_KEY': 'k' * 40, 'CC_SECURE_COOKIES': '1', 'CC_INLINE_WORKER': '0', 'CC_WORKER_MODE': 'http',
+                  'CC_PUBLIC_URL': 'https://www.example.com', 'CC_SMTP_HOST': 'smtp.gmail.com', 'CC_SMTP_USER': '', 'CC_SMTP_PASSWORD': '', 'CC_MAIL_FROM': 'Visuara <you@gmail.com>'}
+    google = {'GOOGLE_CLIENT_ID': 'g', 'GOOGLE_CLIENT_SECRET': 's'}
+    assert config.production_problems({**gmail_only, **google}) == []                                   # the API starts: Google works, so people can sign in
+    assert any('Nobody could sign in' in p for p in config.production_problems(gmail_only))             # still refuses when no sign-in method works
+    assert any('No media storage' in p for p in config.production_problems({**gmail_only, **google, 'CC_WORKER_MODE': ''}))   # a VM must not fall back to local disk
+    warnings = ' '.join(config.setup_warnings({**gmail_only, **google}))
+    assert 'Magic links are off' in warnings and 'Uploads are off' in warnings and 'Google' not in warnings
+    for k, v in gmail_only.items(): monkeypatch.setenv(k, v)
+    monkeypatch.delenv('CC_MAIL_BACKEND', raising=False)
+    assert not mailer.enabled()
+    monkeypatch.setenv('CC_SMTP_USER', 'a@gmail.com'); monkeypatch.setenv('CC_SMTP_PASSWORD', 'x')
+    assert mailer.enabled() and mailer.sender() == 'a@gmail.com'                                        # the example's placeholder is never used as the sender
+
+
+def test_uploads_say_storage_is_not_set_up_on_vercel(monkeypatch):
+    monkeypatch.setenv('CC_WORKER_MODE', 'http')
+    monkeypatch.setattr(storage, 'enabled', lambda: False)
+    with pytest.raises(Exception) as e: limits.check_storage_configured()
+    assert e.value.status_code == 503 and e.value.detail['code'] == 'STORAGE_NOT_CONFIGURED'
+    monkeypatch.setattr(storage, 'enabled', lambda: True)
+    limits.check_storage_configured()

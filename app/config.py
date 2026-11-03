@@ -35,6 +35,27 @@ def apply_platform_defaults():
     for key in ('CC_JOB_MAX_SECONDS', 'CC_RUNNER_BUDGET_SECONDS', 'CC_QUALITY_WAIT_SECONDS'): os.environ.setdefault(key, budget)
 
 
+def email_problem(env=None):
+    """Why sign-in emails cannot be sent over SMTP, or ''. Email is optional, so this turns off magic links rather than the API."""
+    env = os.environ if env is None else env
+    get = lambda k: (env.get(k) or '').strip()
+    if not get('CC_SMTP_HOST'): return 'CC_SMTP_HOST is not set'
+    if bool(get('CC_SMTP_USER')) != bool(get('CC_SMTP_PASSWORD')) or ('gmail' in get('CC_SMTP_HOST').lower() and not get('CC_SMTP_USER')):
+        return 'set both CC_SMTP_USER and CC_SMTP_PASSWORD'
+    return ''
+
+
+def setup_warnings(env=None):
+    """Optional services that are not set up yet in production. The API runs without them, and logs each one when it starts."""
+    env = os.environ if env is None else env
+    if (env.get('CC_ENV') or '').lower() != 'production': return []
+    out = []
+    if email_problem(env): out.append(f'Magic links are off: {email_problem(env)}')
+    if not env.get('GOOGLE_CLIENT_ID') or not env.get('GOOGLE_CLIENT_SECRET'): out.append('Google sign-in is off: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET')
+    if not env.get('CC_S3_BUCKET') and not env.get('BLOB_READ_WRITE_TOKEN'): out.append('Uploads are off: connect a private Vercel Blob store to this project')
+    return out
+
+
 def production_problems(env=None):
     """Settings that are acceptable in development but unsafe in production (CC_ENV=production).
 
@@ -45,18 +66,15 @@ def production_problems(env=None):
     get = lambda k, default='': (env.get(k) or default).strip()
     problems = []
     if not (get('DATABASE_URL') or get('CC_DATABASE_URL')): problems.append('DATABASE_URL is not set (SQLite is development-only)')
-    if not get('CC_S3_BUCKET') and not get('BLOB_READ_WRITE_TOKEN'): problems.append('No media storage: set BLOB_READ_WRITE_TOKEN (Vercel Blob) or CC_S3_BUCKET (local-disk media storage is single-host development only)')
+    # On Vercel, /tmp is never mistaken for storage: uploads answer that storage is not set up (limits.check_storage), and sign-in still works.
+    if not get('CC_S3_BUCKET') and not get('BLOB_READ_WRITE_TOKEN') and get('CC_WORKER_MODE') != 'http': problems.append('No media storage: set BLOB_READ_WRITE_TOKEN (Vercel Blob) or CC_S3_BUCKET (local-disk media storage is single-host development only)')
     if get('CC_MAIL_BACKEND').lower() == 'outbox': problems.append('CC_MAIL_BACKEND=outbox writes sign-in emails to disk (development only)')
     if len(get('CC_SIGNING_KEY')) < 32: problems.append('CC_SIGNING_KEY must be set to at least 32 random characters, identical on every host (it also protects the job runner)')
     if get('CC_SECURE_COOKIES') != '1': problems.append('CC_SECURE_COOKIES must be 1 (HTTPS-only cookies)')
     if not get('CC_PUBLIC_URL').startswith('https://'): problems.append('CC_PUBLIC_URL must be the public https:// address people use (the web app origin that proxies /api and /auth/google)')
     mail = get('CC_MAIL_BACKEND').lower() or ('smtp' if get('CC_SMTP_HOST') else '')
-    if not (mail == 'smtp' and get('CC_SMTP_HOST')) and not (get('GOOGLE_CLIENT_ID') and get('GOOGLE_CLIENT_SECRET')):
+    if not (mail == 'smtp' and not email_problem(env)) and not (get('GOOGLE_CLIENT_ID') and get('GOOGLE_CLIENT_SECRET')):
         problems.append('Nobody could sign in: configure SMTP (CC_MAIL_BACKEND=smtp, CC_SMTP_HOST) or Google (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)')
-    if get('CC_SMTP_HOST') and get('CC_MAIL_BACKEND').lower() != 'outbox':
-        if bool(get('CC_SMTP_USER')) != bool(get('CC_SMTP_PASSWORD')) or ('gmail' in get('CC_SMTP_HOST') and not get('CC_SMTP_USER')):
-            problems.append('Magic links cannot be sent: set both CC_SMTP_USER and CC_SMTP_PASSWORD, or remove CC_SMTP_HOST to offer Google sign-in only')
-        if 'you@' in get('CC_MAIL_FROM'): problems.append('CC_MAIL_FROM still has the placeholder address: use the address emails are sent from')
     if any(get(k) for k in ('CC_GOOGLE_AUTH_URL', 'CC_GOOGLE_TOKEN_URL', 'CC_GOOGLE_JWKS_URL')): problems.append('CC_GOOGLE_*_URL replaces Google with another sign-in server (test setups only)')
     if get('CC_APP_URL') and not get('CC_APP_URL').startswith('https://'): problems.append('CC_APP_URL must use https://')
     if any(o.strip().startswith('http://') for o in get('CC_CORS_ORIGINS').split(',') if o.strip()): problems.append('CC_CORS_ORIGINS must list https:// origins only')

@@ -159,7 +159,15 @@ def check_platform_storage(c, incoming_bytes=0):
         raise _quota('QUOTA_PLATFORM_STORAGE', 'Visuara has run out of storage for new media. Please contact us to free up space.')
 
 
+def check_storage_configured():
+    """Where API and runner share no disk, media cannot work without object storage, so say so before an upload is attempted."""
+    from . import storage
+    if os.getenv('CC_WORKER_MODE') == 'http' and not storage.enabled():
+        raise HTTPException(503, {'code': 'STORAGE_NOT_CONFIGURED', 'message': 'Video storage is not set up yet, so uploads are off. Please try again later.'})
+
+
 def check_storage(c, org_id, incoming_bytes):
+    check_storage_configured()
     check_platform_storage(c, incoming_bytes)
     used = org_usage(c, org_id)['storage_bytes']; cap = effective_storage_bytes(c, org_id)
     if used + incoming_bytes > cap:

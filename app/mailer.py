@@ -9,6 +9,8 @@ import json, os, smtplib, ssl, time
 from email.message import EmailMessage
 from pathlib import Path
 
+from .config import email_problem
+
 
 class MailError(RuntimeError):
     pass
@@ -20,10 +22,13 @@ def backend():
     return 'smtp' if os.getenv('CC_SMTP_HOST') else ''
 
 
-def enabled(): return backend() in ('smtp', 'outbox')
+def enabled(): return backend() == 'outbox' or (backend() == 'smtp' and not email_problem())
 
 
-def sender(): return os.getenv('CC_MAIL_FROM') or os.getenv('CC_SMTP_USER') or 'no-reply@localhost'
+def sender():
+    configured = os.getenv('CC_MAIL_FROM', '')
+    if configured and '<you@gmail.com>' not in configured: return configured      # the example's placeholder is never a real sender
+    return os.getenv('CC_SMTP_USER') or 'no-reply@localhost'
 
 
 def send(to, subject, text, html=None, outbox_dir=None):

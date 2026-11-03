@@ -4,8 +4,8 @@ Results from 3 November 2026, on the code in this repository. Nothing has been d
 
 | Check | Result |
 |---|---|
-| Backend tests, SQLite | 112 passed, 1 skipped (it needs PostgreSQL) |
-| Backend tests, PostgreSQL 16 | 113 passed |
+| Backend tests, PostgreSQL 16 | 114 passed |
+| Backend tests, SQLite | The last full run failed only in `tests/test_blob.py` (a fixture gap, since fixed). That file then gave 32 passed, 1 skipped (it needs PostgreSQL) |
 | `qa/browser_qa_web.py`, Chrome, sign-up to download | 12/12, no page errors |
 | `qa/vercel_rehearsal.py` ([log](evidence/vercel_rehearsal.json)) | 14/14, no CSP violations or page errors |
 
@@ -28,6 +28,7 @@ Read-only checks with the real credentials, using `qa/check_env.py`:
 Blob, email delivery and Vercel itself haven't been exercised for real.
 
 ## Bugs these runs found
+- **Start-up too strict:** unfinished email or Blob settings stopped the whole API, so Google sign-in failed too. Each now turns off only its own feature. The production image was run with those gaps: the API started, `/api/auth/providers` offered Google only, and `/auth/google/start` redirected to Google.
 - **Lost leases:** a render renewed its lease only while processing frames, so a slow download, plan or upload could lose it, and dashboard polling would then restart the job until it was given up. The lease now renews from its own thread (`main.keep_lease`).
 - **Backups:** the `schema_fingerprint` table was copied into logical backups, which broke restore and migration on PostgreSQL.
 

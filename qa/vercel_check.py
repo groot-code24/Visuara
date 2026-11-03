@@ -17,6 +17,9 @@ FIXES = {'database': 'DATABASE_URL: use the Neon connection string (pooled) and 
 def main(base):
     base = base.rstrip('/'); failures = 0
     http = httpx.Client(timeout=60, follow_redirects=False)
+    moved = http.get(base + '/')
+    if moved.is_redirect:       # a custom domain usually redirects one address to the other: check the one people end up on
+        base = str(httpx.URL(moved.headers['location']).copy_with(path='', query=None)).rstrip('/'); print(f'Checking {base}, where the site redirects\n')
 
     def check(name, fn):
         nonlocal failures
@@ -40,19 +43,22 @@ def main(base):
 
     def ready():
         r = http.get(base + '/api/health/ready')
+        assert r.headers.get('content-type', '').startswith('application/json'), f'/api/health/ready returned {r.status_code}: the API is not running'
         checks = r.json().get('checks', {})
         bad = [k for k in FIXES if checks.get(k) not in ('ok',)]
         assert not bad, '; '.join(f'{k} is {checks.get(k)}. Fix {FIXES[k]}' for k in bad)
         return 'database, Blob storage and FFmpeg'
 
     def mode():
-        h = http.get(base + '/api/health').json()
+        r = http.get(base + '/api/health'); assert r.headers.get('content-type', '').startswith('application/json'), f'/api/health returned {r.status_code}: the API is not running'
+        h = r.json()
         assert h.get('mode') == 'production', 'not running in production mode: the API should be built from Dockerfile.vercel'
         assert h.get('queue') == 'on_demand_runner', f'unexpected job queue: {h.get("queue")}'
         assert h['object_storage']['backend'] == 'vercel_blob', f'storage is {h["object_storage"]["backend"]}, expected vercel_blob'
 
     def providers():
-        p = http.get(base + '/api/auth/providers').json()
+        r = http.get(base + '/api/auth/providers'); assert r.headers.get('content-type', '').startswith('application/json'), f'/api/auth/providers returned {r.status_code}: the API is not running'
+        p = r.json()
         assert p.get('email'), 'magic links are off: set CC_SMTP_HOST, CC_SMTP_USER, CC_SMTP_PASSWORD and CC_MAIL_FROM, then redeploy'
         assert p.get('google'), 'Google sign-in is off: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then redeploy'
 
@@ -60,7 +66,7 @@ def main(base):
         r = http.get(base + '/auth/google/start')
         assert r.status_code == 303 and 'accounts.google.com' in r.headers.get('location', ''), f'/auth/google/start returned {r.status_code}'
         uri = dict(httpx.URL(r.headers['location']).params).get('redirect_uri')
-        assert uri == base + '/auth/google/callback', f'Google is being told to return to {uri}. Set CC_PUBLIC_URL={base} if you opened the site on another domain'
+        assert uri == base + '/auth/google/callback', f'Google is being told to return to {uri}. Set CC_PUBLIC_URL={base} in Vercel and redeploy'
         return f'add exactly this redirect URI to your Google client: {uri}'
 
     def guard():

@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import secrets, hashlib, hmac, os, json, shutil, subprocess, time, mimetypes, threading, socket, struct, base64, urllib.request, urllib.parse, logging, re
 
 ROOT = Path(__file__).resolve().parent.parent
-from .config import load_dotenv, apply_platform_defaults, check_production
+from .config import load_dotenv, apply_platform_defaults, check_production, setup_warnings
 load_dotenv()
 apply_platform_defaults()
 check_production()
@@ -238,6 +238,7 @@ def init_db(connect=None):
         if c.kind=='postgres':
             c.execute('CREATE TABLE IF NOT EXISTS schema_fingerprint(value TEXT NOT NULL)'); c.execute('DELETE FROM schema_fingerprint'); c.execute('INSERT INTO schema_fingerprint(value) VALUES(?)',(fingerprint,))
 init_db()
+for _warning in setup_warnings(): obs.warn(_warning)
 
 _RATE_BUCKETS = {}
 _RATE_LOCK = threading.Lock()
@@ -393,7 +394,7 @@ def _readiness():
     checks['database']='ok' if dbm.probe(DB,DB_SCHEMA) else 'unavailable'
     if storage.enabled():
         checks['object_storage']=storage.probe()
-    else: checks['object_storage']='local_disk'
+    else: checks['object_storage']='not_configured' if jobrunner.enabled() else 'local_disk'
     checks['ffmpeg']='ok' if tool_exists('ffmpeg') and tool_exists('ffprobe') else 'missing'
     try: checks['disk']='ok' if obs.disk_status()['free_gb']>=float(os.getenv('CC_MIN_FREE_DISK_GB','2')) else 'low'; checks['disk_free_gb']=obs.disk_status()['free_gb']
     except Exception: checks['disk']='unknown'

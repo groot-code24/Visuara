@@ -33,9 +33,12 @@ Your secrets stay in `.env.vercel`, which git ignores. **Never put real values i
 ```
 It reports the Blob token as missing until step 3. That is expected.
 
+With a custom domain, also add `CC_PUBLIC_URL` and `NEXT_PUBLIC_SITE_URL`, set to the exact address the site ends up on after any redirect, such as `https://www.your-domain.com`.
+
+Magic links and uploads are optional when the API starts: without them, Google sign-in still works, and the API logs what is off. At least one sign-in method must work, and security settings must be right, or the API refuses to start and Vercel's **Logs** says why.
+
 Optional settings:
 - `NEXT_PUBLIC_LEGAL_NAME` and `NEXT_PUBLIC_LEGAL_JURISDICTION`: your registered business name and governing law, for example `India`. The legal pages use them.
-- `CC_PUBLIC_URL` and `NEXT_PUBLIC_SITE_URL`: only with a custom domain. Otherwise your Vercel production address is used.
 
 ## 2. Push the code and create the project
 1. Check that `git config user.email` is the email on your GitHub and Vercel accounts. On the free plan, Vercel blocks deployments of a private repository's commits unless their author owns the Vercel account.
