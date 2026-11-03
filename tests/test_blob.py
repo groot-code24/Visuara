@@ -408,3 +408,20 @@ def test_uploads_say_storage_is_not_set_up_on_vercel(monkeypatch):
     assert e.value.status_code == 503 and e.value.detail['code'] == 'STORAGE_NOT_CONFIGURED'
     monkeypatch.setattr(storage, 'enabled', lambda: True)
     limits.check_storage_configured()
+
+
+def test_a_kick_falls_back_to_the_public_address_when_the_private_one_fails(monkeypatch):
+    tried = []
+
+    def post(url, **_):
+        tried.append(url)
+        if 'private' in url: raise httpx.ConnectError('no route')
+        raise httpx.ReadTimeout('running')
+
+    monkeypatch.setattr(httpx, 'post', post); monkeypatch.setenv('CC_SIGNING_KEY', 's' * 40)
+    monkeypatch.setenv('CC_WORKER_URL', 'https://private.example/'); monkeypatch.setenv('CC_PUBLIC_URL', 'https://www.example.com')
+    jobrunner.kick()
+    assert tried == ['https://private.example/api/internal/run-jobs', 'https://www.example.com/api/internal/run-jobs']
+    tried.clear(); monkeypatch.setenv('CC_WORKER_URL', 'https://www.example.com')
+    jobrunner.kick()
+    assert len(tried) == 1

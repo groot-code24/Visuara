@@ -4,9 +4,9 @@
     python qa/check_env.py --mail you@email.com  # also sends one test email, the way magic links are sent
 """
 import argparse, os, re, smtplib, ssl, sys
+from urllib.parse import urlparse
 from email.message import EmailMessage
 from pathlib import Path
-from urllib.parse import urlparse
 
 import httpx
 
@@ -71,6 +71,19 @@ def check_google(v):
         report('Google client ID and secret', False, error_name(e, secret))
 
 
+def check_google_redirect(v):
+    site = v.get('CC_PUBLIC_URL', '').rstrip('/')
+    if not site or not v.get('GOOGLE_CLIENT_ID'): return
+    uri = f'{site}/auth/google/callback'
+    try:   # opens Google's consent address without signing in: Google rejects a return address it does not know
+        r = httpx.get('https://accounts.google.com/o/oauth2/v2/auth', follow_redirects=True, timeout=30, headers={'User-Agent': 'Mozilla/5.0'},
+                      params={'client_id': v['GOOGLE_CLIENT_ID'], 'redirect_uri': uri, 'response_type': 'code', 'scope': 'openid email profile', 'state': 'check', 'nonce': 'check'})
+        ok = 'redirect_uri_mismatch' not in r.text and '/signin/oauth/error' not in str(r.url)
+        report('Google return address', ok, '' if ok else f'add exactly {uri} under Authorised redirect URIs in your Google OAuth client, wait 5 minutes, then check again')
+    except Exception as e:
+        report('Google return address', False, error_name(e))
+
+
 def smtp_session(v):
     ctx = ssl.create_default_context(); port = int(v.get('CC_SMTP_PORT') or 587)
     s = smtplib.SMTP(v['CC_SMTP_HOST'], port, timeout=20); s.starttls(context=ctx); s.login(v['CC_SMTP_USER'], v['CC_SMTP_PASSWORD'])
@@ -108,8 +121,8 @@ def main():
     a = ap.parse_args(); path = Path(a.file)
     if not path.exists(): sys.exit(f'{path} not found')
     v = read_env(path)
-    check_format(v); check_neon(v.get('DATABASE_URL', '')); check_google(v); check_mail(v, a.mail); check_blob(v.get('BLOB_READ_WRITE_TOKEN', ''))
-    print(f'\n{sum(results)}/{len(results)} ready' if not all(results) else f'\nAll {len(results)} checks passed. Import this file into Vercel.')
+    check_format(v); check_neon(v.get('DATABASE_URL', '')); check_google(v); check_google_redirect(v); check_mail(v, a.mail); check_blob(v.get('BLOB_READ_WRITE_TOKEN', ''))
+    print(f'\n{sum(results)}/{len(results)} ready' if not all(results) else f'\nAll {len(results)} checks passed. Vercel does not read this file: import it under Settings > Environment Variables, for Production, then deploy.')
     sys.exit(0 if all(results) else 1)
 
 

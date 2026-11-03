@@ -29,20 +29,23 @@ def authorised(header):
     return bool(os.getenv('CC_SIGNING_KEY')) and hmac.compare_digest(header or '', f'Bearer {secret()}')
 
 
-def url():
-    # CC_WORKER_URL is the private runner service's address (a Vercel service binding).
-    base = os.getenv('CC_WORKER_URL') or os.getenv('CC_PUBLIC_URL') or ''
-    return base.rstrip('/') + '/api/internal/run-jobs'
+def urls():
+    # CC_WORKER_URL is the private runner service's address (a Vercel service binding); the public site reaches the API, which can also run jobs.
+    bases = dict.fromkeys(b.rstrip('/') for b in (os.getenv('CC_WORKER_URL'), os.getenv('CC_PUBLIC_URL')) if b)
+    return [b + '/api/internal/run-jobs' for b in bases]
 
 
 def kick():
     """Start the runner. The request keeps running after this side stops listening, so the wait only covers delivery."""
-    try:
-        httpx.post(url(), headers={'Authorization': f'Bearer {secret()}'}, timeout=httpx.Timeout(5.0, read=float(os.getenv('CC_RUNNER_KICK_WAIT', '1'))))
-    except httpx.TimeoutException:
-        pass
-    except Exception as e:
-        obs.warn('job runner could not be started', error=type(e).__name__)
+    for target in urls():
+        try:
+            r = httpx.post(target, headers={'Authorization': f'Bearer {secret()}'}, timeout=httpx.Timeout(5.0, read=float(os.getenv('CC_RUNNER_KICK_WAIT', '1'))))
+            if r.status_code < 400: return
+            obs.warn('job runner refused the request', status=r.status_code)
+        except httpx.ReadTimeout:
+            return                                       # delivered, and now working
+        except Exception as e:
+            obs.warn('job runner could not be started', error=type(e).__name__)
 
 
 def nudge(c, org_id):

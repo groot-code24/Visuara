@@ -38,7 +38,7 @@ def main(base):
     def api():
         r = http.get(base + '/api/health/live')
         assert r.status_code == 200 and r.headers.get('content-type', '').startswith('application/json'), (
-            f'/api is not reaching the backend (status {r.status_code}). If this is 500, open Vercel > Logs: the API lists any missing setting when it starts. '
+            f'/api is not reaching the backend (status {r.status_code}). If this is 500, open Vercel > Logs: the API lists any missing setting when it starts. If it says DATABASE_URL is not set, your settings are not in Vercel: import .env.vercel for Production, then deploy again. '
             'If the page is HTML, the project framework is not set to Services.')
 
     def ready():

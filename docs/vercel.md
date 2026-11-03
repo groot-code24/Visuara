@@ -11,7 +11,7 @@ browser ──► your-project.vercel.app
 ```
 
 ## 1. Finish `.env.vercel`
-Your secrets stay in `.env.vercel`, which git ignores. **Never put real values in any other file.**
+Your secrets stay in `.env.vercel`, which git ignores. **Never put real values in any other file. Vercel never reads this file by itself:** step 5 is what gives Vercel your settings.
 
 | Setting | Where it comes from | Needed for |
 |---|---|---|
@@ -63,8 +63,9 @@ In [Google Cloud Credentials](https://console.cloud.google.com/apis/credentials)
 3. **Publish the app.** While it stays in Testing, only the test users you list can sign in.
 
 ## 5. Import your secrets and redeploy
-1. Open **Settings → Environment Variables → Import .env**, select **Production**, and upload `.env.vercel`.
-2. Open **Deployments**, then **⋯ → Redeploy** on the latest one.
+1. Open **Settings → Environment Variables → Import .env**, select **Production**, and upload `.env.vercel`. If a name already exists, such as `BLOB_READ_WRITE_TOKEN` from step 3, replace it or leave that one out.
+2. Check the page lists `DATABASE_URL`, `CC_SIGNING_KEY` and `GOOGLE_CLIENT_ID` for Production.
+3. Open **Deployments**, then **⋯ → Redeploy** on the latest one. Changes never reach a deployment that already exists.
 
 ## 6. Check it
 ```powershell
@@ -103,6 +104,9 @@ Vercel limits the free plan to personal, non-commercial use. It's right for buil
 2. Update `.env.vercel` and Vercel's environment variables, then redeploy.
 
 Removing the old value from git history doesn't help on its own, because anyone could already have copied it. The commit hook in `.githooks/pre-commit` exists to stop this happening again.
+
+## If sign-in says it can't reach the service
+Open **Logs** and filter to `/api/auth/providers`. A line saying `Refusing to start` lists exactly what's wrong. If it says `DATABASE_URL is not set`, Vercel doesn't have your settings: repeat step 5.
 
 ## What could still go wrong on real Vercel
 `qa/vercel_rehearsal.py` ran the same containers locally under the same limits, with local stand-ins for Blob and email. Only a real deployment can settle these. Vercel lists Services and the Container runtime as **beta**.
