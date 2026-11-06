@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Doto, Funnel_Display, Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Preloader } from '@/components/preloader';
@@ -24,7 +25,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: '#ffffff' };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// Every page renders per request: the Content-Security-Policy nonce (proxy.ts) is new each time, and a page prerendered
+// at build time could not carry it. Reading the request headers is what makes Next.js render dynamically.
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  await headers();
   return (
     <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable} ${dots.variable}`}>
       <body className="min-h-screen font-sans"><Preloader />{children}</body>

@@ -1,0 +1,481 @@
+{
+ "measured_at": "2026-11-05 13:29:25",
+ "footage": "synthetic (benchmark/fixtures_cuts.py)",
+ "seeds": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12
+ ],
+ "tolerance_frames": 2,
+ "config": {
+  "cut_gain_normalise": 1,
+  "cut_threshold": 0.35,
+  "gradual_ratio": 0.5,
+  "gradual_spread": 0.4,
+  "min_scene_seconds": 1.0,
+  "sample_seconds": 0.25
+ },
+ "transitions": 36,
+ "precision": 1.0,
+ "recall": 1.0,
+ "f1": 1.0,
+ "false_per_minute": 0.0,
+ "false_by_distractor": {},
+ "recall_by_type": {
+  "cut": 1.0,
+  "cut_same_place": 1.0,
+  "dissolve": 1.0,
+  "fade": 1.0
+ },
+ "count_by_type": {
+  "cut": 9,
+  "cut_same_place": 9,
+  "dissolve": 9,
+  "fade": 9
+ },
+ "hard_cut_error_frames_median": 0,
+ "seconds_per_video_second": 0.02,
+ "clips": [
+  {
+   "seed": 1,
+   "transitions": [
+    [
+     "cut_same_place",
+     65,
+     65
+    ],
+    [
+     "dissolve",
+     115,
+     129
+    ],
+    [
+     "fade",
+     170,
+     189
+    ]
+   ],
+   "found": [
+    [
+     2.6,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     4.76,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     7.08,
+     "GRADUAL_TRANSITION"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 2,
+   "transitions": [
+    [
+     "dissolve",
+     40,
+     64
+    ],
+    [
+     "fade",
+     95,
+     114
+    ],
+    [
+     "cut",
+     170,
+     170
+    ]
+   ],
+   "found": [
+    [
+     1.88,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     4.0,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     6.8,
+     "HISTOGRAM_CUT"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 3,
+   "transitions": [
+    [
+     "fade",
+     55,
+     74
+    ],
+    [
+     "cut",
+     130,
+     130
+    ],
+    [
+     "cut_same_place",
+     195,
+     195
+    ]
+   ],
+   "found": [
+    [
+     2.52,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     5.2,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     7.8,
+     "HISTOGRAM_CUT"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 4,
+   "transitions": [
+    [
+     "cut",
+     65,
+     65
+    ],
+    [
+     "cut_same_place",
+     130,
+     130
+    ],
+    [
+     "dissolve",
+     170,
+     194
+    ]
+   ],
+   "found": [
+    [
+     2.6,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     5.2,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     6.84,
+     "GRADUAL_TRANSITION"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 5,
+   "transitions": [
+    [
+     "cut_same_place",
+     65,
+     65
+    ],
+    [
+     "dissolve",
+     115,
+     129
+    ],
+    [
+     "fade",
+     170,
+     189
+    ]
+   ],
+   "found": [
+    [
+     2.6,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     4.6,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     6.92,
+     "GRADUAL_TRANSITION"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 6,
+   "transitions": [
+    [
+     "dissolve",
+     40,
+     64
+    ],
+    [
+     "fade",
+     95,
+     114
+    ],
+    [
+     "cut",
+     170,
+     170
+    ]
+   ],
+   "found": [
+    [
+     1.64,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     4.08,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     6.8,
+     "HISTOGRAM_CUT"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 7,
+   "transitions": [
+    [
+     "fade",
+     55,
+     74
+    ],
+    [
+     "cut",
+     130,
+     130
+    ],
+    [
+     "cut_same_place",
+     195,
+     195
+    ]
+   ],
+   "found": [
+    [
+     2.4,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     5.2,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     7.8,
+     "HISTOGRAM_CUT"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 8,
+   "transitions": [
+    [
+     "cut",
+     65,
+     65
+    ],
+    [
+     "cut_same_place",
+     130,
+     130
+    ],
+    [
+     "dissolve",
+     170,
+     194
+    ]
+   ],
+   "found": [
+    [
+     2.6,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     5.2,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     6.96,
+     "GRADUAL_TRANSITION"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 9,
+   "transitions": [
+    [
+     "cut_same_place",
+     65,
+     65
+    ],
+    [
+     "dissolve",
+     115,
+     129
+    ],
+    [
+     "fade",
+     170,
+     189
+    ]
+   ],
+   "found": [
+    [
+     2.6,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     4.72,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     6.96,
+     "GRADUAL_TRANSITION"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 10,
+   "transitions": [
+    [
+     "dissolve",
+     40,
+     64
+    ],
+    [
+     "fade",
+     95,
+     114
+    ],
+    [
+     "cut",
+     170,
+     170
+    ]
+   ],
+   "found": [
+    [
+     1.84,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     4.08,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     6.8,
+     "HISTOGRAM_CUT"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 11,
+   "transitions": [
+    [
+     "fade",
+     55,
+     74
+    ],
+    [
+     "cut",
+     130,
+     130
+    ],
+    [
+     "cut_same_place",
+     195,
+     195
+    ]
+   ],
+   "found": [
+    [
+     2.52,
+     "GRADUAL_TRANSITION"
+    ],
+    [
+     5.2,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     7.8,
+     "HISTOGRAM_CUT"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  },
+  {
+   "seed": 12,
+   "transitions": [
+    [
+     "cut",
+     65,
+     65
+    ],
+    [
+     "cut_same_place",
+     130,
+     130
+    ],
+    [
+     "dissolve",
+     170,
+     194
+    ]
+   ],
+   "found": [
+    [
+     2.6,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     5.2,
+     "HISTOGRAM_CUT"
+    ],
+    [
+     6.8,
+     "GRADUAL_TRANSITION"
+    ]
+   ],
+   "false": [],
+   "missed": []
+  }
+ ]
+}

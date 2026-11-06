@@ -1,0 +1,62 @@
+[
+  {
+    "step": "landing and pricing pages",
+    "ok": true,
+    "seconds": 6.8
+  },
+  {
+    "step": "dashboard refuses unauthenticated and forged sessions",
+    "ok": true,
+    "seconds": 2.1
+  },
+  {
+    "step": "sign-up by emailed code and onboarding",
+    "ok": true,
+    "seconds": 3.0
+  },
+  {
+    "step": "sign-in again by magic link (explicit click, single use)",
+    "ok": true,
+    "seconds": 2.7
+  },
+  {
+    "step": "add two products and two videos through the UI",
+    "ok": true,
+    "seconds": 3.3
+  },
+  {
+    "step": "decision engine: which product fits where",
+    "ok": true,
+    "seconds": 39.2
+  },
+  {
+    "step": "placement: quality check, approval, render, download",
+    "ok": true,
+    "seconds": 18.9
+  },
+  {
+    "step": "settings: plan usage and the Free plan seat limit",
+    "ok": true,
+    "seconds": 1.2
+  },
+  {
+    "step": "mobile layout (390 px)",
+    "ok": true,
+    "seconds": 1.8
+  },
+  {
+    "step": "hero is pure white and fits 320 to 1440 px",
+    "ok": true,
+    "seconds": 7.0
+  },
+  {
+    "step": "Google sign-in through the proxy: onboarding, dashboard, returning, cancelled, forged",
+    "ok": true,
+    "seconds": 2.9
+  },
+  {
+    "step": "no page errors",
+    "ok": true,
+    "errors": []
+  }
+]

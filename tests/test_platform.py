@@ -205,6 +205,26 @@ def test_operator_metrics_need_a_token(manual, monkeypatch):
     assert manual.get('/api/ops/metrics', headers={'Authorization': 'Bearer wrong'}).status_code == 401
     m = manual.get('/api/ops/metrics', headers={'Authorization': 'Bearer ' + 'x' * 32}).json()
     assert m['organizations'] == 1 and 'queue' in m and 'disk' in m
+    assert m['ledger'] == {'unbalanced_transactions': 0, 'balanced': True} and m['payments_24h']['needs_attention'] == 0
+    assert m['analyses'] == {'queued': 0, 'running': 0, 'finished_24h': 0, 'failed_24h': 0}
+
+
+def test_the_monitor_alerts_on_an_unbalanced_ledger_and_payments_that_need_a_person(monkeypatch):
+    from ops import monitor
+    healthy = {'queue': {'depth': 0, 'oldest_queued_age_seconds': None}, 'jobs_24h': {'finished': 0, 'failure_rate': 0}, 'workers': {'alive': 1},
+               'disk': {'free_gb': 50}, 'ledger': {'balanced': True, 'unbalanced_transactions': 0}, 'payments_24h': {'needs_attention': 0},
+               'analyses': {'finished_24h': 10, 'failed_24h': 1}}
+    answers = {'/api/health/live': (200, {}), '/api/health/ready': (200, {})}
+    def fake_get(url, token=None):
+        path = url.split('example.test', 1)[1]
+        return answers.get(path, (200, metrics))
+    monkeypatch.setattr(monitor, 'get', fake_get)
+    metrics = healthy
+    assert monitor.check('https://example.test', 't' * 32) == []
+    metrics = dict(healthy, ledger={'balanced': False, 'unbalanced_transactions': 2}, payments_24h={'needs_attention': 1},
+                   analyses={'finished_24h': 10, 'failed_24h': 6})
+    alerts = monitor.check('https://example.test', 't' * 32)
+    assert any('unbalanced' in a for a in alerts) and any('payment event' in a for a in alerts) and any('analysis failure' in a for a in alerts)
 
 
 def test_worker_wake_file_and_fair_claiming(manual):
@@ -336,13 +356,97 @@ def test_log_redaction():
     for secret in ('abc.def', 'tok123', '123456', 'alice@example.com', 'deadbeef'): assert secret not in line
 
 
+def test_logs_never_contain_credentials(monkeypatch):
+    """D-SEC-03: connection-string passwords with any characters, bearer tokens, the configured secrets themselves,
+    and structured fields in the JSON format (production) are redacted."""
+    import logging
+    key = 'k3y-' + 'Z' * 40
+    monkeypatch.setenv('CC_SIGNING_KEY', key)
+    monkeypatch.setenv('GOOGLE_CLIENT_SECRET', 'GOCSPX-' + 'q' * 24)
+    pw = 'Pa!ss%40w0rd*x'                     # built in pieces so qa/secret_scan.py never sees a whole credential here
+    monkeypatch.setenv('DATABASE_URL', 'postgresql://owner:' + pw + '@ep-1.eu.aws.neon.tech/db?sslmode=require')
+    text = ('connection to postgresql://owner:' + pw + '@ep-1.eu.aws.neon.tech/db failed; '
+            f'Authorization: Bearer abc.DEF-ghi_123; key {key}; client secret {"GOCSPX-" + "q" * 24}; bare Pa!ss%40w0rd*x')
+    line = obs.redact(text)
+    for secret in ('Pa!ss', 'w0rd', 'abc.DEF-ghi_123', key, 'GOCSPX-' + 'q' * 24): assert secret not in line, secret
+    assert 'ep-1.eu.aws.neon.tech' in line            # the host stays, so the log is still useful
+    rec = logging.LogRecord('cc', logging.ERROR, __file__, 1, 'failed', None, None)
+    rec.fields = {'reason': 'postgresql://owner:' + pw + '@host/db', 'attempt': 2}
+    out = obs._JsonFormatter().format(rec)
+    assert 'Pa!ss' not in out and json.loads(out)['attempt'] == 2
+
+
+def test_secret_scanner_scans_a_directory_it_is_given(tmp_path):
+    """D-QA-03: a directory argument used to be skipped, reporting '0 files, 0 findings' and exit 0."""
+    import subprocess, sys
+    (tmp_path / 'nested').mkdir()
+    (tmp_path / 'nested' / 'notes.md').write_text('GOOGLE_CLIENT_SECRET=GOCSPX-' + 'a1B2c3D4e5F6g7H8i9J0k1L2\n', encoding='utf-8')
+    scanner = Path(__file__).resolve().parent.parent / 'qa' / 'secret_scan.py'
+    r = subprocess.run([sys.executable, str(scanner), str(tmp_path)], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 1 and 'google_client_secret' in r.stdout and '1 files' in r.stdout
+    assert 'GOCSPX' not in r.stdout                                       # the value itself is never printed
+    r = subprocess.run([sys.executable, str(scanner), str(tmp_path / 'missing')], capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0 and 'no such file' in r.stderr
+
+
+def test_a_line_break_in_a_name_cannot_break_an_email(tmp_path, monkeypatch):
+    """D-SEC-06: subjects include names people type; a newline used to raise ValueError (a 500) instead of sending."""
+    from email import message_from_bytes
+    from app import mailer
+    monkeypatch.setenv('CC_MAIL_BACKEND', 'outbox')
+    out = mailer.send('a@example.com', 'Ann\r\nBcc: victim@example.com invited you to Acme', 'body', outbox_dir=tmp_path)
+    msg = message_from_bytes(Path(out['file']).read_bytes())
+    assert msg['Subject'] == 'Ann Bcc: victim@example.com invited you to Acme' and msg['Bcc'] is None
+
+
+def test_smtp_never_sends_credentials_unencrypted(monkeypatch):
+    """D-SEC-04: a misspelt CC_SMTP_TLS used to fall through to plain SMTP, and production accepted 'none'."""
+    from app import mailer
+    from app.config import email_problem, production_problems
+    base = {'CC_SMTP_HOST': 'smtp.example.com', 'CC_SMTP_USER': 'u', 'CC_SMTP_PASSWORD': 'p'}
+    assert email_problem({**base, 'CC_SMTP_TLS': 'tls'}).startswith('CC_SMTP_TLS must be')
+    assert email_problem({**base, 'CC_SMTP_TLS': 'starttls'}) == '' and email_problem({**base, 'CC_SMTP_TLS': 'ssl'}) == ''
+    prod = {**base, 'CC_ENV': 'production', 'CC_MAIL_BACKEND': 'smtp', 'CC_SMTP_TLS': 'none'}
+    assert any('CC_SMTP_TLS=none' in p for p in production_problems(prod))
+    assert not any('CC_SMTP_TLS' in p for p in production_problems({**prod, 'CC_SMTP_TLS': 'starttls'}))
+    for k, v in {**base, 'CC_MAIL_BACKEND': 'smtp', 'CC_SMTP_TLS': 'tls'}.items(): monkeypatch.setenv(k, v)
+    opened = []
+    monkeypatch.setattr(mailer.smtplib, 'SMTP', lambda *a, **k: opened.append(a) or (_ for _ in ()).throw(AssertionError('connected')))
+    with pytest.raises(mailer.MailError): mailer.send('a@example.com', 's', 't')
+    assert opened == []                                 # refused before any connection
+
+
+def test_production_requires_an_encrypted_database_connection():
+    """D-SEC-05: without sslmode, libpq may connect unencrypted. Neon's own strings carry sslmode=require."""
+    from app.config import database_tls_problem, production_problems
+    neon = 'postgresql://owner:' + 'pw@ep-x-pooler.eu-central-1.aws.neon.tech/neondb'      # in pieces, as above
+    assert database_tls_problem(neon).startswith('DATABASE_URL must end with ?sslmode=require')
+    for ok in (neon + '?sslmode=require', neon + '?sslmode=verify-full&channel_binding=require', 'postgresql://cc:x@127.0.0.1:5433/db'):
+        assert database_tls_problem(ok) == '', ok
+    assert database_tls_problem(neon + '?sslmode=prefer') and database_tls_problem(neon + '?sslmode=disable')
+    assert any('sslmode' in p for p in production_problems({'CC_ENV': 'production', 'DATABASE_URL': neon}))
+    assert not any('sslmode' in p for p in production_problems({'CC_ENV': 'production', 'DATABASE_URL': neon + '?sslmode=require'}))
+
+
+def test_production_without_a_database_refuses_to_start(tmp_path):
+    """The whole start-up path, as Vercel runs it: no DATABASE_URL in production stops the process before it serves
+    anything, and no SQLite file is created as a fallback."""
+    import subprocess, sys
+    env = {k: v for k, v in os.environ.items() if k not in ('DATABASE_URL', 'CC_DATABASE_URL', 'CC_TEST_DATABASE_URL')}
+    env.update(CC_ENV='production', CC_DOTENV='0', CC_DATA_DIR=str(tmp_path), PYTHONPATH=str(Path(__file__).resolve().parent.parent))
+    r = subprocess.run([sys.executable, '-c', 'import app.main'], env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode != 0
+    assert 'DATABASE_URL is not set' in r.stderr
+    assert not list(tmp_path.rglob('*.sqlite3'))
+
+
 def test_production_refuses_development_stand_ins():
     from app.config import production_problems
     dev = production_problems({'CC_ENV': 'production', 'CC_MAIL_BACKEND': 'outbox', 'CC_PUBLIC_URL': 'http://x', 'CC_CORS_ORIGINS': 'http://app.example.com'})
     joined = ' '.join(dev)
     for needle in ('DATABASE_URL', 'CC_S3_BUCKET', 'outbox', 'CC_SIGNING_KEY', 'CC_SECURE_COOKIES', 'CC_PUBLIC_URL', 'CC_CORS_ORIGINS', 'CC_INLINE_WORKER'):
         assert needle in joined, needle
-    good = {'DATABASE_URL': 'postgresql://u:p@ep-x.neon.tech/db', 'CC_S3_BUCKET': 'b', 'CC_SMTP_HOST': 'smtp.resend.com', 'CC_SIGNING_KEY': 'k' * 40,
+    good = {'DATABASE_URL': 'postgresql://u:p@ep-x.neon.tech/db?sslmode=require', 'CC_S3_BUCKET': 'b', 'CC_SMTP_HOST': 'smtp.resend.com', 'CC_SIGNING_KEY': 'k' * 40,
             'CC_SECURE_COOKIES': '1', 'CC_PUBLIC_URL': 'https://api.example.com', 'CC_APP_URL': 'https://app.example.com',
             'CC_CORS_ORIGINS': 'https://app.example.com', 'CC_INLINE_WORKER': '0'}
     assert production_problems(good) == []
@@ -357,8 +461,12 @@ def test_secret_scanner_detects_credentials_and_allows_placeholders(tmp_path):
     scan = importlib.util.module_from_spec(spec); spec.loader.exec_module(scan)
     fake = ('AWS_ACCESS_KEY_ID=AKIA' + 'ABCDEFGHIJKLMNOP\n' + 'GOOGLE_CLIENT_SECRET=GOCSPX-' + 'a1B2c3D4e5F6g7H8i9J0k1L2\n'
             + 'DATABASE_URL=postgresql://neondb_owner:' + 'npg_X9y8Z7w6V5@ep-cool-1.eu-central-1.aws.neon.tech/neondb\n')
-    kinds = {k for _, k, _ in scan.scan_text('x.env', fake)}
+    hits = scan.scan_text('x.env', fake)
+    kinds = {k for _, k in hits}
     assert {'aws_access_key', 'google_client_secret', 'postgres_url_with_password'} <= kinds
+    # Only the file, line and kind are reported: no fragment of any value.
+    assert {w for w, _ in hits} <= {'x.env:1', 'x.env:2', 'x.env:3'}
+    assert not any(part in repr(hits) for part in ('AKIA', 'GOCSPX', 'npg_', 'neondb_owner'))
     ok = 'DATABASE_URL=postgresql://USER:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/neondb\nCC_SIGNING_KEY=change-me-to-a-long-random-secret\nDATABASE_URL: postgresql://cc:cc-local-only@postgres:5432/x'
     assert scan.scan_text('ok.env', ok) == []
 

@@ -1,0 +1,23 @@
+{
+ "measured_at": "2026-11-06 04:22:03",
+ "where": "production image, 1 pinned vCPU, 2 GB (docker --cpuset-cpus=0 --memory=2g), uvicorn 1 process",
+ "database": "SQLite (temporary)",
+ "users": 20,
+ "seconds": 60.2,
+ "requests": 3559,
+ "requests_per_second": 59.1,
+ "server_errors": 0,
+ "error_rate": 0.0,
+ "client_errors_by_endpoint": {},
+ "latency_ms": {
+  "p50": 314.0,
+  "p95": 541.5,
+  "p99": 663.2,
+  "max": 960.2
+ },
+ "thresholds": {
+  "max_error_rate": 0.01,
+  "max_p95_ms": 1500
+ },
+ "passed": true
+}

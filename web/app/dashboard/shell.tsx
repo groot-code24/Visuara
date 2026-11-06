@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useState } from 'react';
-import type { Me } from '@/lib/types';
+import type { Me, Org } from '@/lib/types';
 import { LogoMark } from '@/components/logo';
 import { ToastProvider } from '@/components/toast';
 import { cx } from '@/components/ui';
@@ -15,13 +15,22 @@ export const useMe = () => useContext(MeCtx)!;
 const RANK = { viewer: 0, editor: 1, manager: 2, admin: 3, owner: 4 } as const;
 export const can = (me: Me, role: keyof typeof RANK) => RANK[me.member_role] >= RANK[role];
 
-const NAV = [
+type NavItem = { href: string; label: string; icon: typeof IconHome; exact?: boolean; kinds?: string[]; admin?: boolean };
+const NAV: NavItem[] = [
   { href: '/dashboard', label: 'Overview', icon: IconHome, exact: true },
-  { href: '/dashboard/decide', label: 'New decision', icon: IconSpark },
-  { href: '/dashboard/decisions', label: 'Decisions', icon: IconTarget },
+  { href: '/dashboard/decide', label: 'New decision', icon: IconSpark, kinds: ['direct'] },
+  { href: '/dashboard/decisions', label: 'Decisions', icon: IconTarget, kinds: ['direct'] },
   { href: '/dashboard/library', label: 'Library', icon: IconBox },
+  { href: '/dashboard/analyses', label: 'Analyses', icon: IconSpark, kinds: ['direct', 'publisher'] },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: IconTarget, kinds: ['publisher'] },
+  { href: '/dashboard/marketplace', label: 'Marketplace', icon: IconTarget, kinds: ['brand', 'agency'] },
+  { href: '/dashboard/campaigns', label: 'Campaigns', icon: IconLayers, kinds: ['brand', 'agency'] },
+  { href: '/dashboard/requests', label: 'Placement requests', icon: IconLayers, kinds: ['brand', 'agency', 'publisher'] },
   { href: '/dashboard/placements', label: 'Placements', icon: IconLayers },
   { href: '/dashboard/renders', label: 'Renders', icon: IconDownload },
+  { href: '/dashboard/finance', label: 'Finance', icon: IconDownload, kinds: ['brand', 'agency', 'publisher'] },
+  { href: '/dashboard/organizations', label: 'Organizations', icon: IconSettings },
+  { href: '/dashboard/admin', label: 'Platform admin', icon: IconSettings, admin: true },
   { href: '/dashboard/settings', label: 'Settings', icon: IconSettings },
 ];
 
@@ -30,11 +39,27 @@ async function signOut() {
   window.location.assign('/login');
 }
 
+function OrgSwitcher() {
+  const me = useMe();
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  useEffect(() => { api<{ organizations: Org[] }>('/api/organizations').then((d) => setOrgs(d.organizations)).catch(() => {}); }, [me.org_id]);
+  if (orgs.length < 2) return null;
+  return (
+    <select aria-label="Active organization" value={me.org_id} className="mb-4 w-full rounded-xl border border-line bg-card px-3 py-2 text-sm"
+      onChange={async (e) => { await api('/api/organizations/switch', { json: { org_id: Number(e.target.value) } }).catch(() => {}); window.location.assign('/dashboard'); }}>
+      {orgs.map((o) => <option key={o.id} value={o.id}>{o.name} · {o.kind}</option>)}
+    </select>
+  );
+}
+
 function Nav({ onNavigate }: { onNavigate?: () => void }) {
   const path = usePathname();
+  const me = useMe();
+  const items = NAV.filter((n) => (!n.kinds || n.kinds.includes(me.org_kind)) && (!n.admin || me.platform_admin));
   return (
     <nav className="space-y-0.5">
-      {NAV.map(({ href, label, icon: Icon, exact }) => {
+      <OrgSwitcher />
+      {items.map(({ href, label, icon: Icon, exact }) => {
         const active = exact ? path === href : path.startsWith(href);
         return (
           <Link key={href} href={href} onClick={onNavigate}
@@ -56,7 +81,7 @@ function Account({ me }: { me: Me }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{me.name}</p>
-          <p className="truncate text-xs text-muted">{me.organization} · {me.plan_name}</p>
+          <p className="truncate text-xs text-muted">{me.organization} · {me.org_kind} · {me.plan_name} plan</p>
         </div>
         <button onClick={signOut} title="Sign out" aria-label="Sign out" className="rounded-lg p-1.5 text-muted hover:bg-soft hover:text-ink"><IconLogout size={17} /></button>
       </div>
@@ -65,9 +90,11 @@ function Account({ me }: { me: Me }) {
 }
 
 export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+  // The mobile menu remembers the page it was opened on, so navigating anywhere closes it (no effect needed).
   const path = usePathname();
-  useEffect(() => setOpen(false), [path]);
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === path;
+  const setOpen = (v: boolean) => setOpenOn(v ? path : null);
   return (
     <MeCtx.Provider value={me}>
       <ToastProvider>

@@ -4,17 +4,27 @@
 sign-in rate limits. The real passwordless flows (email code, magic link, Google) are exercised in test_auth.py,
 and `email_signin`/`signup` drive them end to end where a test needs the genuine path.
 """
-import hashlib, json, re, secrets, time
+import hashlib, json, os, re, secrets, time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import main
+from app import main, members
 from benchmark.fixtures import generate, product_image
 
 needs_media = pytest.mark.skipif(not (main.tool_exists('ffmpeg') and main.tool_exists('ffprobe') and main._has_cv2()),
                                  reason='FFmpeg, FFprobe and OpenCV are required')
+
+
+def _model_installed():
+    from app import detection
+    return (detection.models_dir() / detection.MODELS[detection.DEFAULT_MODEL]['file']).exists()
+
+
+# CI sets CC_REQUIRE_MODELS=1 after fetching the model, so there a missing model fails these tests instead of skipping them.
+needs_model = pytest.mark.skipif(not _model_installed() and os.getenv('CC_REQUIRE_MODELS') != '1',
+                                 reason='the object-detection model is not installed: python ops/fetch_models.py')
 
 
 class CSRSTestClient(TestClient):
@@ -51,6 +61,7 @@ def make_user(email, name='Owner', org='Acme', member_role='owner', org_id=None,
             org_id = c.execute('INSERT INTO organizations(name,plan) VALUES(?,?)', (org, plan)).lastrowid
         uid = c.execute("INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,'',?,'brand',?,?)",
                         (email.lower(), name, org_id, member_role)).lastrowid
+        members.sync_membership(c, uid)          # as sign-up does
         return dict(c.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone())
 
 

@@ -319,7 +319,7 @@ def analyse_video(did, v, products, creator, renew, ms, resume=None, save=None):
 def run(did, token, stop=None):
     with m.db() as c:
         d = dict(c.execute('SELECT * FROM decisions WHERE id=?', (did,)).fetchone())
-        creator = dict(c.execute('SELECT * FROM users WHERE id=?', (d['created_by'],)).fetchone())
+        creator = dict(c.execute('SELECT * FROM users WHERE id=?', (d['created_by'],)).fetchone()); creator['org_id'] = d['org_id']   # acts in the decision's organization
         pids, vids = json.loads(d['product_ids']), json.loads(d['video_ids'])
         prods = [dict(r) for r in c.execute(f'SELECT * FROM products WHERE org_id=? AND id IN ({",".join("?" * len(pids))})', (d['org_id'], *pids)).fetchall()]
         vrows = {r['id']: dict(r) for r in c.execute(f'SELECT * FROM videos WHERE org_id=? AND id IN ({",".join("?" * len(vids))})', (d['org_id'], *vids)).fetchall()}

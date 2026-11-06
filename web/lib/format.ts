@@ -41,7 +41,28 @@ export const ROLE_HELP: Record<string, string> = {
   viewer: 'Read-only',
 };
 
-/** Only same-site paths are allowed as post-sign-in destinations (no open redirects). */
+/**
+ * Only same-site paths are allowed as post-sign-in destinations (no open redirects).
+ * The path is resolved the way a browser resolves it: browsers drop tabs and newlines and treat `\` as `/`, so
+ * `/\t/evil.example` would otherwise become `//evil.example`. The resolved path is returned, never the input,
+ * and a path that resolves to `//…` (for example `/.//evil.example`) is refused.
+ */
 export function safeNext(next: string | undefined) {
-  return next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') ? next : '/dashboard';
+  const fallback = '/dashboard';
+  if (!next || !next.startsWith('/') || next.length > 2048) return fallback;
+  const base = 'https://visuara.invalid';
+  try {
+    const url = new URL(next, base);
+    if (url.origin !== base || url.pathname.startsWith('//')) return fallback;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return fallback;
+  }
 }
+
+export function money(minor: number | null | undefined, currency: string | null | undefined) {
+  if (minor == null || !currency) return '—';
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(minor / 100); }
+  catch { return `${(minor / 100).toFixed(2)} ${currency}`; }
+}
+export const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);

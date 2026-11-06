@@ -1,0 +1,17 @@
+PASS production settings accepted; database, Blob and FFmpeg ready first start 5.5s
+PASS database and email connections are encrypted 2 database connections, all over TLS; plain-text SMTP refused
+PASS a new instance starts without repeating schema setup new instance serving after 3.4s without repeating schema setup
+PASS job runner refuses outsiders; dashboard guarded; security headers 
+PASS Google sign-in starts with the right client, callback and PKCE 
+PASS magic link by email, onboarding, dashboard 
+PASS an image over the request limit gets a clear message 
+PASS browser uploads the video straight to Blob with the real SDK 
+PASS decision runs on the separate runner; preview through a signed link 
+PASS library thumbnails load through signed links 
+PASS runner killed mid-render: dashboard polling restarts it and the job completes claimed,lease_recovered,claimed,succeeded
+PASS finished video downloads through a signed link, with range requests outputs/placement_1_v1_job_1.mp4
+PASS a large video uploads in parts 36 MB in 5 parts
+PASS nothing depends on a writable disk outside /tmp 
+PASS no CSP violations or page errors [] []
+15/15 passed
+rehearsal exit 0

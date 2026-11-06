@@ -1,0 +1,59 @@
+
+> visuara-web@1.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.ts took 199ms
+- Experiments (use with caution):
+  · proxyTimeout: 120000
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.4s
+  Running TypeScript ...
+  Finished TypeScript in 5.6s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/12) ...
+  Generating static pages using 7 workers (3/12) 
+  Generating static pages using 7 workers (6/12) 
+  Generating static pages using 7 workers (9/12) 
+✓ Generating static pages using 7 workers (12/12) in 1854ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /dashboard
+├ ƒ /dashboard/admin
+├ ƒ /dashboard/analyses
+├ ƒ /dashboard/analyses/[id]
+├ ƒ /dashboard/campaigns
+├ ƒ /dashboard/campaigns/[id]
+├ ƒ /dashboard/decide
+├ ƒ /dashboard/decisions
+├ ƒ /dashboard/decisions/[id]
+├ ƒ /dashboard/finance
+├ ƒ /dashboard/inventory
+├ ƒ /dashboard/library
+├ ƒ /dashboard/marketplace
+├ ƒ /dashboard/organizations
+├ ƒ /dashboard/placements
+├ ƒ /dashboard/placements/[id]
+├ ƒ /dashboard/renders
+├ ƒ /dashboard/requests
+├ ƒ /dashboard/settings
+├ ƒ /login
+├ ○ /opengraph-image
+├ ƒ /pricing
+├ ƒ /privacy
+├ ○ /robots.txt
+├ ○ /sitemap.xml
+├ ƒ /terms
+├ ƒ /verify
+└ ƒ /welcome
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

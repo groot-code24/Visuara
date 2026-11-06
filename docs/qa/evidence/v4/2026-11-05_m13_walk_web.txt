@@ -1,0 +1,17 @@
+D:\context-commerce\qa\browser_qa_web.py:40: DeprecationWarning: connect() must be used as a context manager: with connect(...) as websocket: ...; alternatively, use websocket = connect(..., legacy=True) to connect directly
+  i = next(self.ids); self.ws.send(json.dumps({'id': i, 'method': method, 'params': params}))
+PASS landing and pricing pages
+PASS dashboard refuses unauthenticated and forged sessions
+PASS sign-up by emailed code and onboarding
+PASS sign-in again by magic link (explicit click, single use)
+PASS add two products and two videos through the UI
+PASS decision engine: which product fits where
+PASS placement: quality check, approval, render, download
+PASS settings: plan usage and the Free plan seat limit
+PASS mobile layout (390 px)
+PASS hero is pure white and fits 320 to 1440 px
+PASS Google sign-in through the proxy: onboarding, dashboard, returning, cancelled, forged
+PASS no page errors []
+12/12 passed; screenshots in C:\Users\palma\AppData\Local\Temp\claude\cf6914441a09214f\aaf58aa1-f01d-44e3-bc96-975f08770329\scratchpad\v4\final-web
+web exit 0
+ALL_DONE

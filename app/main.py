@@ -25,7 +25,7 @@ UPLOADS = DATA / 'uploads'; OUTPUTS = DATA / 'outputs'; FRAMES = DATA / 'frames'
 for p in (DATA, UPLOADS, OUTPUTS, FRAMES): p.mkdir(parents=True, exist_ok=True)
 DB = DATA / 'context_commerce.sqlite3'
 from . import lifecycle, renderers, media
-from . import db as dbm, storage, limits, obs, jobrunner
+from . import db as dbm, storage, limits, obs, jobrunner, outbox, analysis_versions, video_versions
 obs.configure_logging()
 from .compositor import RenderCancelled, render_plan
 from .validation import validate_plan
@@ -91,7 +91,7 @@ async def security_middleware(request: Request, call_next):
 if os.getenv('CC_CORS_ORIGINS'):
     from starlette.middleware.cors import CORSMiddleware
     app.add_middleware(CORSMiddleware,allow_origins=sorted(allowed_origins()),allow_credentials=True,allow_methods=['GET','POST','PUT','PATCH','DELETE'],
-                       allow_headers=['Content-Type','X-CSRF-Token','X-Request-ID'],expose_headers=['X-Request-ID','Content-Disposition'],max_age=600)
+                       allow_headers=['Content-Type','X-CSRF-Token','X-Request-ID','Idempotency-Key'],expose_headers=['X-Request-ID','Content-Disposition'],max_age=600)
 
 LEASE_SECONDS=int(os.getenv('CC_JOB_LEASE_SECONDS','120'))
 MAX_ANALYSIS_SECONDS=float(os.getenv('CC_MAX_ANALYSIS_SECONDS','60'))
@@ -139,6 +139,11 @@ def _worker_loop():
             if token=='retry': continue
             from . import decisions
             if decisions.run_next(stop=_WORKER_STOP):
+                idle=0.5; continue
+            from . import intelligence
+            if intelligence.run_next(stop=_WORKER_STOP):
+                idle=0.5; continue
+            if outbox.deliver():
                 idle=0.5; continue
             if time.time()-last_db_maint>maintenance.db_interval():   # piggybacks on a poll that already woke the database
                 maintenance.run_db_maintenance(); last_db_maint=time.time()
@@ -213,14 +218,16 @@ def db():
 def all_schemas():
     from .decisions import SCHEMA as DECISIONS_SCHEMA
     from .auth import SCHEMA as AUTH_SCHEMA
-    return SCHEMA, AUTH_SCHEMA, DECISIONS_SCHEMA
+    from . import migrations
+    return SCHEMA, AUTH_SCHEMA, DECISIONS_SCHEMA, migrations.ddl()
 
 def init_db(connect=None):
     """Create or migrate the schema (idempotent). `connect` targets another database, e.g. for migrations."""
     global _ID_TABLES
-    _, AUTH_SCHEMA, DECISIONS_SCHEMA = all_schemas()
-    _ID_TABLES=frozenset(dbm.id_tables(SCHEMA+DECISIONS_SCHEMA+AUTH_SCHEMA))
-    fingerprint=hashlib.sha256((SCHEMA+AUTH_SCHEMA+DECISIONS_SCHEMA+repr(_MIGRATIONS)+repr(_INDEXES)).encode()).hexdigest()
+    from . import migrations
+    _, AUTH_SCHEMA, DECISIONS_SCHEMA, MIGRATION_DDL = all_schemas()
+    _ID_TABLES=frozenset(dbm.id_tables(SCHEMA+DECISIONS_SCHEMA+AUTH_SCHEMA+MIGRATION_DDL))
+    fingerprint=hashlib.sha256((SCHEMA+AUTH_SCHEMA+DECISIONS_SCHEMA+repr(_MIGRATIONS)+repr(_INDEXES)+migrations.fingerprint()).encode()).hexdigest()
     with (connect or db)() as c:
         if c.kind=='postgres':
             # A new serverless instance starts often: when this exact schema is already applied, skip the DDL round trips.
@@ -235,6 +242,8 @@ def init_db(connect=None):
         # V10: every workspace has exactly one owner (the earliest member of workspaces created before member roles).
         c.execute("UPDATE users SET member_role='owner' WHERE id IN (SELECT MIN(id) FROM users GROUP BY org_id) AND org_id NOT IN (SELECT org_id FROM users WHERE member_role='owner')")
         for ddl in _INDEXES: c.execute(ddl)
+        # Everything above is the frozen baseline. Later changes are ordered, recorded migrations (app/migrations.py).
+        migrations.apply(c)
         if c.kind=='postgres':
             c.execute('CREATE TABLE IF NOT EXISTS schema_fingerprint(value TEXT NOT NULL)'); c.execute('DELETE FROM schema_fingerprint'); c.execute('INSERT INTO schema_fingerprint(value) VALUES(?)',(fingerprint,))
 init_db()
@@ -295,14 +304,31 @@ def current_user(request: Request):
     token=request.cookies.get('cc_session')
     if not token: raise HTTPException(401,'Please sign in')
     with db() as c:
-        row=c.execute('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',(hashlib.sha256(token.encode()).hexdigest(),int(time.time()))).fetchone()
+        row=c.execute('SELECT u.*, s.active_org_id AS session_org_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',(hashlib.sha256(token.encode()).hexdigest(),int(time.time()))).fetchone()
         if not row: raise HTTPException(401,'Session expired. Please sign in again.')
+        user=dict(row); user['default_org_id']=user['org_id']; user['platform_admin']=bool(user.get('platform_admin'))
+        ms=c.execute('SELECT m.org_id,m.member_role,m.status,o.kind FROM memberships m JOIN organizations o ON o.id=m.org_id WHERE m.user_id=?',(user['id'],)).fetchall()
+        session_org=user.pop('session_org_id')
+        # M15: an agency member may act in a client organization that granted the agency access (app/agencies.py)
+        delegated={}
+        if session_org and session_org not in {r['org_id'] for r in ms if r['status']=='ACTIVE'}:
+            from .agencies import delegated_orgs
+            delegated=delegated_orgs(c,user['id'])
+    # Phase 2: the request acts in the session's active organization, with the role of that membership.
+    active={r['org_id']:r for r in ms if r['status']=='ACTIVE' and not (r['org_id']==user['org_id'] and user.get('suspended_at'))}
+    chosen=next((active[o] for o in (session_org,user['org_id']) if o in active),None) or (active[min(active)] if active else None)
+    if session_org in delegated and not user.get('suspended_at'):
+        d=delegated[session_org]
+        user.update(org_id=d['org_id'],member_role=d['member_role'],org_kind=d['kind'],suspended_at=None,delegated_from=d['via_agency'])
+    elif chosen: user.update(org_id=chosen['org_id'],member_role=chosen['member_role'],org_kind=chosen['kind'],suspended_at=None)
+    elif ms: user['suspended_at']=user.get('suspended_at') or 'no active membership'; user['org_kind']='direct'
+    else: user['org_kind']='direct'     # an account created outside the sign-up path, before its membership row
     from .members import authorize
-    user=dict(row); authorize(user,request)
+    authorize(user,request)
     return user
 def owned(c, table, item_id, org_id):
     # Table names are internal constants only.
-    row=c.execute(f'SELECT * FROM {table} WHERE id=? AND org_id=?',(item_id,org_id)).fetchone()
+    row=c.execute(f'SELECT * FROM {table} WHERE id=? AND org_id=?'+(' AND deleted_at IS NULL' if table=='videos' else ''),(item_id,org_id)).fetchone()
     if not row: raise HTTPException(404,'Resource not found')
     return dict(row)
 
@@ -323,14 +349,10 @@ def probe(path):
     return duration,width,height,fps
 
 def _ollama_describe(image_path):
-    model=os.getenv('CC_VISION_MODEL','').strip()
-    if not model: return None
-    try:
-        payload={'model':model,'prompt':'Describe the visible scene in one concise sentence for a video product-placement editor. Mention visible objects and whether a placement area appears unobstructed. Do not infer identities.','images':[base64.b64encode(Path(image_path).read_bytes()).decode()],'stream':False}
-        req=urllib.request.Request(os.getenv('CC_OLLAMA_URL','http://127.0.0.1:11434/api/generate'),data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'},method='POST')
-        with urllib.request.urlopen(req,timeout=float(os.getenv('CC_VISION_TIMEOUT','20'))) as r: data=json.loads(r.read().decode())
-        return str(data.get('response','')).strip()[:500] or None
-    except Exception: return None
+    """A one-sentence description of a frame from the configured vision model, or None (see app/vision.py)."""
+    from . import vision
+    res=vision.describe(image_path)
+    return res.description if res.status=='AVAILABLE' else None
 
 def extract_frames(video_id, path, duration):
     if not tool_exists('ffmpeg'): raise RuntimeError('FFmpeg is required for scene analysis and rendering')
@@ -420,7 +442,7 @@ def health_ready():
 def health():
     body,_=_readiness(); db_ok=body['checks']['database']=='ok'
     d=dbm.describe(); st=storage.describe()   # public endpoint: no hostnames, bucket names or credentials
-    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'on_demand_runner' if jobrunner.enabled() else 'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_approval_min_0.75','decision_engine':__import__('app.decisions',fromlist=['x']).ENGINE_VERSION,'rights_versioning':'placement_version_bound','mode':'production' if os.getenv('CC_ENV')=='production' else 'development','workers_alive':'on_demand' if jobrunner.enabled() else obs.worker_status()['alive'] if os.getenv('CC_INLINE_WORKER','1')!='1' else 'inline'}
+    return {'status':'ok' if db_ok else 'degraded','database':{'engine':d['engine'],'neon':d.get('neon',False),'reachable':db_ok},'ffmpeg':tool_exists('ffmpeg'),'ffprobe':tool_exists('ffprobe'),'opencv':_has_cv2(),'vision_model':os.getenv('CC_VISION_MODEL') or None,'object_detection':__import__('app.detection',fromlist=['x']).installed(),'malware_scanning':'clamav' if os.getenv('CC_CLAMAV_HOST') else 'not_configured','object_storage':{k:st[k] for k in ('backend','private') if k in st} | ({'presigned_ttl_seconds':st['presigned_ttl_seconds']} if 'presigned_ttl_seconds' in st else {}),'queue':'on_demand_runner' if jobrunner.enabled() else 'persistent_db_queue' if os.getenv('CC_INLINE_WORKER','1')=='1' else 'external_worker_required','perspective_tracking':'opencv_optical_flow_homography' if _has_cv2() else 'unavailable','renderers_available':[p['id'] for p in renderers.capabilities() if p.get('available')],'quality_policy':__import__('app.quality',fromlist=['x']).POLICY_VERSION,'visual_fit_gate':'automated_quality_check_plus_human_approval_min_0.75','decision_engine':__import__('app.decisions',fromlist=['x']).ENGINE_VERSION,'rights_versioning':'placement_version_bound','mode':'production' if os.getenv('CC_ENV')=='production' else 'development','workers_alive':'on_demand' if jobrunner.enabled() else obs.worker_status()['alive'] if os.getenv('CC_INLINE_WORKER','1')!='1' else 'inline'}
 @app.post('/api/auth/logout')
 def logout(request:Request):
     token=request.cookies.get('cc_session')
@@ -431,7 +453,7 @@ def logout(request:Request):
 def me(request:Request):
     u=current_user(request)
     with db() as c: org=c.execute('SELECT name FROM organizations WHERE id=?',(u['org_id'],)).fetchone(); plan=limits.org_plan(c,u['org_id'])
-    return {**{k:u[k] for k in ('id','email','name','org_id','member_role')},'organization':org['name'] if org else None,'plan':plan,'plan_name':limits.PLANS[plan]['name']}
+    return {**{k:u[k] for k in ('id','email','name','org_id','member_role','org_kind','platform_admin','default_org_id')},'organization':org['name'] if org else None,'plan':plan,'plan_name':limits.PLANS[plan]['name']}
 
 @app.post('/api/products')
 def create_product(request:Request, name:str=Form(...), description:str=Form(''), category:str=Form('other'), image:UploadFile=File(...)):
@@ -460,7 +482,7 @@ def create_product(request:Request, name:str=Form(...), description:str=Form('')
     except Exception as e: path.unlink(missing_ok=True); raise HTTPException(400,f'Invalid product image: {str(e)[:120]}')
     storage.persist(path); storage.persist(derived)
     with db() as c:
-        cur=c.execute('INSERT INTO products(org_id,name,description,image_path,created_by,sha256,derived_path,asset_report,size_bytes,category) VALUES(?,?,?,?,?,?,?,?,?,?)',(u['org_id'],name.strip(),description.strip(),str(path),u['id'],hashlib.sha256(raw).hexdigest(),str(derived),json.dumps(report),len(raw)+derived.stat().st_size,category)); pid=cur.lastrowid; event(c,u,'product.created','product',pid,{'asset_warnings':[w['code'] for w in report['warnings']]})
+        cur=c.execute('INSERT INTO products(org_id,name,description,image_path,created_by,sha256,derived_path,asset_report,size_bytes,category) VALUES(?,?,?,?,?,?,?,?,?,?)',(u['org_id'],name.strip(),description.strip(),str(path),u['id'],hashlib.sha256(raw).hexdigest(),str(derived),json.dumps(report),len(raw)+derived.stat().st_size,category)); pid=cur.lastrowid; c.execute("INSERT INTO product_assets(org_id,product_id,version,kind,path,sha256,size_bytes,created_by) VALUES(?,?,1,'IMAGE',?,?,?,?)",(u['org_id'],pid,str(path),hashlib.sha256(raw).hexdigest(),len(raw),u['id'])); event(c,u,'product.created','product',pid,{'asset_warnings':[w['code'] for w in report['warnings']]})
     return {'id':pid,'name':name.strip(),'description':description.strip(),'category':category,'image_url':f'/api/products/{pid}/image','asset_report':report}
 @app.post('/api/products/{pid}/model')
 def upload_product_model(pid:int,request:Request,model:UploadFile=File(...)):
@@ -491,23 +513,44 @@ def product_image(pid:int,request:Request):
     return storage.response(p['image_path'])
 
 @app.post('/api/videos')
-def upload_video(request:Request, title:str=Form(...), license_confirmed:bool=Form(...), license_expires:Optional[str]=Form(None), video:UploadFile=File(...)):
+def upload_video(request:Request, title:str=Form(...), license_confirmed:bool=Form(...), license_expires:Optional[str]=Form(None), video:UploadFile=File(...), reject_duplicates:bool=Form(False)):
     u=current_user(request)
     if not license_confirmed: raise HTTPException(400,'Confirm that you own or are authorized to license this video')
     if video.content_type not in VIDEO_TYPES: raise HTTPException(415,'Supported formats: MP4, MOV, WebM')
     with db() as c: limits.check_daily_uploads(c,u['org_id'])
     path=UPLOADS/f'video_{secrets.token_hex(8)}_{safe_name(video.filename or "upload.mp4")}'
+    size=receive_upload(video,path)
+    return ingest_video(u,path,title,license_expires,size,reject_duplicates=reject_duplicates)
+
+def receive_upload(video, path):
+    """Stream an uploaded file to disk in 1 MB chunks (never the whole video in memory). Returns its size."""
     size=0
-    with open(path,'wb') as out:          # streamed to disk in 1 MB chunks: never the whole video in memory
+    with open(path,'wb') as out:
         while chunk:=video.file.read(1048576):
             size+=len(chunk)
             if size>limits.max_video_bytes(): out.close(); path.unlink(missing_ok=True); raise HTTPException(413,f'Video upload limit is {limits.max_video_bytes()//1048576} MB')
             out.write(chunk)
-    return ingest_video(u,path,title,license_expires,size)
+    return size
 
 VIDEO_TYPES=('video/mp4','video/quicktime','video/webm','application/octet-stream')
-def ingest_video(u, path, title, license_expires, size, persisted=False):
-    """Validate a received video file (malware scan, FFprobe metadata, limits, quotas) and record it."""
+def ingest_video(u, path, title, license_expires, size, persisted=False, reject_duplicates=False):
+    """Validate a received video file (malware scan, FFprobe metadata, limits, quotas) and record it as version 1."""
+    from . import videos as video_assets
+    duration,width,height,fps=validate_video_file(u,path,size,persisted)
+    content_sha256=video_versions.sha256_file(path); meta=video_assets.details(path)
+    try:
+        with db() as c: dup=video_assets.reject_duplicate(c,u['org_id'],content_sha256,reject_duplicates)
+    except HTTPException:
+        Path(path).unlink(missing_ok=True)
+        if persisted: storage.delete(str(path))
+        raise
+    if not persisted: storage.persist(path)
+    with db() as c:
+        cur=c.execute('INSERT INTO videos(org_id,title,source_path,duration,width,height,fps,license_confirmed,license_expires,created_by,size_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(u['org_id'],title.strip(),str(path),duration,width,height,fps,1,license_expires,u['id'],size)); vid=cur.lastrowid; video_versions.record_upload(c,vid,u['org_id'],u['id'],path,size,duration,width,height,fps,content_sha256,meta); event(c,u,'video.uploaded','video',vid,{'duplicate_of':dup} if dup else {})
+    return {'id':vid,'title':title,'duration':duration,'width':width,'height':height,'fps':fps,'analyzed':False,'content_sha256':content_sha256,'duplicate_of':dup,**meta}
+
+def validate_video_file(u, path, size, persisted=False):
+    """Malware scan, FFprobe metadata (the file's real contents) and plan limits. Deletes the file when it is refused."""
     try:
         with db() as c: limits.check_video_size(c,u['org_id'],size); limits.check_storage(c,u['org_id'],size); limits.check_daily_uploads(c,u['org_id'])
         scan=clamav_scan(path)
@@ -518,15 +561,12 @@ def ingest_video(u, path, title, license_expires, size, persisted=False):
         Path(path).unlink(missing_ok=True)
         if persisted: storage.delete(str(path))
         raise
-    if not persisted: storage.persist(path)
-    with db() as c:
-        cur=c.execute('INSERT INTO videos(org_id,title,source_path,duration,width,height,fps,license_confirmed,license_expires,created_by,size_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(u['org_id'],title.strip(),str(path),duration,width,height,fps,1,license_expires,u['id'],size)); vid=cur.lastrowid; event(c,u,'video.uploaded','video',vid,{'duration':duration,'bytes':size})
-    return {'id':vid,'title':title,'duration':duration,'width':width,'height':height,'fps':fps,'analyzed':False}
+    return duration,width,height,fps
 @app.get('/api/videos')
 def videos(request:Request):
     u=current_user(request)
     with db() as c:
-        rows=c.execute('SELECT id,title,duration,width,height,fps,analyzed,license_confirmed,license_expires,size_bytes,created_at FROM videos WHERE org_id=? ORDER BY id DESC',(u['org_id'],)).fetchall()
+        rows=c.execute('SELECT id,title,duration,width,height,fps,analyzed,license_confirmed,license_expires,size_bytes,current_version,created_at FROM videos WHERE org_id=? AND deleted_at IS NULL ORDER BY id DESC',(u['org_id'],)).fetchall()
         thumbs={r['video_id']:r['first_second'] for r in c.execute('SELECT video_id,MIN(second) AS first_second FROM frames WHERE video_id IN (SELECT id FROM videos WHERE org_id=?) GROUP BY video_id',(u['org_id'],)).fetchall()}
     return [dict(r,thumbnail_url=f'/api/videos/{r["id"]}/frames/{int(thumbs[r["id"]]*1000)}' if r['id'] in thumbs else None) for r in rows]
 @app.post('/api/videos/{vid}/analyze')
@@ -552,12 +592,18 @@ def frame(vid:int,ms:int,request:Request):
     return storage.response(r['image_path'],media_type='image/jpeg')
 
 def analyze_keyframes(v, u):
-    """Extract and store keyframes for a video (replacing earlier ones). Used by the API and the decision engine."""
-    frames=extract_frames(v['id'],storage.local(v['source_path']),v['duration'])
+    """Extract keyframes for a video. `frames` holds the latest result (read by the current API and decision engine);
+    each run also adds an immutable analysis version with its scenes (AD-4), so earlier results are kept."""
+    started=time.strftime('%Y-%m-%d %H:%M:%S',time.gmtime()); config={'vision_model':os.getenv('CC_VISION_MODEL') or None}
+    try: frames=extract_frames(v['id'],storage.local(v['source_path']),v['duration'])
+    except Exception as e:
+        with db() as c: analysis_versions.record_failed(c,v,u['id'],e,config=config,started_at=started)
+        raise
     with db() as c:
         c.execute('DELETE FROM frames WHERE video_id=?',(v['id'],))
         for sec,path,desc,score in frames: c.execute('INSERT INTO frames(video_id,second,image_path,description,score) VALUES(?,?,?,?,?)',(v['id'],sec,path,desc,score))
-        c.execute('UPDATE videos SET analyzed=1 WHERE id=?',(v['id'],)); event(c,u,'video.analyzed','video',v['id'],{'keyframes':len(frames)})
+        aid=analysis_versions.record_completed(c,v,frames,u['id'],config=config,started_at=started,model_versions={'vision':config['vision_model']} if config['vision_model'] else None)
+        c.execute('UPDATE videos SET analyzed=1 WHERE id=?',(v['id'],)); event(c,u,'video.analyzed','video',v['id'],{'keyframes':len(frames),'analysis_version_id':aid})
     return frames
 
 def _today(): return time.strftime('%Y-%m-%d')
@@ -920,6 +966,8 @@ def _render_job(j, job_id, token):
                 storage.delete(output); raise RenderCancelled('Job was cancelled before completion')
             now=dict(c.execute('SELECT * FROM placements WHERE id=?',(p['id'],)).fetchone())
             if now['version']==p['version'] and now['status']=='RENDERING': lifecycle.transition(c,now,'RENDERED',p['created_by'],details={'job_id':job_id})
+            from . import delivery
+            delivery.on_render_succeeded(c,job_id,str(output))     # a campaign placement: record the delivery and its evidence
             c.execute('INSERT INTO events(org_id,user_id,event_type,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',(j['org_id'],p['created_by'],'render.succeeded','job',job_id,json.dumps({'bytes':output.stat().st_size,'frames':info['frames_written'],'composited':info['frames_composited'],'renderer':j['renderer'],'product_psnr_db':val['product_psnr_db']})))
             c.execute('INSERT INTO queue_events(job_id,event_type,details) VALUES(?,?,?)',(job_id,'succeeded','{}'))
         obs.info('job succeeded',job=job_id,seconds=round(time.time()-started,1))
@@ -1014,16 +1062,19 @@ def download_link(jid:int,request:Request):
 @app.get('/api/media/{token}')
 def signed_media(token:str):
     data=_unsign(token)
-    if not data: raise HTTPException(403,'Invalid download link')
+    # Delivery links (delivery.py) are signed with the same key: accept only the render-download shape.
+    if not isinstance(data,dict) or set(data)!={'j','u','v','exp'}: raise HTTPException(403,'Invalid download link')
     if data['exp']<time.time(): raise _err(410,'LINK_EXPIRED','This download link has expired; request a new one')
     with db() as c:
-        row=c.execute('SELECT * FROM users WHERE id=? AND removed_at IS NULL AND suspended_at IS NULL',(data['u'],)).fetchone()
-        if not row: raise HTTPException(403,'Invalid download link')
+        j=c.execute('SELECT placement_version,org_id FROM jobs WHERE id=?',(data['j'],)).fetchone()
+        row=c.execute('SELECT * FROM users WHERE id=? AND removed_at IS NULL',(data['u'],)).fetchone()
+        ms=c.execute("SELECT member_role FROM memberships WHERE user_id=? AND org_id=? AND status='ACTIVE'",(data['u'],j['org_id'] if j else -1)).fetchone()
+        if not row or not ms or (row['suspended_at'] and row['org_id']==j['org_id']): raise HTTPException(403,'Invalid download link')
         from .members import can
-        if not can(dict(row),'manager'): raise HTTPException(403,'Invalid download link')
-        j=c.execute('SELECT placement_version FROM jobs WHERE id=?',(data['j'],)).fetchone()
+        row=dict(row,org_id=j['org_id'],member_role=ms['member_role'])     # the role in the job's organization
+        if not can(row,'manager'): raise HTTPException(403,'Invalid download link')
         if not j or j['placement_version']!=data['v']: raise _err(403,'SUPERSEDED_VERSION','This link was issued for an earlier placement version')
-    return _authorize_delivery(data['j'],dict(row),record=True)
+    return _authorize_delivery(data['j'],row,record=True)
 
 @app.get('/api/jobs/{jid}/download')
 def download(jid:int,request:Request):
@@ -1162,6 +1213,13 @@ app.include_router(decisions_router)
 from .auth import router as auth_router  # noqa: E402
 app.include_router(auth_router)
 from .members import router as members_router  # noqa: E402
+from .orgs import router as orgs_router  # noqa: E402
+app.include_router(orgs_router)
+from .videos import router as videos_router  # noqa: E402
+app.include_router(videos_router)
+from . import intelligence, inventory, profiles, catalogue, campaigns, commercial, delivery, programmatic, payments, agencies  # noqa: E402
+for _module in (intelligence, inventory, profiles, catalogue, campaigns, commercial, delivery, programmatic, payments, agencies): app.include_router(_module.router)
+delivery.register_consumers()
 app.include_router(members_router)
 from .uploads import router as uploads_router  # noqa: E402
 app.include_router(uploads_router)

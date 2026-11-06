@@ -127,6 +127,28 @@ def test_direct_upload_to_blob_end_to_end(blob, manual, tmp_path):
 
 
 @needs_media
+def test_a_new_version_uploads_straight_to_blob_too(blob, manual, tmp_path):
+    """M15: a new version of a video goes browser to storage like the first upload, so it is not limited by the 4.5 MB
+    request limit of a Vercel function."""
+    c = manual; owner(c)
+
+    def upload(raw, **extra):
+        r = c.post('/api/uploads/video', json={'title': 'Clip', 'filename': 'clip.mp4', 'content_type': 'video/mp4', 'size_bytes': len(raw), 'license_confirmed': True, **extra}).json()
+        assert httpx.put(blob.api_url, params={'pathname': r['pathname']}, content=raw,
+                         headers={'authorization': f"Bearer {r['client_token']}", 'x-content-type': 'video/mp4', 'x-vercel-blob-access': 'private'}).status_code == 200
+        return c.post(f"/api/uploads/{r['upload_id']}/complete")
+    vid = upload(Path(generate('static', 3, tmp_path / 'a')['path']).read_bytes()).json()['id']
+    done = upload(Path(generate('pan_zoom', 4, tmp_path / 'b')['path']).read_bytes(), video_id=vid)
+    assert done.status_code == 200, done.text
+    assert done.json()['id'] == vid and done.json()['version'] == 2
+    versions = c.get(f'/api/videos/{vid}/versions').json()
+    assert versions['current_version'] == 2 and [v['version'] for v in versions['versions']] == [1, 2]
+    assert len(c.get('/api/videos').json()) == 1                                           # a version, not a second video
+    other = c.post('/api/uploads/video', json={'title': 'x', 'filename': 'x.mp4', 'content_type': 'video/mp4', 'size_bytes': 10, 'license_confirmed': True, 'video_id': 999})
+    assert other.status_code == 404                                                        # only this organization's videos
+
+
+@needs_media
 def test_render_on_a_host_with_an_empty_disk_and_redirected_download(blob, manual, tmp_path):
     pl, _ = drive_to_approved(manual, tmp_path, 'static', 3)
     for d in ('uploads', 'frames', 'analyses'): shutil.rmtree(main.DATA / d, ignore_errors=True)
@@ -142,7 +164,7 @@ def test_render_on_a_host_with_an_empty_disk_and_redirected_download(blob, manua
 
 
 # ---------------------------------------------------------------- production settings
-BASE = {'CC_ENV': 'production', 'DATABASE_URL': 'postgresql://x', 'CC_SIGNING_KEY': 'k' * 40, 'CC_SECURE_COOKIES': '1', 'CC_INLINE_WORKER': '0',
+BASE = {'CC_ENV': 'production', 'DATABASE_URL': 'postgresql://x/db?sslmode=require', 'CC_SIGNING_KEY': 'k' * 40, 'CC_SECURE_COOKIES': '1', 'CC_INLINE_WORKER': '0',
         'CC_PUBLIC_URL': 'https://x.vercel.app', 'CC_MAIL_BACKEND': 'smtp', 'CC_SMTP_HOST': 'smtp.gmail.com', 'CC_SMTP_USER': 'a@gmail.com', 'CC_SMTP_PASSWORD': 'x'}
 
 
@@ -386,7 +408,7 @@ def test_platform_storage_ceiling_stops_uploads_and_renders_before_the_free_blob
 
 def test_unfinished_email_or_storage_turns_off_that_feature_and_not_the_whole_api(monkeypatch):
     from app import mailer
-    gmail_only = {'CC_ENV': 'production', 'DATABASE_URL': 'postgresql://x', 'CC_SIGNING_KEY': 'k' * 40, 'CC_SECURE_COOKIES': '1', 'CC_INLINE_WORKER': '0', 'CC_WORKER_MODE': 'http',
+    gmail_only = {'CC_ENV': 'production', 'DATABASE_URL': 'postgresql://x/db?sslmode=require', 'CC_SIGNING_KEY': 'k' * 40, 'CC_SECURE_COOKIES': '1', 'CC_INLINE_WORKER': '0', 'CC_WORKER_MODE': 'http',
                   'CC_PUBLIC_URL': 'https://www.example.com', 'CC_SMTP_HOST': 'smtp.gmail.com', 'CC_SMTP_USER': '', 'CC_SMTP_PASSWORD': '', 'CC_MAIL_FROM': 'Visuara <you@gmail.com>'}
     google = {'GOOGLE_CLIENT_ID': 'g', 'GOOGLE_CLIENT_SECRET': 's'}
     assert config.production_problems({**gmail_only, **google}) == []                                   # the API starts: Google works, so people can sign in

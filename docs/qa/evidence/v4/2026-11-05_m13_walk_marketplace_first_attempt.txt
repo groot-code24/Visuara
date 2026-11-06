@@ -1,0 +1,45 @@
+PASS every page has a per-request script nonce and no inline-script allowance
+PASS a new person signs up as a publisher and gets publisher navigation
+PASS publisher: analyses, analysis detail and inventory
+PASS publisher: approves the placement request
+PASS brand: marketplace, campaigns and the campaign page
+PASS brand: accepts the quote and sees the invoice
+PASS admin: marks the invoice paid; the ledger balances
+PASS publisher: starts production, quality check, approval, render, delivery
+PASS brand: accepts the delivery; organizations page
+FAIL publisher: a sold video cannot be deleted; another one can Timed out waiting for 'Check your email' | PAGE: http://localhost:13000/login | Welcome
+
+Sign in or create your account
+
+Too many authentication attempts. Try again in a minute.
+Continue with Google
+
+Development: Google sign-in needs your own OAuth client. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env, then restart the API.
+
+OR
+Email
+Continue with email
+
+We'll email you a magic link and a one-time code. No password needed.
+By continuing, you agree to our Terms and Privacy Policy.
+
+© Visuara · Terms · Privacy
+Traceback (most recent call last):
+  File "D:\context-commerce\qa\browser_qa_marketplace.py", line 245, in <module>
+    main()
+  File "D:\context-commerce\qa\browser_qa_marketplace.py", line 219, in main
+    step('publisher: a sold video cannot be deleted; another one can', publisher_deletes_videos)
+  File "D:\context-commerce\qa\browser_qa_marketplace.py", line 57, in step
+    fn(); log.append({'step': name, 'ok': True, 'seconds': round(time.time() - t, 1)}); print('PASS', name, flush=True)
+    ^^^^
+  File "D:\context-commerce\qa\browser_qa_marketplace.py", line 206, in publisher_deletes_videos
+    sign_in(PUBLISHER)
+  File "D:\context-commerce\qa\browser_qa_marketplace.py", line 71, in sign_in
+    pg.type('#email', email); pg.click_text('Continue with email'); pg.wait_text('Check your email')
+                                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\context-commerce\qa\browser_qa_web.py", line 72, in wait_text
+    self.wait(f'document.body.innerText.includes({json.dumps(needle)})', timeout, what=repr(needle))
+  File "D:\context-commerce\qa\browser_qa_web.py", line 63, in wait
+    raise AssertionError(f'Timed out waiting for {what or expr}')
+AssertionError: Timed out waiting for 'Check your email'
+mkt exit 1

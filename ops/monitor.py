@@ -1,7 +1,8 @@
 """Uptime and alert check for cron or an external scheduler. Exit code 0 = healthy, 1 = alert.
 
     CC_OPS_TOKEN=... python -m ops.monitor --api https://api.example.com [--webhook https://hooks.slack.com/...]
-Checks: liveness, readiness, worker heartbeats, queue backlog and age, 24 h job failure rate, disk space.
+Checks: liveness, readiness, worker heartbeats, queue backlog and age, 24 h job and analysis failure rates, disk space,
+an unbalanced ledger, and payment events that need a person (an amount mismatch, a double payment, an unknown checkout).
 Readiness and metrics query the database, so on Neon Free schedule this every 30-60 minutes; a frequent external
 uptime monitor should poll only /api/health/live, which never touches the database.
 """
@@ -36,6 +37,10 @@ def check(api, token):
             if (q['oldest_queued_age_seconds'] or 0) > THRESHOLDS['oldest_queued_age_seconds']: alerts.append(f'oldest queued job waiting {q["oldest_queued_age_seconds"]} s')
             if j['finished'] >= 4 and j['failure_rate'] > THRESHOLDS['failure_rate']: alerts.append(f'job failure rate {j["failure_rate"]:.0%} in 24 h')
             if mtr['disk']['free_gb'] < THRESHOLDS['min_free_gb']: alerts.append(f'disk low: {mtr["disk"]["free_gb"]} GB free')
+            if not mtr.get('ledger', {}).get('balanced', True): alerts.append(f'ledger has {mtr["ledger"]["unbalanced_transactions"]} unbalanced transaction(s)')
+            if mtr.get('payments_24h', {}).get('needs_attention'): alerts.append(f'{mtr["payments_24h"]["needs_attention"]} payment event(s) need a person: /api/admin/payments/events')
+            a = mtr.get('analyses', {})
+            if a.get('finished_24h', 0) >= 4 and a.get('failed_24h', 0) / a['finished_24h'] > THRESHOLDS['failure_rate']: alerts.append(f'analysis failure rate {a["failed_24h"]}/{a["finished_24h"]} in 24 h')
     return alerts
 
 

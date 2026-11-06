@@ -19,10 +19,10 @@ export default function VerifyPage() {
   useEffect(() => {
     const t = new URLSearchParams(window.location.hash.slice(1)).get('token');
     history.replaceState(null, '', '/verify');                   // drop the token from the address bar and history
-    if (!t) { setState('expired'); return; }
-    setToken(t);
-    api<{ email: string }>('/api/auth/email/link/check', { json: { token: t } })
-      .then((r) => { setEmail(r.email); setState('ready'); })
+    // One asynchronous check decides every state; with no token it settles as expired.
+    const check = t ? api<{ email: string }>('/api/auth/email/link/check', { json: { token: t } }) : Promise.reject(new Error('no token'));
+    check
+      .then((r) => { setToken(t); setEmail(r.email); setState('ready'); })
       .catch(() => setState('expired'));
   }, []);
 

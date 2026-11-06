@@ -1,0 +1,789 @@
+{
+ "measured_at": "2026-11-05 13:53:13",
+ "model": "yolox-tiny@427cc366d34e",
+ "tracker": "iou-alpha-beta-reid-v1",
+ "sequences": 24,
+ "objects": 48,
+ "imagery": "COCO val2017 cut-outs on COCO backgrounds, synthetic motion (labels CC BY 4.0)",
+ "objects_detected_and_tracked": 41,
+ "single_identity_rate": 0.805,
+ "identity_switches": 9,
+ "recovered_after_occlusion": "13/16",
+ "mean_recall_of_tracked_objects": 0.737,
+ "false_tracks": 31,
+ "background_object_tracks": 58,
+ "tracker_params": {},
+ "seconds": 147.1,
+ "per_object": [
+  {
+   "sequence": 0,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.923,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 0,
+   "object": 1,
+   "label": "person",
+   "identities": 2,
+   "switches": 1,
+   "recall": 0.812,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 1,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.143,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 1,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.875,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 2,
+   "object": 0,
+   "label": "person",
+   "identities": 3,
+   "switches": 2,
+   "recall": 1.0,
+   "recovered_after_occlusion": false,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 2,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.75,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 3,
+   "object": 0,
+   "label": "person",
+   "identities": 0,
+   "switches": 0,
+   "recall": 0.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 5
+  },
+  {
+   "sequence": 3,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.062,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 4,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 1.0,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 4,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.875,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 5,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.929,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 5,
+   "object": 1,
+   "label": "car",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.625,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 6,
+   "object": 0,
+   "label": "person",
+   "identities": 2,
+   "switches": 1,
+   "recall": 1.0,
+   "recovered_after_occlusion": false,
+   "occlusion_samples": 5
+  },
+  {
+   "sequence": 6,
+   "object": 1,
+   "label": "person",
+   "identities": 2,
+   "switches": 1,
+   "recall": 0.812,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 7,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.923,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 7,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.812,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 8,
+   "object": 0,
+   "label": "dog",
+   "identities": 0,
+   "switches": 0,
+   "recall": 0.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 8,
+   "object": 1,
+   "label": "person",
+   "identities": 2,
+   "switches": 1,
+   "recall": 0.375,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 9,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.083,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 4
+  },
+  {
+   "sequence": 9,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.062,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 10,
+   "object": 0,
+   "label": "chair",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.286,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 10,
+   "object": 1,
+   "label": "dog",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.125,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 11,
+   "object": 0,
+   "label": "person",
+   "identities": 2,
+   "switches": 1,
+   "recall": 0.667,
+   "recovered_after_occlusion": false,
+   "occlusion_samples": 4
+  },
+  {
+   "sequence": 11,
+   "object": 1,
+   "label": "motorcycle",
+   "identities": 2,
+   "switches": 1,
+   "recall": 0.812,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 12,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 1.0,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 12,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.875,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 13,
+   "object": 0,
+   "label": "person",
+   "identities": 0,
+   "switches": 0,
+   "recall": 0.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 4
+  },
+  {
+   "sequence": 13,
+   "object": 1,
+   "label": "motorcycle",
+   "identities": 2,
+   "switches": 1,
+   "recall": 0.625,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 14,
+   "object": 0,
+   "label": "car",
+   "identities": 0,
+   "switches": 0,
+   "recall": 0.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 4
+  },
+  {
+   "sequence": 14,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.75,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 15,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.923,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 15,
+   "object": 1,
+   "label": "chair",
+   "identities": 0,
+   "switches": 0,
+   "recall": 0.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 16,
+   "object": 0,
+   "label": "motorcycle",
+   "identities": 0,
+   "switches": 0,
+   "recall": 0.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 16,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.812,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 17,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 1.0,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 17,
+   "object": 1,
+   "label": "chair",
+   "identities": 0,
+   "switches": 0,
+   "recall": 0.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 18,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.909,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 5
+  },
+  {
+   "sequence": 18,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.938,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 19,
+   "object": 0,
+   "label": "bicycle",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.909,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 5
+  },
+  {
+   "sequence": 19,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.75,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 20,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 1.0,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 20,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.812,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 21,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.923,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 3
+  },
+  {
+   "sequence": 21,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 1.0,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 22,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.929,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 22,
+   "object": 1,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.875,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  },
+  {
+   "sequence": 23,
+   "object": 0,
+   "label": "person",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.929,
+   "recovered_after_occlusion": true,
+   "occlusion_samples": 2
+  },
+  {
+   "sequence": 23,
+   "object": 1,
+   "label": "dog",
+   "identities": 1,
+   "switches": 0,
+   "recall": 0.312,
+   "recovered_after_occlusion": null,
+   "occlusion_samples": 0
+  }
+ ],
+ "per_sequence": [
+  {
+   "sequence": 0,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    3
+   ],
+   "tracks": 3
+  },
+  {
+   "sequence": 1,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    2
+   ],
+   "tracks": 6
+  },
+  {
+   "sequence": 2,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    2
+   ],
+   "tracks": 3
+  },
+  {
+   "sequence": 3,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    5
+   ],
+   "tracks": 8
+  },
+  {
+   "sequence": 4,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    7,
+    3
+   ],
+   "tracks": 6
+  },
+  {
+   "sequence": 5,
+   "labels": [
+    "person",
+    "car"
+   ],
+   "occlusion": [
+    6,
+    2
+   ],
+   "tracks": 8
+  },
+  {
+   "sequence": 6,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    6,
+    5
+   ],
+   "tracks": 4
+  },
+  {
+   "sequence": 7,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    5,
+    3
+   ],
+   "tracks": 8
+  },
+  {
+   "sequence": 8,
+   "labels": [
+    "dog",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    2
+   ],
+   "tracks": 5
+  },
+  {
+   "sequence": 9,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    4
+   ],
+   "tracks": 4
+  },
+  {
+   "sequence": 10,
+   "labels": [
+    "chair",
+    "dog"
+   ],
+   "occlusion": [
+    8,
+    2
+   ],
+   "tracks": 12
+  },
+  {
+   "sequence": 11,
+   "labels": [
+    "person",
+    "motorcycle"
+   ],
+   "occlusion": [
+    8,
+    4
+   ],
+   "tracks": 6
+  },
+  {
+   "sequence": 12,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    3
+   ],
+   "tracks": 4
+  },
+  {
+   "sequence": 13,
+   "labels": [
+    "person",
+    "motorcycle"
+   ],
+   "occlusion": [
+    6,
+    4
+   ],
+   "tracks": 4
+  },
+  {
+   "sequence": 14,
+   "labels": [
+    "car",
+    "person"
+   ],
+   "occlusion": [
+    7,
+    4
+   ],
+   "tracks": 9
+  },
+  {
+   "sequence": 15,
+   "labels": [
+    "person",
+    "chair"
+   ],
+   "occlusion": [
+    7,
+    3
+   ],
+   "tracks": 9
+  },
+  {
+   "sequence": 16,
+   "labels": [
+    "motorcycle",
+    "person"
+   ],
+   "occlusion": [
+    5,
+    2
+   ],
+   "tracks": 3
+  },
+  {
+   "sequence": 17,
+   "labels": [
+    "person",
+    "chair"
+   ],
+   "occlusion": [
+    6,
+    3
+   ],
+   "tracks": 4
+  },
+  {
+   "sequence": 18,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    5
+   ],
+   "tracks": 4
+  },
+  {
+   "sequence": 19,
+   "labels": [
+    "bicycle",
+    "person"
+   ],
+   "occlusion": [
+    8,
+    5
+   ],
+   "tracks": 5
+  },
+  {
+   "sequence": 20,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    6,
+    3
+   ],
+   "tracks": 4
+  },
+  {
+   "sequence": 21,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    5,
+    3
+   ],
+   "tracks": 10
+  },
+  {
+   "sequence": 22,
+   "labels": [
+    "person",
+    "person"
+   ],
+   "occlusion": [
+    6,
+    2
+   ],
+   "tracks": 3
+  },
+  {
+   "sequence": 23,
+   "labels": [
+    "person",
+    "dog"
+   ],
+   "occlusion": [
+    7,
+    2
+   ],
+   "tracks": 4
+  }
+ ]
+}

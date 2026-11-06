@@ -26,6 +26,7 @@ class UploadInit(BaseModel):
     size_bytes: int = Field(gt=0)
     license_confirmed: bool
     license_expires: Optional[str] = None
+    video_id: Optional[int] = None                 # a new version of this existing video, instead of a new video
 
 
 @router.post('/api/uploads/video')
@@ -36,15 +37,21 @@ def init_video_upload(body: UploadInit, request: Request):
     if body.size_bytes > limits.max_video_bytes(): raise HTTPException(413, f'Video upload limit is {limits.max_video_bytes() // 1048576} MB')
     with m.db() as c:
         limits.check_video_size(c, u['org_id'], body.size_bytes); max_bytes = limits.effective_video_bytes(c, u['org_id'])
+        if body.video_id is not None:
+            from .videos import _video, in_use
+            _video(c, body.video_id, u['org_id'])
+            why = in_use(c, body.video_id)
+            if why: raise HTTPException(409, {'code': 'VIDEO_IN_USE', 'message': f'A new version cannot replace this video: {why}'})
     if not storage.enabled():
-        return {'method': 'server', 'upload_url': '/api/videos', 'max_bytes': max_bytes}
+        return {'method': 'server', 'upload_url': f'/api/videos/{body.video_id}/versions' if body.video_id else '/api/videos', 'max_bytes': max_bytes}
     if not m.rate_limit(f'upload-init:{u["org_id"]}', 60, 3600): raise HTTPException(429, 'Too many uploads started this hour')
     ttl = limits.upload_session_ttl()
     path = m.UPLOADS / f'video_{secrets.token_hex(8)}_{m.safe_name(body.filename)}'
     with m.db() as c:
         limits.check_daily_uploads(c, u['org_id']); limits.check_storage(c, u['org_id'], body.size_bytes)
-        sid = c.execute('INSERT INTO upload_sessions(org_id,user_id,kind,path,title,content_type,expected_bytes,license_expires,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',
-                        (u['org_id'], u['id'], 'video', str(path), body.title.strip(), body.content_type, body.size_bytes, body.license_expires, int(time.time()) + ttl)).lastrowid
+        sid = c.execute('INSERT INTO upload_sessions(org_id,user_id,kind,path,title,content_type,expected_bytes,license_expires,expires_at,target_video_id) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                        (u['org_id'], u['id'], 'video_version' if body.video_id else 'video', str(path), body.title.strip(), body.content_type, body.size_bytes,
+                         body.license_expires, int(time.time()) + ttl, body.video_id)).lastrowid
         m.event(c, u, 'upload.started', 'upload', sid, {'bytes': body.size_bytes})
     if storage.uses_blob():
         key = storage.key_for(str(path))
@@ -89,7 +96,12 @@ def complete_upload(sid: int, request: Request):
         with m.db() as c: c.execute("UPDATE upload_sessions SET status='PENDING' WHERE id=? AND status='PROCESSING'", (sid,))
         raise HTTPException(503, {'code': 'STORAGE_UNAVAILABLE', 'message': 'Storage is temporarily unavailable. Try completing the upload again shortly.'})
     try:
-        out = m.ingest_video(u, Path(s['path']), s['title'], s['license_expires'], size, persisted=True)
+        if s['kind'] == 'video_version':
+            from .videos import add_version
+            v = add_version(u, s['target_video_id'], Path(s['path']), size, persisted=True)
+            out = dict(v, id=v['video_id'])
+        else:
+            out = m.ingest_video(u, Path(s['path']), s['title'], s['license_expires'], size, persisted=True)
     except HTTPException as e:
         _fail(sid, u, 'REJECTED', str(e.detail)); raise
     except Exception:

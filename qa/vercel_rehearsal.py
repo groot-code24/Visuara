@@ -1,7 +1,6 @@
 """A full rehearsal of the Vercel deployment on this machine, in Chrome, with nothing mocked inside the application.
 
-    docker compose up -d postgres mailpit
-    python qa/vercel_rehearsal.py
+    python qa/vercel_rehearsal.py      # needs Docker and Chrome; it starts its own database and email stand-ins
 
 What matches Vercel: the image from Dockerfile.vercel with production settings; API and job runner as separate containers that
 share no disk; a read-only filesystem except /tmp; 1 vCPU and 2 GB each; routing as in vercel.json, HTTPS, and Vercel's 4.5 MB
@@ -9,6 +8,11 @@ request limit (a small proxy below); Vercel's own JavaScript and Python Blob SDK
 
 What stands in: PostgreSQL for Neon, qa/blob_stub.py for Blob, Mailpit for an email provider. So this proves our code and
 configuration, not Vercel's platform, Neon, Google or a real inbox. docs/vercel.md lists what to check on the real thing.
+
+The API image is built from the current working tree on every run, so the rehearsal never tests an older build. The
+database and email stand-ins are dedicated containers that speak TLS, as Neon and an email provider do, because
+production refuses an unencrypted database (sslmode=require) and plain-text SMTP: a certificate authority made for
+the run signs their certificates, and the API containers trust it through SSL_CERT_FILE.
 """
 import argparse, datetime, http.client, json, ssl, subprocess, sys, tempfile, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,10 +32,59 @@ from browser_qa_web import CHROMES, Page, free_port   # noqa: E402
 PUBLIC, API_PORT, WEB_PORT, BLOB_PORT, PROXY_PORT = 'https://localhost:8443', 8021, 3021, 8031, 8443
 NET = 'context-commerce_default'
 API, RUNNER, WEB = 'cc-sim-api', 'cc-sim-runner', 'cc-sim-web'
+PG, MAIL = 'cc-sim-postgres', 'cc-sim-mailpit'          # TLS stand-ins for Neon and the email provider
+MAIL_UI_PORT, MAIL_SMTP_PORT = 8026, 1026                # published on 127.0.0.1 only
 VERCEL_BODY_LIMIT = int(4.5 * 1048576)
 
 
-def sh(*cmd, **kw): return subprocess.run(cmd, check=kw.pop('check', True), capture_output=True, text=True, encoding='utf-8', errors='replace', **kw)
+def sh(*cmd, **kw):
+    check = kw.pop('check', True)
+    r = subprocess.run(cmd, check=False, capture_output=True, text=True, encoding='utf-8', errors='replace', **kw)
+    # Docker's own message used to be swallowed with the output. Show it, but not the command line, which carries settings.
+    if check and r.returncode != 0: raise RuntimeError(f'{cmd[0]} {cmd[1]} failed ({r.returncode}): {(r.stderr or r.stdout).strip()[-800:]}')
+    return r
+
+
+def tls_stand_ins(tmp):
+    """A certificate authority for this run, and one server certificate for the database and email stand-ins."""
+    d = tmp / 'tls'; d.mkdir()
+    now = datetime.datetime.now(datetime.timezone.utc); later = now + datetime.timedelta(days=2)
+    ca_key = ec.generate_private_key(ec.SECP256R1()); ca_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Visuara rehearsal CA')])
+    ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name).public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
+          .not_valid_before(now).not_valid_after(later).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+          .add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True, content_commitment=False, key_encipherment=False,
+                                       data_encipherment=False, key_agreement=False, encipher_only=False, decipher_only=False), critical=True)
+          .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False).sign(ca_key, hashes.SHA256()))
+    key = ec.generate_private_key(ec.SECP256R1())
+    leaf = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, PG)])).issuer_name(ca_name)
+            .public_key(key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now).not_valid_after(later)
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName(PG), x509.DNSName(MAIL), x509.DNSName('localhost')]), critical=False)
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(x509.ExtendedKeyUsage([x509.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False).sign(ca_key, hashes.SHA256()))
+    (d / 'ca.crt').write_bytes(ca.public_bytes(serialization.Encoding.PEM))
+    (d / 'server.crt').write_bytes(leaf.public_bytes(serialization.Encoding.PEM))
+    (d / 'server.key').write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    return d
+
+
+def start_stand_ins(tls):
+    """PostgreSQL with ssl=on and Mailpit that requires STARTTLS, on the rehearsal network."""
+    sh('docker', 'network', 'create', NET, check=False)
+    for c in (PG, MAIL): sh('docker', 'rm', '-f', c, check=False)
+    # PostgreSQL refuses a key file readable by others, and a bind mount from Windows is: copy it in with mode 600.
+    sh('docker', 'run', '-d', '--name', PG, '--network', NET, '-e', 'POSTGRES_USER=cc', '-e', 'POSTGRES_PASSWORD=cc-local-only', '-e', 'POSTGRES_DB=cc_rehearsal',
+       '-v', f'{tls}:/certs:ro', '--entrypoint', 'sh', 'postgres:16-alpine', '-c',
+       'install -o postgres -g postgres -m 600 /certs/server.key /tmp/server.key && install -o postgres -g postgres -m 644 /certs/server.crt /tmp/server.crt'
+       ' && exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/tmp/server.crt -c ssl_key_file=/tmp/server.key')
+    sh('docker', 'run', '-d', '--name', MAIL, '--network', NET, '-p', f'127.0.0.1:{MAIL_UI_PORT}:8025', '-p', f'127.0.0.1:{MAIL_SMTP_PORT}:1025',
+       '-v', f'{tls}:/certs:ro', '-e', 'MP_SMTP_TLS_CERT=/certs/server.crt', '-e', 'MP_SMTP_TLS_KEY=/certs/server.key', '-e', 'MP_SMTP_REQUIRE_STARTTLS=true',
+       'axllent/mailpit:latest')
+    t = time.time()
+    while time.time() - t < 90:
+        if sh('docker', 'exec', PG, 'pg_isready', '-U', 'cc', '-d', 'cc_rehearsal', '-h', '127.0.0.1', check=False).returncode == 0: return
+        time.sleep(.5)
+    raise AssertionError('the TLS PostgreSQL stand-in did not come up')
 
 
 def certificate(tmp):
@@ -104,6 +157,11 @@ CMD ["node", "server.js"]
 '''
 
 
+def api_image():
+    """The API and runner image from Dockerfile.vercel, built from the working tree as it is now."""
+    sh('docker', 'build', '-q', '-f', str(ROOT / 'Dockerfile.vercel'), '-t', 'context-commerce-vercel:local', str(ROOT), timeout=1800)
+
+
 def web_image(tmp):
     """The web app built as in production, with only the Blob API address pointed at the stand-in."""
     # The SDK streams uploads (HTTP/2 only in Chrome) except when its API address starts with http://localhost; this stand-in speaks HTTP/1.1.
@@ -111,10 +169,13 @@ def web_image(tmp):
     sh('docker', 'build', '-q', '-f', str(f), '--build-arg', f'CC_API_ORIGIN=http://{API}:80', '-t', 'context-commerce-web:rehearsal', str(ROOT / 'web'), timeout=900)
 
 
+TLS_DIR = [None]
+
+
 def start_backend(name, env, publish=None):
     sh('docker', 'rm', '-f', name, check=False)
     args = ['docker', 'run', '-d', '--name', name, '--network', NET, '--add-host', 'host.docker.internal:host-gateway', '--cpus=1', '--memory=2g', '--memory-swap=2g',
-            '--read-only', '--tmpfs', '/tmp:size=1024m,exec',
+            '--read-only', '--tmpfs', '/tmp:size=1024m,exec', '-v', f'{TLS_DIR[0]}:/certs:ro', '-e', 'SSL_CERT_FILE=/certs/ca.crt',
             '-v', f'{ROOT / "qa" / "rehearsal_app.py"}:/app/rehearsal_app.py:ro']
     if publish: args += ['-p', f'127.0.0.1:{publish}:80']
     for k, v in env.items(): args += ['-e', f'{k}={v}']
@@ -143,13 +204,12 @@ def main():
     big_video.write_bytes(Path(room).read_bytes() + (padding + 8).to_bytes(4, 'big') + b'free' + bytes(padding))
 
     stub = BlobStub(host='0.0.0.0', port=BLOB_PORT, advertise='127.0.0.1')
-    sh('docker', 'exec', 'context-commerce-postgres-1', 'psql', '-U', 'cc', '-d', 'postgres', '-c', 'DROP DATABASE IF EXISTS cc_rehearsal')
-    sh('docker', 'exec', 'context-commerce-postgres-1', 'psql', '-U', 'cc', '-d', 'postgres', '-c', 'CREATE DATABASE cc_rehearsal')
-    env = {'DATABASE_URL': 'postgresql://cc:cc-local-only@postgres:5432/cc_rehearsal', 'CC_SIGNING_KEY': 'rehearsal-only-' + 'k' * 32, 'BLOB_READ_WRITE_TOKEN': stub.rw_token,
+    TLS_DIR[0] = tls_stand_ins(tmp); start_stand_ins(TLS_DIR[0])
+    env = {'DATABASE_URL': f'postgresql://cc:cc-local-only@{PG}:5432/cc_rehearsal?sslmode=require', 'CC_SIGNING_KEY': 'rehearsal-only-' + 'k' * 32, 'BLOB_READ_WRITE_TOKEN': stub.rw_token,
            'VERCEL_BLOB_API_URL': f'http://host.docker.internal:{BLOB_PORT}/api/blob', 'SIM_BLOB_ORIGIN': f'http://host.docker.internal:{BLOB_PORT}', 'SIM_BLOB_PUBLIC_ORIGIN': f'http://127.0.0.1:{BLOB_PORT}',
-           'CC_SMTP_HOST': 'mailpit', 'CC_SMTP_PORT': '1025', 'CC_SMTP_TLS': 'none', 'CC_MAIL_FROM': 'Context Commerce <signin@qa.test>', 'CC_PUBLIC_URL': PUBLIC,
+           'CC_SMTP_HOST': MAIL, 'CC_SMTP_PORT': '1025', 'CC_SMTP_TLS': 'starttls', 'CC_MAIL_FROM': 'Context Commerce <signin@qa.test>', 'CC_PUBLIC_URL': PUBLIC,
            'GOOGLE_CLIENT_ID': 'rehearsal-client.apps.googleusercontent.com', 'GOOGLE_CLIENT_SECRET': 'rehearsal-secret', 'CC_WORKER_URL': f'http://{RUNNER}:80', 'CC_JOB_LEASE_SECONDS': '30', 'CC_RUNNER_NUDGE_SECONDS': '5', 'CC_DEFAULT_PLAN': 'pro'}
-    web_image(tmp)
+    api_image(); web_image(tmp)
     log, violations = [], []
     browser = None
     try:
@@ -195,9 +255,21 @@ def main():
             return f'first start {cold}s'
         step('production settings accepted; database, Blob and FFmpeg ready', ready)
 
+        def encrypted():
+            q = "SELECT count(*) FILTER (WHERE s.ssl), count(*) FILTER (WHERE NOT s.ssl) FROM pg_stat_ssl s JOIN pg_stat_activity a USING (pid) WHERE a.datname='cc_rehearsal' AND a.pid<>pg_backend_pid()"
+            on, off = sh('docker', 'exec', PG, 'psql', '-U', 'cc', '-d', 'cc_rehearsal', '-tAF', ',', '-c', q).stdout.strip().split(',')
+            assert int(on) > 0 and int(off) == 0, f'{on} encrypted and {off} unencrypted database connections'
+            import smtplib
+            with smtplib.SMTP('127.0.0.1', MAIL_SMTP_PORT, timeout=10) as s:       # a client that skips STARTTLS is refused
+                try: s.sendmail('a@qa.test', ['b@qa.test'], 'Subject: plain\n\nplain'); refused = False
+                except smtplib.SMTPException: refused = True
+            assert refused, 'the email stand-in accepted a message without TLS'
+            return f'{on} database connections, all over TLS; plain-text SMTP refused'
+        step('database and email connections are encrypted', encrypted)
+
         def fast_restart():
             start_backend(API, env, publish=API_PORT); took = wait_up(f'http://127.0.0.1:{API_PORT}/api/health/live')
-            logs = sh('docker', 'exec', 'context-commerce-postgres-1', 'psql', '-U', 'cc', '-d', 'cc_rehearsal', '-tAc', 'SELECT count(*) FROM schema_fingerprint').stdout.strip()
+            logs = sh('docker', 'exec', PG, 'psql', '-U', 'cc', '-d', 'cc_rehearsal', '-tAc', 'SELECT count(*) FROM schema_fingerprint').stdout.strip()
             assert logs == '1'
             return f'new instance serving after {took}s without repeating schema setup'
         step('a new instance starts without repeating schema setup', fast_restart)
@@ -224,10 +296,10 @@ def main():
             assert 'Open the magic link' not in pg.text(), 'production must not show the link on screen'
             import re
             for _ in range(60):
-                msgs = httpx.get('http://127.0.0.1:8025/api/v1/search', params={'query': f'to:{email}'}, timeout=10).json().get('messages', [])
+                msgs = httpx.get(f'http://127.0.0.1:{MAIL_UI_PORT}/api/v1/search', params={'query': f'to:{email}'}, timeout=10).json().get('messages', [])
                 if msgs: break
                 time.sleep(.5)
-            text = httpx.get(f'http://127.0.0.1:8025/api/v1/message/{msgs[0]["ID"]}', timeout=10).json()['Text']
+            text = httpx.get(f'http://127.0.0.1:{MAIL_UI_PORT}/api/v1/message/{msgs[0]["ID"]}', timeout=10).json()['Text']
             link = re.search(r'https://\S*/verify#token=[A-Za-z0-9_-]+', text).group(0); assert link.startswith(PUBLIC), link
             pg.go(link); pg.wait_text('Continue as', timeout=60); pg.click_text('Continue')
             pg.wait("location.pathname==='/welcome'", what='onboarding'); pg.wait("!!document.getElementById('name')", what='onboarding form'); pg.type('#name', 'Vercel QA')
@@ -282,7 +354,7 @@ def main():
             pg.go(PUBLIC + '/dashboard/renders')       # this page polls while a job is unfinished, which is what restarts the runner
             events = ''
             for _ in range(280):
-                events = sh('docker', 'exec', 'context-commerce-postgres-1', 'psql', '-U', 'cc', '-d', 'cc_rehearsal', '-tAc', "SELECT string_agg(event_type, ',' ORDER BY id) FROM queue_events").stdout.strip()
+                events = sh('docker', 'exec', PG, 'psql', '-U', 'cc', '-d', 'cc_rehearsal', '-tAc', "SELECT string_agg(event_type, ',' ORDER BY id) FROM queue_events").stdout.strip()
                 if 'succeeded' in events: break
                 time.sleep(1)
             assert 'lease_recovered' in events and 'succeeded' in events, events
@@ -319,7 +391,7 @@ def main():
         print('PASS' if ok else 'FAIL', 'no CSP violations or page errors', violations[:10], errs[:10], flush=True)
     finally:
         if browser: browser.kill()
-        for c in (API, RUNNER, WEB): sh('docker', 'rm', '-f', c, check=False)
+        for c in (API, RUNNER, WEB, PG, MAIL): sh('docker', 'rm', '-f', c, check=False)
         stub.close()
         out = Path(a.out); out.parent.mkdir(parents=True, exist_ok=True); out.write_text(json.dumps(log, indent=1))
     passed = sum(1 for x in log if x['ok'])

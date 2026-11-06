@@ -7,7 +7,8 @@ import os
 
 os.environ['CC_DOTENV'] = '0'
 for _k in ('DATABASE_URL', 'CC_DATABASE_URL', 'CC_DATABASE_SCHEMA', 'CC_S3_BUCKET', 'BLOB_READ_WRITE_TOKEN', 'CC_WORKER_MODE', 'CC_SMTP_HOST', 'CC_MAIL_BACKEND',
-           'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CC_APP_URL', 'CC_VISION_MODEL'):
+           'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CC_APP_URL', 'CC_VISION_MODEL', 'CC_DETECTION_MODEL',
+           'CC_PAYMENT_PROVIDER', 'CC_PAYMENT_WEBHOOK_SECRET', 'CC_STRIPE_SECRET_KEY', 'CC_PAYMENT_LIVE', 'CC_PROGRAMMATIC_TEST_ADAPTERS'):
     os.environ.pop(_k, None)
 # Workspaces created in tests are on the Team plan unless a test sets another; plan limits have their own tests.
 os.environ['CC_DEFAULT_PLAN'] = 'team'

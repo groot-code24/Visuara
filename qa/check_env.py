@@ -46,10 +46,31 @@ def check_format(v):
         if v.get(name): report(name, v[name].startswith('https://'), 'must start with https://' if not v[name].startswith('https://') else '')
 
 
+SECRET_SETTINGS = ('GOOGLE_CLIENT_SECRET', 'CC_SIGNING_KEY', 'CC_SMTP_PASSWORD', 'BLOB_READ_WRITE_TOKEN', 'CC_OPS_TOKEN')
+
+
+def check_not_in_history(v):
+    """A secret that was ever committed is public once pushed: refuse it until it is replaced. Names only are printed."""
+    secrets = {k: v[k] for k in SECRET_SETTINGS if len(v.get(k, '')) >= 8}
+    password = urlparse(v.get('DATABASE_URL', '')).password
+    if password and len(password) >= 8: secrets['DATABASE_URL password'] = password
+    try:
+        sys.path.insert(0, str(ROOT / 'qa')); from secret_scan import history_blobs
+        leaked = {name for _, _, text in history_blobs() for name, value in secrets.items() if value in text}
+    except Exception as e:
+        return report('Secrets not in git history', False, f'could not read the history ({type(e).__name__})')
+    for name in sorted(secrets):
+        report(f'{name} never committed', name not in leaked,
+               'it is in the git history, so treat it as public: replace it at its service (for Neon, reset the role password) and paste the new value' if name in leaked else '')
+
+
 def check_neon(url):
     if not url: return report('DATABASE_URL', False, 'empty: paste the connection string from Neon')
     host = urlparse(url).hostname or ''
     if 'neon.tech' in host and '-pooler' not in host: report('DATABASE_URL', False, 'use the pooled connection string (its host contains -pooler)')
+    from app.config import database_tls_problem       # the rule production enforces at start-up
+    tls = database_tls_problem(url)
+    report('DATABASE_URL encryption', not tls, tls)
     import psycopg
     for attempt in range(3):
         try:
@@ -93,6 +114,8 @@ def smtp_session(v):
 def check_mail(v, to):
     if not v.get('CC_SMTP_HOST'): return report('Magic-link email', False, 'CC_SMTP_HOST is empty')
     if not v.get('CC_SMTP_USER') or not v.get('CC_SMTP_PASSWORD'): return report('Magic-link email', False, 'CC_SMTP_USER and CC_SMTP_PASSWORD are needed')
+    mode = (v.get('CC_SMTP_TLS') or 'starttls').lower()
+    if mode not in ('starttls', 'ssl'): return report('Email encryption', False, 'set CC_SMTP_TLS to starttls (port 587) or ssl (port 465): production refuses anything else')
     try:
         with smtp_session(v) as s:
             report('Email login', True)
@@ -121,7 +144,7 @@ def main():
     a = ap.parse_args(); path = Path(a.file)
     if not path.exists(): sys.exit(f'{path} not found')
     v = read_env(path)
-    check_format(v); check_neon(v.get('DATABASE_URL', '')); check_google(v); check_google_redirect(v); check_mail(v, a.mail); check_blob(v.get('BLOB_READ_WRITE_TOKEN', ''))
+    check_format(v); check_not_in_history(v); check_neon(v.get('DATABASE_URL', '')); check_google(v); check_google_redirect(v); check_mail(v, a.mail); check_blob(v.get('BLOB_READ_WRITE_TOKEN', ''))
     print(f'\n{sum(results)}/{len(results)} ready' if not all(results) else f'\nAll {len(results)} checks passed. Vercel does not read this file: import it under Settings > Environment Variables, for Production, then deploy.')
     sys.exit(0 if all(results) else 1)
 

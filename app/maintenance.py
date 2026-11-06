@@ -45,7 +45,10 @@ def run_db_maintenance():
             c.execute('DELETE FROM auth_challenges WHERE expires_at<?', (now - 86400,))
             c.execute('DELETE FROM pending_signups WHERE expires_at<?', (now,))
             c.execute('DELETE FROM rate_limits WHERE hit_at<?', (time.time() - 86400,))
-        obs.info('database maintenance', expired_uploads=expired, expired_sessions=sessions)
+        from . import videos, inventory
+        hashed = videos.backfill_hashes(int(os.getenv('CC_HASH_BACKFILL_PER_RUN', '2')))
+        inventory.run_expiry()
+        obs.info('database maintenance', expired_uploads=expired, expired_sessions=sessions, hashed_videos=hashed)
         return {'expired_uploads': expired, 'expired_sessions': sessions}
     except Exception:
         obs.error('database maintenance failed', exc_info=True); return None

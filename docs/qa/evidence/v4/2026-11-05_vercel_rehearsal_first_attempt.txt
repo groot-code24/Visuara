@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "D:\context-commerce\qa\vercel_rehearsal.py", line 340, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "D:\context-commerce\qa\vercel_rehearsal.py", line 156, in main
+    start_backend(RUNNER, env); start_backend(API, env, publish=API_PORT)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\context-commerce\qa\vercel_rehearsal.py", line 122, in start_backend
+    sh(*args)
+  File "D:\context-commerce\qa\vercel_rehearsal.py", line 34, in sh
+    def sh(*cmd, **kw): return subprocess.run(cmd, check=kw.pop('check', True), capture_output=True, text=True, encoding='utf-8', errors='replace', **kw)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\palma\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 569, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '('docker', 'run', '-d', '--name', 'cc-sim-runner', '--network', 'context-commerce_default', '--add-host', 'host.docker.internal:host-gateway', '--cpus=1', '--memory=2g', '--memory-swap=2g', '--read-only', '--tmpfs', '/tmp:size=1024m,exec', '-v', 'D:\\context-commerce\\qa\\rehearsal_app.py:/app/rehearsal_app.py:ro', '-e', 'DATABASE_URL=[REDACTED]', '-e', 'CC_SIGNING_KEY=[REDACTED]', '-e', 'BLOB_READ_WRITE_TOKEN=[REDACTED]', '-e', 'VERCEL_BLOB_API_URL=http://host.docker.internal:8031/api/blob', '-e', 'SIM_BLOB_ORIGIN=http://host.docker.internal:8031', '-e', 'SIM_BLOB_PUBLIC_ORIGIN=http://127.0.0.1:8031', '-e', 'CC_SMTP_HOST=mailpit', '-e', 'CC_SMTP_PORT=1025', '-e', 'CC_SMTP_TLS=none', '-e', 'CC_MAIL_FROM=Context Commerce <signin@qa.test>', '-e', 'CC_PUBLIC_URL=https://localhost:8443', '-e', 'GOOGLE_CLIENT_ID=rehearsal-client.apps.googleusercontent.com', '-e', 'GOOGLE_CLIENT_SECRET=[REDACTED]', '-e', 'CC_WORKER_URL=http://cc-sim-runner:80', '-e', 'CC_JOB_LEASE_SECONDS=30', '-e', 'CC_RUNNER_NUDGE_SECONDS=5', '-e', 'CC_DEFAULT_PLAN=pro', 'context-commerce-vercel:local', 'sh', '-c', 'exec uvicorn rehearsal_app:app --host 0.0.0.0 --port 80 --proxy-headers --timeout-keep-alive 75 --no-server-header')' returned non-zero exit status 125.
+rehearsal exit 1

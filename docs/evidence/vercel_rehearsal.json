@@ -2,14 +2,20 @@
  {
   "step": "production settings accepted; database, Blob and FFmpeg ready",
   "ok": true,
-  "seconds": 3.4,
-  "note": "first start 9.7s"
+  "seconds": 2.6,
+  "note": "first start 5.2s"
+ },
+ {
+  "step": "database and email connections are encrypted",
+  "ok": true,
+  "seconds": 1.0,
+  "note": "2 database connections, all over TLS; plain-text SMTP refused"
  },
  {
   "step": "a new instance starts without repeating schema setup",
   "ok": true,
-  "seconds": 9.9,
-  "note": "new instance serving after 4.4s without repeating schema setup"
+  "seconds": 5.7,
+  "note": "new instance serving after 3.4s without repeating schema setup"
  },
  {
   "step": "job runner refuses outsiders; dashboard guarded; security headers",
@@ -24,50 +30,50 @@
  {
   "step": "magic link by email, onboarding, dashboard",
   "ok": true,
-  "seconds": 4.1
+  "seconds": 3.4
  },
  {
   "step": "an image over the request limit gets a clear message",
   "ok": true,
-  "seconds": 2.9
+  "seconds": 2.3
  },
  {
   "step": "browser uploads the video straight to Blob with the real SDK",
   "ok": true,
-  "seconds": 5.2
+  "seconds": 4.0
  },
  {
   "step": "decision runs on the separate runner; preview through a signed link",
   "ok": true,
-  "seconds": 61.3
+  "seconds": 52.9
  },
  {
   "step": "library thumbnails load through signed links",
   "ok": true,
-  "seconds": 1.3
+  "seconds": 1.2
  },
  {
   "step": "runner killed mid-render: dashboard polling restarts it and the job completes",
   "ok": true,
-  "seconds": 83.0,
+  "seconds": 48.6,
   "note": "claimed,lease_recovered,claimed,succeeded"
  },
  {
   "step": "finished video downloads through a signed link, with range requests",
   "ok": true,
-  "seconds": 0.7,
+  "seconds": 0.1,
   "note": "outputs/placement_1_v1_job_1.mp4"
  },
  {
   "step": "a large video uploads in parts",
   "ok": true,
-  "seconds": 40.7,
+  "seconds": 7.0,
   "note": "36 MB in 5 parts"
  },
  {
   "step": "nothing depends on a writable disk outside /tmp",
   "ok": true,
-  "seconds": 3.3
+  "seconds": 0.4
  },
  {
   "step": "no CSP violations or page errors",

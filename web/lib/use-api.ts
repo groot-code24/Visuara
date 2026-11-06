@@ -9,7 +9,8 @@ export function useApi<T>(path: string | null, opts: { poll?: (d: T) => boolean;
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(Boolean(path));
-  const pollRef = useRef(opts.poll); pollRef.current = opts.poll;
+  const pollRef = useRef(opts.poll);
+  useEffect(() => { pollRef.current = opts.poll; });
 
   const reload = useCallback(async () => {
     if (!path) return null;
@@ -21,7 +22,17 @@ export function useApi<T>(path: string | null, opts: { poll?: (d: T) => boolean;
     } finally { setLoading(false); }
   }, [path]);
 
-  useEffect(() => { reload(); }, [reload]);
+  // First load, and again whenever the path changes. A response for a path that is no longer current is dropped,
+  // so a slow earlier request can never overwrite the data of the page now shown.
+  useEffect(() => {
+    if (!path) return;
+    let current = true;
+    api<T>(path)
+      .then((d) => { if (current) { setData(d); setError(null); } })
+      .catch((e) => { if (current) setError(e instanceof ApiError ? e : new ApiError(0, 'Failed to load')); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [path]);
 
   useEffect(() => {
     if (!data || !pollRef.current?.(data)) return;

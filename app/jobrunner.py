@@ -10,7 +10,7 @@ import hashlib, hmac, os, threading, time
 
 import httpx
 
-from . import obs
+from . import obs, outbox
 
 _last_nudge = {}
 
@@ -55,7 +55,8 @@ def nudge(c, org_id):
     if now - _last_nudge.get(org_id, 0) < nudge_interval(): return
     stuck = "(status='QUEUED' OR (status='RUNNING' AND (lease_until IS NULL OR lease_until<?)))"
     if c.execute(f'SELECT 1 FROM jobs WHERE org_id=? AND {stuck} LIMIT 1', (org_id, now)).fetchone() or \
-       c.execute(f'SELECT 1 FROM decisions WHERE org_id=? AND {stuck} LIMIT 1', (org_id, now)).fetchone():
+       c.execute(f'SELECT 1 FROM decisions WHERE org_id=? AND {stuck} LIMIT 1', (org_id, now)).fetchone() or \
+       c.execute(f'SELECT 1 FROM analysis_versions WHERE org_id=? AND {stuck} LIMIT 1', (org_id, now)).fetchone():
         _last_nudge[org_id] = now
         kick()
 
@@ -75,7 +76,7 @@ def _busy():
     from . import main
     now = time.time()
     with main.db() as c:
-        return sum(c.execute(f"SELECT COUNT(*) FROM {t} WHERE status='RUNNING' AND lease_until>=?", (now,)).fetchone()[0] for t in ('jobs', 'decisions')) >= max_concurrent()
+        return sum(c.execute(f"SELECT COUNT(*) FROM {t} WHERE status='RUNNING' AND lease_until>=?", (now,)).fetchone()[0] for t in ('jobs', 'decisions', 'analysis_versions')) >= max_concurrent()
 
 
 def _has_work():
@@ -83,7 +84,8 @@ def _has_work():
     now = time.time()
     stuck = "status='QUEUED' OR (status='RUNNING' AND (lease_until IS NULL OR lease_until<?))"
     with main.db() as c:
-        return any(c.execute(f'SELECT 1 FROM {t} WHERE {stuck} LIMIT 1', (now,)).fetchone() for t in ('jobs', 'decisions'))
+        from . import intelligence
+        return any(c.execute(f'SELECT 1 FROM {t} WHERE {stuck} LIMIT 1', (now,)).fetchone() for t in ('jobs', 'decisions')) or intelligence.has_work(c, now) or outbox.pending(c, now)
 
 
 def run_one():
@@ -99,6 +101,10 @@ def run_one():
             main.render_job(job_id, token); ran = 'render'
         elif decisions.run_next(stop=stop):
             ran = 'decision'
+        else:
+            from . import intelligence
+            if intelligence.run_next(stop=stop): ran = 'analysis'
+        if not stop.is_set() and outbox.deliver(): ran = ran or 'outbox'
         if time.time() - maintenance_last.get('at', 0) > maintenance.db_interval():   # a job just woke the database anyway
             maintenance.run_db_maintenance(); maintenance_last['at'] = time.time()
     finally:

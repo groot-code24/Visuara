@@ -16,7 +16,8 @@ def test_engine_matches_configuration(client):
     with main.db() as c:
         tables = set(c.tables())
         assert {'users', 'auth_challenges', 'user_identities', 'pending_signups', 'decisions'} <= tables
-        assert not {'offers', 'campaigns', 'tracked_links', 'payment_records'} & tables
+        assert not {'offers', 'tracked_links', 'payment_records'} & tables          # the V11-removed commerce tables stay gone
+        assert 'campaign_id' in c.columns('placement_requests')                      # Phase 9 reintroduced campaigns with a new schema
 
 
 def test_providers_reflect_configuration(client, monkeypatch):
@@ -29,6 +30,20 @@ def test_providers_reflect_configuration(client, monkeypatch):
     # There are no password endpoints any more.
     assert client.post('/api/auth/login', json={'email': 'a@b.co', 'password': 'x'}).status_code in (404, 405)
     assert client.post('/api/auth/register', json={}).status_code in (404, 405)
+
+
+def test_sign_in_requests_are_limited_per_address_and_per_ip(mail, monkeypatch):
+    """The per-IP limit on sign-in requests (CC_AUTH_RATE_PER_MINUTE, 12 by default) and the per-address limit on emails.
+    The browser walk raises the per-IP one because it signs six people in from one machine, so it is checked here."""
+    monkeypatch.setenv('CC_AUTH_RATE_PER_MINUTE', '3')
+    codes = [mail.post('/api/auth/email/start', json={'email': f'p{i}@limits.io'}).status_code for i in range(4)]
+    assert codes == [200, 200, 200, 429]
+    assert 'Too many authentication attempts' in mail.post('/api/auth/email/verify', json={'email': 'p0@limits.io', 'code': '000000'}).json()['detail']
+    with main.db() as c: c.execute('DELETE FROM rate_limits')
+    monkeypatch.setenv('CC_AUTH_RATE_PER_MINUTE', '100')
+    codes = [mail.post('/api/auth/email/start', json={'email': 'same@limits.io'}).status_code for _ in range(6)]
+    assert codes == [200] * 5 + [429]                                            # five sign-in emails an hour per address
+    assert mail.post('/api/auth/email/start', json={'email': 'same@limits.io'}).json()['detail']['code'] == 'RATE_LIMITED'
 
 
 def test_email_code_signup_onboarding_and_return_signin(mail):
@@ -185,6 +200,22 @@ def test_signup_workspace_name_conflict_and_cancel(mail):
     assert r.status_code == 409 and r.json()['detail']['code'] == 'ORGANIZATION_EXISTS'
     mail.post('/api/auth/signup/cancel')
     assert mail.get('/api/auth/signup').status_code == 404
+
+
+def test_signup_chooses_what_the_workspace_does(mail):
+    """A new workspace can start as a brand or publisher, so its owner reaches the marketplace without a detour."""
+    assert email_signin(mail, 'pub@studio.io') == 'signup_required'
+    bad = mail.post('/api/auth/signup', json={'name': 'P', 'organization': 'Studio', 'kind': 'exchange'})
+    assert bad.status_code == 422                                                          # only the four kinds exist
+    r = mail.post('/api/auth/signup', json={'name': 'P', 'organization': 'Studio', 'kind': 'publisher'})
+    assert r.status_code == 200, r.text
+    me = mail.get('/api/me').json()
+    assert me['org_kind'] == 'publisher' and me['member_role'] == 'owner'
+    assert mail.get('/api/inventory').status_code == 200                                   # a publisher-only route answers
+    mail.cookies.clear()
+    assert email_signin(mail, 'old@habit.io') == 'signup_required'
+    assert mail.post('/api/auth/signup', json={'name': 'O', 'organization': 'Habit'}).status_code == 200
+    assert mail.get('/api/me').json()['org_kind'] == 'direct'                                # the default is unchanged
 
 
 def test_secure_cookie_flag(mail, monkeypatch):

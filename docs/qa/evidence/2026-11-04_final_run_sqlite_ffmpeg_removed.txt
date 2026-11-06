@@ -1,0 +1,369 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.0, pytest-9.2.0, pluggy-1.7.0 -- D:\context-commerce\.venv311\Scripts\python.exe
+rootdir: D:\context-commerce
+plugins: anyio-4.15.1, platformdirs-4.14.0
+collecting ... collected 181 items
+
+tests/test_assets_3d.py::test_prepare_asset_orientation_icc_and_warnings PASSED [  0%]
+tests/test_assets_3d.py::test_premultiplied_compositing_has_no_dark_fringe PASSED [  1%]
+tests/test_assets_3d.py::test_temporal_gains_deadband_tracking_and_clamp PASSED [  1%]
+tests/test_assets_3d.py::test_glb_loader_accepts_valid_and_rejects_adversarial PASSED [  2%]
+tests/test_assets_3d.py::test_3d_placement_renders_validates_and_previews SKIPPED [  2%]
+tests/test_assets_3d.py::test_3d_refuses_unobservable_camera SKIPPED     [  3%]
+tests/test_assets_3d.py::test_signed_download_links SKIPPED (FFmpeg/...) [  3%]
+tests/test_assets_3d.py::test_backup_restore_round_trip SKIPPED (FFm...) [  4%]
+tests/test_auth.py::test_engine_matches_configuration PASSED             [  4%]
+tests/test_auth.py::test_providers_reflect_configuration PASSED          [  5%]
+tests/test_auth.py::test_email_code_signup_onboarding_and_return_signin PASSED [  6%]
+tests/test_auth.py::test_magic_link_needs_an_explicit_click_and_works_once PASSED [  6%]
+tests/test_auth.py::test_wrong_codes_burn_the_challenge_and_responses_do_not_enumerate PASSED [  7%]
+tests/test_auth.py::test_expired_code_and_new_code_supersedes_old PASSED [  7%]
+tests/test_auth.py::test_email_rate_limit_per_address PASSED             [  8%]
+tests/test_auth.py::test_suspended_accounts_cannot_sign_in PASSED        [  8%]
+tests/test_auth.py::test_google_rejects_bad_state_and_bad_claims PASSED  [  9%]
+tests/test_auth.py::test_google_signup_links_identity_and_joins_invitation PASSED [  9%]
+tests/test_auth.py::test_google_links_existing_email_account PASSED      [ 10%]
+tests/test_auth.py::test_app_redirects_are_absolute_when_the_app_has_its_own_origin PASSED [ 11%]
+tests/test_auth.py::test_signup_workspace_name_conflict_and_cancel PASSED [ 11%]
+tests/test_auth.py::test_secure_cookie_flag PASSED                       [ 12%]
+tests/test_auth.py::test_api_root_is_not_a_web_page PASSED               [ 12%]
+tests/test_auth.py::test_sql_translation_for_postgres PASSED             [ 13%]
+tests/test_auth.py::test_development_sign_in_works_without_an_email_provider PASSED [ 13%]
+tests/test_auth.py::test_loopback_origins_are_allowed_only_in_development PASSED [ 14%]
+tests/test_auth.py::test_magic_links_point_at_the_web_app_by_default PASSED [ 14%]
+tests/test_blob.py::test_client_token_is_exactly_what_the_javascript_sdk_generates PASSED [ 15%]
+tests/test_blob.py::test_signed_read_is_exactly_what_the_javascript_sdk_generates PASSED [ 16%]
+tests/test_blob.py::test_store_id_comes_from_the_token PASSED            [ 16%]
+tests/test_blob.py::test_files_round_trip_through_the_sdk PASSED         [ 17%]
+tests/test_blob.py::test_every_generated_file_reaches_object_storage PASSED [ 17%]
+tests/test_blob.py::test_a_large_file_goes_in_parts PASSED               [ 18%]
+tests/test_blob.py::test_signed_links_expire_and_private_objects_need_them PASSED [ 18%]
+tests/test_blob.py::test_a_client_token_allows_one_upload_of_what_was_declared PASSED [ 19%]
+tests/test_blob.py::test_direct_upload_to_blob_end_to_end SKIPPED (F...) [ 19%]
+tests/test_blob.py::test_render_on_a_host_with_an_empty_disk_and_redirected_download SKIPPED [ 20%]
+tests/test_blob.py::test_production_accepts_blob_and_refuses_no_storage PASSED [ 20%]
+tests/test_blob.py::test_the_public_address_defaults_to_the_vercel_production_domain PASSED [ 21%]
+tests/test_blob.py::test_runner_endpoint_requires_the_key PASSED         [ 22%]
+tests/test_blob.py::test_runner_endpoint_does_not_exist_with_a_worker_process PASSED [ 22%]
+tests/test_blob.py::test_runner_key_is_unusable_without_a_signing_key PASSED [ 23%]
+tests/test_blob.py::test_queueing_a_render_starts_the_runner_and_one_request_runs_one_job SKIPPED [ 23%]
+tests/test_blob.py::test_runner_asks_for_another_request_while_work_remains SKIPPED [ 24%]
+tests/test_blob.py::test_runner_respects_the_concurrency_limit PASSED    [ 24%]
+tests/test_blob.py::test_polling_restarts_a_lost_runner_but_not_too_often PASSED [ 25%]
+tests/test_blob.py::test_a_kick_does_not_wait_for_the_job_and_survives_failure PASSED [ 25%]
+tests/test_blob.py::test_a_decision_resumes_after_running_out_of_time SKIPPED [ 26%]
+tests/test_blob.py::test_a_decision_continues_from_the_surface_it_stopped_at SKIPPED [ 27%]
+tests/test_blob.py::test_total_work_ceiling_names_a_length_that_would_fit PASSED [ 27%]
+tests/test_blob.py::test_budgets_follow_the_function_time_limit PASSED   [ 28%]
+tests/test_blob.py::test_a_decision_that_never_finishes_a_video_fails_instead_of_looping SKIPPED [ 28%]
+tests/test_blob.py::test_a_worker_stopping_uses_no_attempt SKIPPED (...) [ 29%]
+tests/test_blob.py::test_schema_setup_is_skipped_when_already_applied SKIPPED [ 29%]
+tests/test_blob.py::test_client_token_payload_is_readable_json PASSED    [ 30%]
+tests/test_blob.py::test_quality_check_that_outlasts_its_request_says_so SKIPPED [ 30%]
+tests/test_blob.py::test_sign_in_housekeeping_starts_the_runner_once_per_interval PASSED [ 31%]
+tests/test_blob.py::test_platform_storage_ceiling_stops_uploads_and_renders_before_the_free_blob_limit PASSED [ 32%]
+tests/test_blob.py::test_unfinished_email_or_storage_turns_off_that_feature_and_not_the_whole_api PASSED [ 32%]
+tests/test_blob.py::test_uploads_say_storage_is_not_set_up_on_vercel PASSED [ 33%]
+tests/test_blob.py::test_a_kick_falls_back_to_the_public_address_when_the_private_one_fails PASSED [ 33%]
+tests/test_dbtransfer.py::test_round_trip_between_engines_preserves_every_row PASSED [ 34%]
+tests/test_dbtransfer.py::test_tampered_dump_is_refused PASSED           [ 34%]
+tests/test_decisions.py::test_orientation_of_surfaces PASSED             [ 35%]
+tests/test_decisions.py::test_assignment_is_exact_spreads_products_and_skips_weak_fits PASSED [ 35%]
+tests/test_decisions.py::test_decision_engine_end_to_end SKIPPED (FF...) [ 36%]
+tests/test_decisions.py::test_two_products_two_videos_are_spread_with_context SKIPPED [ 37%]
+tests/test_decisions.py::test_decision_requests_are_validated_and_plan_limited PASSED [ 37%]
+tests/test_decisions.py::test_categories_endpoint PASSED                 [ 38%]
+tests/test_decisions.py::test_stalled_decision_is_requeued_then_failed PASSED [ 38%]
+tests/test_decisions.py::test_a_lease_is_renewed_during_slow_work_and_not_after_it PASSED [ 39%]
+tests/test_demo.py::test_demo_seed_builds_a_working_marketplace SKIPPED  [ 39%]
+tests/test_demo.py::test_demo_refuses_a_shared_database_and_foreign_folders PASSED [ 40%]
+tests/test_e2e_processes.py::test_release_workflow_and_worker_crash_recovery SKIPPED [ 40%]
+tests/test_foundations.py::test_migrations_are_recorded_in_order_and_run_once PASSED [ 41%]
+tests/test_foundations.py::test_a_changed_applied_migration_stops_start_up PASSED [ 41%]
+tests/test_foundations.py::test_a_database_from_a_newer_version_is_refused PASSED [ 42%]
+tests/test_foundations.py::test_migrations_must_be_unique_and_ordered PASSED [ 43%]
+tests/test_foundations.py::test_upgrading_a_pre_phase1_database_backfills_everything PASSED [ 43%]
+tests/test_foundations.py::test_memberships_follow_every_member_change PASSED [ 44%]
+tests/test_foundations.py::test_membership_drift_is_detected PASSED      [ 44%]
+tests/test_foundations.py::test_uploads_and_analyses_add_versions_and_keep_earlier_ones SKIPPED [ 45%]
+tests/test_foundations.py::test_a_valid_opportunity_is_stored_with_its_lineage PASSED [ 45%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over0-outside the scene] PASSED [ 46%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over1-end_second must be after] PASSED [ 46%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over2-visible_seconds cannot exceed] PASSED [ 47%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over3-bbox] PASSED [ 48%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over4-frame_second must be inside] PASSED [ 48%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over5-feasibility_score] PASSED [ 49%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over6-between 0 and 1] PASSED [ 49%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over7-placement_category] PASSED [ 50%]
+tests/test_foundations.py::test_invalid_opportunities_are_refused_and_never_stored[over8-raw_model_output] PASSED [ 50%]
+tests/test_foundations.py::test_an_opportunity_cannot_point_at_another_organizations_scene PASSED [ 51%]
+tests/test_foundations.py::test_an_event_exists_only_if_its_transaction_commits PASSED [ 51%]
+tests/test_foundations.py::test_delivery_retries_and_never_repeats_a_consumer_that_succeeded PASSED [ 52%]
+tests/test_foundations.py::test_events_of_one_aggregate_are_delivered_in_order_and_dead_letters_park PASSED [ 53%]
+tests/test_foundations.py::test_one_delivery_pass_drains_a_chain_of_events PASSED [ 53%]
+tests/test_foundations.py::test_a_claimed_event_cannot_be_claimed_again PASSED [ 54%]
+tests/test_foundations.py::test_the_http_runner_delivers_pending_events PASSED [ 54%]
+tests/test_foundations.py::test_new_tables_enforce_their_relationships PASSED [ 55%]
+tests/test_intelligence.py::test_segmentation_finds_cuts_and_merges_short_scenes PASSED [ 55%]
+tests/test_intelligence.py::test_following_a_surface_stops_where_it_disappears PASSED [ 56%]
+tests/test_intelligence.py::test_scores_rescale_over_measured_factors PASSED [ 56%]
+tests/test_intelligence.py::test_brand_safety_rules PASSED               [ 57%]
+tests/test_intelligence.py::test_a_staged_analysis_records_every_stage_and_owns_its_outputs SKIPPED [ 58%]
+tests/test_intelligence.py::test_a_lighting_drift_is_not_a_cut_but_a_real_cut_is[mild_lighting-1-0] SKIPPED [ 58%]
+tests/test_intelligence.py::test_a_lighting_drift_is_not_a_cut_but_a_real_cut_is[lighting_change-1-0] SKIPPED [ 59%]
+tests/test_intelligence.py::test_a_lighting_drift_is_not_a_cut_but_a_real_cut_is[cut_inside-1-1] SKIPPED [ 59%]
+tests/test_intelligence.py::test_a_lighting_drift_is_not_a_cut_but_a_real_cut_is[bare-2-0] SKIPPED [ 60%]
+tests/test_intelligence.py::test_a_lighting_drift_is_not_a_cut_but_a_real_cut_is[bare-3-0] SKIPPED [ 60%]
+tests/test_intelligence.py::test_an_analysis_resumes_after_running_out_of_time SKIPPED [ 61%]
+tests/test_intelligence.py::test_failures_retry_then_fail_with_the_error SKIPPED [ 61%]
+tests/test_intelligence.py::test_a_queued_analysis_can_be_cancelled SKIPPED [ 62%]
+tests/test_intelligence.py::test_validation_refuses_a_deleted_or_unlicensed_video SKIPPED [ 62%]
+tests/test_intelligence.py::test_analyses_are_private_to_their_organization ERROR [ 63%]
+tests/test_marketplace.py::test_listing_needs_review_and_verified_rights SKIPPED [ 64%]
+tests/test_marketplace.py::test_only_one_brand_wins_a_reservation SKIPPED [ 64%]
+tests/test_marketplace.py::test_the_whole_marketplace_flow SKIPPED (...) [ 65%]
+tests/test_marketplace.py::test_the_ledger_is_append_only_and_balanced PASSED [ 65%]
+tests/test_orgs.py::test_a_person_creates_and_switches_between_organizations PASSED [ 66%]
+tests/test_orgs.py::test_switching_needs_an_active_membership PASSED     [ 66%]
+tests/test_orgs.py::test_existing_accounts_accept_invitations_and_get_that_role PASSED [ 67%]
+tests/test_orgs.py::test_suspension_and_removal_are_per_organization PASSED [ 67%]
+tests/test_orgs.py::test_removal_from_the_default_organization_moves_the_default PASSED [ 68%]
+tests/test_orgs.py::test_only_the_owner_changes_the_organization_kind PASSED [ 69%]
+tests/test_orgs.py::test_platform_administration_is_granted_outside_the_api PASSED [ 69%]
+tests/test_orgs.py::test_require_kind PASSED                             [ 70%]
+tests/test_platform.py::test_member_roles_gate_actions_server_side PASSED [ 70%]
+tests/test_platform.py::test_suspension_removal_and_ownership_transfer PASSED [ 71%]
+tests/test_platform.py::test_invitations_revoke_expire_single_use PASSED [ 71%]
+tests/test_platform.py::test_quotas_and_limits PASSED                    [ 72%]
+tests/test_platform.py::test_every_plan_delivers_what_the_pricing_page_promises PASSED [ 72%]
+tests/test_platform.py::test_a_long_quality_check_answers_running_and_can_be_collected SKIPPED [ 73%]
+tests/test_platform.py::test_plans_limit_members_renders_and_video_length SKIPPED [ 74%]
+tests/test_platform.py::test_health_split_and_cross_origin_protection FAILED [ 74%]
+tests/test_platform.py::test_operator_metrics_need_a_token PASSED        [ 75%]
+tests/test_platform.py::test_worker_wake_file_and_fair_claiming PASSED   [ 75%]
+tests/test_platform.py::test_job_timeout_and_shutdown_hand_back SKIPPED  [ 76%]
+tests/test_platform.py::test_direct_upload_complete_mismatch_cancel_and_expiry SKIPPED [ 76%]
+tests/test_platform.py::test_server_upload_fallback_without_object_storage PASSED [ 77%]
+tests/test_platform.py::test_cache_cleanup_evicts_only_synced_idle_files PASSED [ 77%]
+tests/test_platform.py::test_google_id_token_signature_verification PASSED [ 78%]
+tests/test_platform.py::test_log_redaction PASSED                        [ 79%]
+tests/test_platform.py::test_production_refuses_development_stand_ins PASSED [ 79%]
+tests/test_platform.py::test_secret_scanner_detects_credentials_and_allows_placeholders PASSED [ 80%]
+tests/test_platform.py::test_operator_plan_cli PASSED                    [ 80%]
+tests/test_real_footage.py::test_manifest_validation_refuses_missing_consent_and_changed_files FAILED [ 81%]
+tests/test_real_footage.py::test_creator_level_split_is_deterministic PASSED [ 81%]
+tests/test_real_footage.py::test_statistics PASSED                       [ 82%]
+tests/test_real_footage.py::test_run_sheet_and_report_end_to_end SKIPPED [ 82%]
+tests/test_security_marketplace.py::test_other_organizations_see_nothing SKIPPED [ 83%]
+tests/test_security_marketplace.py::test_roles_and_kinds_gate_marketplace_actions SKIPPED [ 83%]
+tests/test_security_marketplace.py::test_adversarial_input_is_refused_or_stored_inert SKIPPED [ 84%]
+tests/test_security_marketplace.py::test_programmatic_capabilities_are_labelled PASSED [ 85%]
+tests/test_security_marketplace.py::test_the_feed_shows_only_available_inventory SKIPPED [ 85%]
+tests/test_storage.py::test_object_keys_are_relative_to_media_directories PASSED [ 86%]
+tests/test_storage.py::test_write_through_restore_and_presigned_delivery SKIPPED [ 86%]
+tests/test_storage.py::test_push_media_uploads_existing_local_files PASSED [ 87%]
+tests/test_videos.py::test_metadata_comes_from_the_file_and_duplicates_are_detected SKIPPED [ 87%]
+tests/test_videos.py::test_a_mislabelled_file_is_refused SKIPPED (FF...) [ 88%]
+tests/test_videos.py::test_new_versions_keep_earlier_versions_and_analyses SKIPPED [ 88%]
+tests/test_videos.py::test_a_video_in_use_cannot_be_replaced_or_deleted SKIPPED [ 89%]
+tests/test_videos.py::test_deletion_removes_files_and_hides_the_video SKIPPED [ 90%]
+tests/test_videos.py::test_older_versions_are_hashed_by_maintenance SKIPPED [ 90%]
+tests/test_workflow.py::test_session_logout_and_health PASSED            [ 91%]
+tests/test_workflow.py::test_org_isolation PASSED                        [ 91%]
+tests/test_workflow.py::test_csrf_and_origin_protection PASSED           [ 92%]
+tests/test_workflow.py::test_overlay_workflow_render_download_and_takedown SKIPPED [ 92%]
+tests/test_workflow.py::test_tracking_quad_validation_and_real_perspective_render SKIPPED [ 93%]
+tests/test_workflow.py::test_lifecycle_rejects_invalid_transitions PASSED [ 93%]
+tests/test_workflow.py::test_renderer_routing_refuses_unsupported PASSED [ 94%]
+tests/test_workflow.py::test_quality_gate_on_labelled_fixtures[static-None] SKIPPED [ 95%]
+tests/test_workflow.py::test_quality_gate_on_labelled_fixtures[handheld-None] SKIPPED [ 95%]
+tests/test_workflow.py::test_quality_gate_on_labelled_fixtures[cut_inside-SCENE_CUT_IN_INTERVAL] SKIPPED [ 96%]
+tests/test_workflow.py::test_quality_gate_on_labelled_fixtures[occluder-PARTIAL_OCCLUSION_UNSUPPORTED] SKIPPED [ 96%]
+tests/test_workflow.py::test_quality_gate_on_labelled_fixtures[low_texture-LOW_TEXTURE] SKIPPED [ 97%]
+tests/test_workflow.py::test_quality_gate_on_labelled_fixtures[exits_frame-PRODUCT_OUT_OF_FRAME] SKIPPED [ 97%]
+tests/test_workflow.py::test_quality_gate_on_labelled_fixtures[lighting_change-LIGHTING_CHANGE_UNSUPPORTED] SKIPPED [ 98%]
+tests/test_workflow.py::test_tracked_workflow_rejection_version_binding_delivery_and_roles SKIPPED [ 98%]
+tests/test_workflow.py::test_tampered_track_and_takedown_block_render_and_delivery SKIPPED [ 99%]
+tests/test_workflow.py::test_cancel_mid_render_lease_recovery_and_dead_letter SKIPPED [100%]
+
+=================================== ERRORS ====================================
+______ ERROR at setup of test_analyses_are_private_to_their_organization ______
+
+manual = <helpers.CSRSTestClient object at 0x000002EAED8A0690>
+tmp_path = WindowsPath('C:/Users/palma/AppData/Local/Temp/pytest-of-palma/pytest-136/test_analyses_are_private_to_t0')
+
+    @pytest.fixture()
+    def room(manual, tmp_path):
+        owner(manual, 'pub@pub.io', 'Pub Studio')
+>       meta = scene.generate('room', 1, tmp_path / 'clips')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_intelligence.py:66: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kind = 'room', seed = 1
+out_dir = WindowsPath('C:/Users/palma/AppData/Local/Temp/pytest-of-palma/pytest-136/test_analyses_are_private_to_t0/clips')
+
+    def generate(kind, seed, out_dir):
+        """kind: 'room' (poster + table) or 'bare' (no trackable surface). Writes <kind>_s<seed>.mp4."""
+>       if not shutil.which('ffmpeg'): raise RuntimeError('ffmpeg is required')
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: ffmpeg is required
+
+benchmark\fixtures_scene.py:49: RuntimeError
+---------------------------- Captured stdout setup ----------------------------
+00:11:32 INFO    cc request method=GET path=/api/auth/csrf status=200 ms=3.1 [1a36123633f0a071]
+----------------------------- Captured log setup ------------------------------
+INFO     cc:obs.py:57 request
+================================== FAILURES ===================================
+________________ test_health_split_and_cross_origin_protection ________________
+
+manual = <helpers.CSRSTestClient object at 0x000002EAED942390>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002EAED9F8550>
+
+    def test_health_split_and_cross_origin_protection(manual, monkeypatch):
+        assert manual.get('/api/health/live').json() == {'status': 'ok'}
+        r = manual.get('/api/health/ready')
+>       assert r.status_code == 200 and r.json()['checks']['database'] == 'ok'
+E       assert (503 == 200)
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests\test_platform.py:186: AssertionError
+---------------------------- Captured stdout call -----------------------------
+00:12:09 INFO    cc request method=GET path=/api/health/ready status=503 ms=27.8 [d5e873785f8b191f]
+------------------------------ Captured log call ------------------------------
+INFO     cc:obs.py:57 request
+_____ test_manifest_validation_refuses_missing_consent_and_changed_files ______
+
+tmp_path = WindowsPath('C:/Users/palma/AppData/Local/Temp/pytest-of-palma/pytest-136/test_manifest_validation_refus0')
+
+    def test_manifest_validation_refuses_missing_consent_and_changed_files(tmp_path):
+>       meta = generate('static', 1, tmp_path / 'g')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_real_footage.py:23: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+benchmark\fixtures.py:131: in generate
+    meta = _render(kind, seed, out_dir, world, False, rng)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+benchmark\fixtures.py:147: in _render
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\palma\AppData\Local\Programs\Python\Python311\Lib\subprocess.py:1022: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <Popen: returncode: None args: ['ffmpeg', '-y', '-loglevel', 'error', '-f', ...>
+args = 'ffmpeg -y -loglevel error -f rawvideo -pix_fmt bgr24 -s 480x270 -r 25 -i - -f lavfi -i sine=frequency=330:duration=3....C:\\Users\\palma\\AppData\\Local\\Temp\\pytest-of-palma\\pytest-136\\test_manifest_validation_refus0\\g\\static_s1.mp4'
+executable = None, preexec_fn = None, close_fds = False, pass_fds = ()
+cwd = None, env = None
+startupinfo = <subprocess.STARTUPINFO object at 0x000002EAED87A950>
+creationflags = 0, shell = False, p2cread = Handle(2948), p2cwrite = 12
+c2pread = -1, c2pwrite = Handle(3044), errread = -1, errwrite = Handle(2804)
+unused_restore_signals = True, unused_gid = None, unused_gids = None
+unused_uid = None, unused_umask = -1, unused_start_new_session = False
+unused_process_group = -1
+
+    def _execute_child(self, args, executable, preexec_fn, close_fds,
+                       pass_fds, cwd, env,
+                       startupinfo, creationflags, shell,
+                       p2cread, p2cwrite,
+                       c2pread, c2pwrite,
+                       errread, errwrite,
+                       unused_restore_signals,
+                       unused_gid, unused_gids, unused_uid,
+                       unused_umask,
+                       unused_start_new_session, unused_process_group):
+        """Execute program (MS Windows version)"""
+    
+        assert not pass_fds, "pass_fds not supported on Windows."
+    
+        if isinstance(args, str):
+            pass
+        elif isinstance(args, bytes):
+            if shell:
+                raise TypeError('bytes args is not allowed on Windows')
+            args = list2cmdline([args])
+        elif isinstance(args, os.PathLike):
+            if shell:
+                raise TypeError('path-like args is not allowed when '
+                                'shell is true')
+            args = list2cmdline([args])
+        else:
+            args = list2cmdline(args)
+    
+        if executable is not None:
+            executable = os.fsdecode(executable)
+    
+        # Process startup details
+        if startupinfo is None:
+            startupinfo = STARTUPINFO()
+        else:
+            # bpo-34044: Copy STARTUPINFO since it is modified above,
+            # so the caller can reuse it multiple times.
+            startupinfo = startupinfo.copy()
+    
+        use_std_handles = -1 not in (p2cread, c2pwrite, errwrite)
+        if use_std_handles:
+            startupinfo.dwFlags |= _winapi.STARTF_USESTDHANDLES
+            startupinfo.hStdInput = p2cread
+            startupinfo.hStdOutput = c2pwrite
+            startupinfo.hStdError = errwrite
+    
+        attribute_list = startupinfo.lpAttributeList
+        have_handle_list = bool(attribute_list and
+                                "handle_list" in attribute_list and
+                                attribute_list["handle_list"])
+    
+        # If we were given an handle_list or need to create one
+        if have_handle_list or (use_std_handles and close_fds):
+            if attribute_list is None:
+                attribute_list = startupinfo.lpAttributeList = {}
+            handle_list = attribute_list["handle_list"] = \
+                list(attribute_list.get("handle_list", []))
+    
+            if use_std_handles:
+                handle_list += [int(p2cread), int(c2pwrite), int(errwrite)]
+    
+            handle_list[:] = self._filter_handle_list(handle_list)
+    
+            if handle_list:
+                if not close_fds:
+                    warnings.warn("startupinfo.lpAttributeList['handle_list'] "
+                                  "overriding close_fds", RuntimeWarning)
+    
+                # When using the handle_list we always request to inherit
+                # handles but the only handles that will be inherited are
+                # the ones in the handle_list
+                close_fds = False
+    
+        if shell:
+            startupinfo.dwFlags |= _winapi.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = _winapi.SW_HIDE
+            comspec = os.environ.get("COMSPEC", "cmd.exe")
+            args = '{} /c "{}"'.format (comspec, args)
+    
+        if cwd is not None:
+            cwd = os.fsdecode(cwd)
+    
+        sys.audit("subprocess.Popen", executable, args, cwd, env)
+    
+        # Start the process
+        try:
+>           hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                                     # no special security
+                                     None, None,
+                                     int(not close_fds),
+                                     creationflags,
+                                     env,
+                                     cwd,
+                                     startupinfo)
+E                                    FileNotFoundError: [WinError 2] The system cannot find the file specified
+
+C:\Users\palma\AppData\Local\Programs\Python\Python311\Lib\subprocess.py:1491: FileNotFoundError
+=========================== short test summary info ===========================
+FAILED tests/test_platform.py::test_health_split_and_cross_origin_protection
+FAILED tests/test_real_footage.py::test_manifest_validation_refuses_missing_consent_and_changed_files
+ERROR tests/test_intelligence.py::test_analyses_are_private_to_their_organization
+======= 2 failed, 118 passed, 60 skipped, 1 error in 194.49s (0:03:14) ========
+sqlite exit 1

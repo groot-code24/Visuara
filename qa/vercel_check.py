@@ -55,6 +55,8 @@ def main(base):
         assert h.get('mode') == 'production', 'not running in production mode: the API should be built from Dockerfile.vercel'
         assert h.get('queue') == 'on_demand_runner', f'unexpected job queue: {h.get("queue")}'
         assert h['object_storage']['backend'] == 'vercel_blob', f'storage is {h["object_storage"]["backend"]}, expected vercel_blob'
+        det = h.get('object_detection') or {}
+        assert det.get('installed'), f'the object-detection model is not in the image ({det}): the image build fetches it, see DEPLOYMENT_RUNBOOK.md §2a'
 
     def providers():
         r = http.get(base + '/api/auth/providers'); assert r.headers.get('content-type', '').startswith('application/json'), f'/api/auth/providers returned {r.status_code}: the API is not running'

@@ -1,0 +1,84 @@
+[
+ {
+  "step": "production settings accepted; database, Blob and FFmpeg ready",
+  "ok": true,
+  "seconds": 2.6,
+  "note": "first start 5.5s"
+ },
+ {
+  "step": "database and email connections are encrypted",
+  "ok": true,
+  "seconds": 0.8,
+  "note": "2 database connections, all over TLS; plain-text SMTP refused"
+ },
+ {
+  "step": "a new instance starts without repeating schema setup",
+  "ok": true,
+  "seconds": 6.4,
+  "note": "new instance serving after 3.4s without repeating schema setup"
+ },
+ {
+  "step": "job runner refuses outsiders; dashboard guarded; security headers",
+  "ok": true,
+  "seconds": 2.3
+ },
+ {
+  "step": "Google sign-in starts with the right client, callback and PKCE",
+  "ok": true,
+  "seconds": 0.1
+ },
+ {
+  "step": "magic link by email, onboarding, dashboard",
+  "ok": true,
+  "seconds": 4.8
+ },
+ {
+  "step": "an image over the request limit gets a clear message",
+  "ok": true,
+  "seconds": 2.5
+ },
+ {
+  "step": "browser uploads the video straight to Blob with the real SDK",
+  "ok": true,
+  "seconds": 3.9
+ },
+ {
+  "step": "decision runs on the separate runner; preview through a signed link",
+  "ok": true,
+  "seconds": 49.1
+ },
+ {
+  "step": "library thumbnails load through signed links",
+  "ok": true,
+  "seconds": 1.0
+ },
+ {
+  "step": "runner killed mid-render: dashboard polling restarts it and the job completes",
+  "ok": true,
+  "seconds": 49.9,
+  "note": "claimed,lease_recovered,claimed,succeeded"
+ },
+ {
+  "step": "finished video downloads through a signed link, with range requests",
+  "ok": true,
+  "seconds": 0.2,
+  "note": "outputs/placement_1_v1_job_1.mp4"
+ },
+ {
+  "step": "a large video uploads in parts",
+  "ok": true,
+  "seconds": 5.3,
+  "note": "36 MB in 5 parts"
+ },
+ {
+  "step": "nothing depends on a writable disk outside /tmp",
+  "ok": true,
+  "seconds": 0.4
+ },
+ {
+  "step": "no CSP violations or page errors",
+  "ok": true,
+  "violations": [],
+  "errors": []
+ }
+]

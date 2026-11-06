@@ -1,0 +1,19 @@
+== lint
+
+✖ 10 problems (0 errors, 10 warnings)
+
+lint exit 0
+== test
+test exit 0
+== typecheck
+tsc exit 0
+== audit
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+audit exit 0
+== build
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+build exit 0

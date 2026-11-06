@@ -87,13 +87,14 @@ def _quota(code, message, **extra):
 def org_usage(c, org_id):
     day = time.strftime('%Y-%m-%d')
     storage = (c.execute('SELECT COALESCE(SUM(size_bytes),0) FROM videos WHERE org_id=?', (org_id,)).fetchone()[0]
+               + c.execute('SELECT COALESCE(SUM(vv.size_bytes),0) FROM video_versions vv JOIN videos v ON v.id=vv.video_id WHERE v.org_id=? AND vv.version<v.current_version', (org_id,)).fetchone()[0]
                + c.execute('SELECT COALESCE(SUM(size_bytes),0) FROM products WHERE org_id=?', (org_id,)).fetchone()[0]
                + c.execute('SELECT COALESCE(SUM(output_bytes),0) FROM jobs WHERE org_id=?', (org_id,)).fetchone()[0]
                + c.execute("SELECT COALESCE(SUM(expected_bytes),0) FROM upload_sessions WHERE org_id=? AND status='PENDING'", (org_id,)).fetchone()[0])
     return {'storage_bytes': int(storage),
             'videos_uploaded_today': c.execute('SELECT COUNT(*) FROM videos WHERE org_id=? AND created_at>=?', (org_id, day)).fetchone()[0],
             'active_jobs': c.execute("SELECT COUNT(*) FROM jobs WHERE org_id=? AND status IN ('QUEUED','RUNNING')", (org_id,)).fetchone()[0],
-            'members': c.execute('SELECT COUNT(*) FROM users WHERE org_id=? AND removed_at IS NULL', (org_id,)).fetchone()[0],
+            'members': c.execute("SELECT COUNT(*) FROM memberships WHERE org_id=? AND status<>'REMOVED'", (org_id,)).fetchone()[0],
             'decisions_this_month': c.execute('SELECT COUNT(*) FROM decisions WHERE org_id=? AND created_at>=?', (org_id, _month_start())).fetchone()[0],
             'renders_this_month': c.execute("SELECT COUNT(*) FROM jobs WHERE org_id=? AND created_at>=? AND status NOT IN ('CANCELLED')", (org_id, _month_start())).fetchone()[0]}
 
@@ -152,6 +153,7 @@ def check_platform_storage(c, incoming_bytes=0):
     cap = platform_storage_bytes()
     if not cap: return
     used = (c.execute('SELECT COALESCE(SUM(size_bytes),0) FROM videos').fetchone()[0]
+            + c.execute('SELECT COALESCE(SUM(vv.size_bytes),0) FROM video_versions vv JOIN videos v ON v.id=vv.video_id WHERE vv.version<v.current_version').fetchone()[0]
             + c.execute('SELECT COALESCE(SUM(size_bytes),0) FROM products').fetchone()[0]
             + c.execute('SELECT COALESCE(SUM(output_bytes),0) FROM jobs').fetchone()[0]
             + c.execute("SELECT COALESCE(SUM(expected_bytes),0) FROM upload_sessions WHERE status='PENDING'").fetchone()[0])

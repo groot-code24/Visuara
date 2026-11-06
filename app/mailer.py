@@ -33,7 +33,9 @@ def sender():
 
 def send(to, subject, text, html=None, outbox_dir=None):
     msg = EmailMessage()
-    msg['From'] = sender(); msg['To'] = to; msg['Subject'] = subject
+    # Subjects carry names people typed (an inviter, a workspace): a line break in a header is refused by the email
+    # library with ValueError, which used to escape as a 500 after the invitation was saved.
+    msg['From'] = sender(); msg['To'] = to; msg['Subject'] = ' '.join(str(subject).split())
     msg.set_content(text)
     if html: msg.add_alternative(html, subtype='html')
     b = backend()
@@ -43,7 +45,9 @@ def send(to, subject, text, html=None, outbox_dir=None):
         (d / 'latest.json').write_text(json.dumps({'to': to, 'subject': subject, 'text': text, 'file': f.name}))
         return {'backend': 'outbox', 'file': str(f)}
     if b != 'smtp': raise MailError('Email delivery is not configured')
-    host = os.environ['CC_SMTP_HOST']; mode = os.getenv('CC_SMTP_TLS', 'starttls').lower()
+    host = os.environ['CC_SMTP_HOST']; mode = (os.getenv('CC_SMTP_TLS') or 'starttls').strip().lower()
+    # Anything but these three used to fall through to plain SMTP: refuse it rather than send credentials in clear.
+    if mode not in ('starttls', 'ssl', 'none'): raise MailError('CC_SMTP_TLS must be starttls, ssl or none')
     port = int(os.getenv('CC_SMTP_PORT', '465' if mode == 'ssl' else '587'))
     ctx = ssl.create_default_context()
     try:

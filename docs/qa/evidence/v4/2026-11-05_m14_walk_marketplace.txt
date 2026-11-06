@@ -1,0 +1,13 @@
+PASS every page has a per-request script nonce and no inline-script allowance
+PASS a new person signs up as a publisher and gets publisher navigation
+PASS publisher: analyses, analysis detail and inventory
+PASS publisher: approves the placement request
+PASS brand: marketplace, campaigns and the campaign page
+PASS brand: accepts the quote and sees the invoice
+PASS admin: marks the invoice paid; the ledger balances
+PASS publisher: starts production, quality check, approval, render, delivery
+PASS brand: accepts the delivery; organizations page
+PASS publisher: a sold video cannot be deleted; another one can
+PASS mobile layout (390 px) of the marketplace pages
+PASS no page errors []
+12/12 passed; screenshots in D:\context-commerce\data\qa-marketplace

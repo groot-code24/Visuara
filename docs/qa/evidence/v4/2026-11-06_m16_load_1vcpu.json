@@ -1,0 +1,110 @@
+{
+ "measured_at": "2026-11-06 02:50:03",
+ "where": "production image, 1 pinned vCPU, 2 GB (docker --cpuset-cpus=0 --memory=2g), uvicorn 1 process",
+ "database": "SQLite (temporary)",
+ "users": 20,
+ "seconds": 63.1,
+ "requests": 2677,
+ "requests_per_second": 42.4,
+ "server_errors": 0,
+ "error_rate": 0.0,
+ "client_errors_by_endpoint": {},
+ "latency_ms": {
+  "p50": 346.2,
+  "p95": 868.7,
+  "p99": 2772.5,
+  "max": 5806.4
+ },
+ "per_endpoint": {
+  "GET /api/campaigns": {
+   "n": 115,
+   "p50": 2221.6,
+   "p95": 4136.4
+  },
+  "GET /api/earnings": {
+   "n": 151,
+   "p50": 310.4,
+   "p95": 519.9
+  },
+  "GET /api/inventory": {
+   "n": 141,
+   "p50": 501.5,
+   "p95": 1011.9
+  },
+  "GET /api/invoices": {
+   "n": 264,
+   "p50": 310.5,
+   "p95": 502.4
+  },
+  "GET /api/ledger": {
+   "n": 104,
+   "p50": 299.6,
+   "p95": 430.8
+  },
+  "GET /api/marketplace/inventory": {
+   "n": 110,
+   "p50": 565.8,
+   "p95": 918.2
+  },
+  "GET /api/me": {
+   "n": 262,
+   "p50": 317.9,
+   "p95": 482.0
+  },
+  "GET /api/notifications": {
+   "n": 262,
+   "p50": 298.3,
+   "p95": 433.4
+  },
+  "GET /api/opportunities": {
+   "n": 136,
+   "p50": 316.1,
+   "p95": 540.2
+  },
+  "GET /api/organizations": {
+   "n": 145,
+   "p50": 323.1,
+   "p95": 512.7
+  },
+  "GET /api/payments/config": {
+   "n": 124,
+   "p50": 219.8,
+   "p95": 387.5
+  },
+  "GET /api/placement-requests": {
+   "n": 253,
+   "p50": 367.6,
+   "p95": 570.9
+  },
+  "GET /api/products": {
+   "n": 97,
+   "p50": 296.2,
+   "p95": 515.8
+  },
+  "GET /api/usage": {
+   "n": 148,
+   "p50": 469.4,
+   "p95": 635.7
+  },
+  "GET /api/videos": {
+   "n": 150,
+   "p50": 316.0,
+   "p95": 469.9
+  },
+  "POST /api/campaigns": {
+   "n": 92,
+   "p50": 453.1,
+   "p95": 758.5
+  },
+  "PUT /api/profile": {
+   "n": 123,
+   "p50": 420.8,
+   "p95": 667.2
+  }
+ },
+ "thresholds": {
+  "max_error_rate": 0.01,
+  "max_p95_ms": 1500
+ },
+ "passed": true
+}

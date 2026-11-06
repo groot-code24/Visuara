@@ -6,7 +6,9 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "node --test \"tests/*.test.mjs\""
   },
   "dependencies": {
     "@vercel/blob": "2.8.2",
@@ -19,6 +21,8 @@
     "@types/node": "22.20.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.2",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3"
   },

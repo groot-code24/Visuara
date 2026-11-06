@@ -23,3 +23,9 @@ frontend/dist/
 node_modules/
 *.part.mp4
 *.dl
+# Demonstration environment (ops/demo.py): its SQLite database holds sessions
+demo-data/
+
+# Object-detection model weights: fetched and checksum-verified by ops/fetch_models.py, not kept in git
+models/*.onnx
+models/*.download

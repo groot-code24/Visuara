@@ -35,11 +35,11 @@ function fallbackMessage(status: number) {
   return status >= 500 ? 'Something went wrong on our side. Please try again.' : `Request failed (${status})`;
 }
 
-type Opts = { method?: string; json?: unknown; form?: FormData; signal?: AbortSignal; redirectOn401?: boolean };
+type Opts = { method?: string; json?: unknown; form?: FormData; signal?: AbortSignal; redirectOn401?: boolean; headers?: Record<string, string> };
 
 export async function api<T = unknown>(path: string, opts: Opts = {}): Promise<T> {
   const method = opts.method || (opts.json !== undefined || opts.form ? 'POST' : 'GET');
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(opts.headers || {}) };
   if (method !== 'GET') headers['X-CSRF-Token'] = await csrfToken();
   let body: BodyInit | undefined;
   if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(opts.json); }
@@ -109,10 +109,11 @@ export async function runQualityCheck(placementId: number) {
 }
 
 /** Upload one video: straight to private storage when the server offers it, otherwise through the API. */
-export async function uploadVideo(file: File, title: string, onProgress: (f: number) => void, signal?: AbortSignal) {
+/** Upload a video, or, with `videoId`, a new version of that video. */
+export async function uploadVideo(file: File, title: string, onProgress: (f: number) => void, signal?: AbortSignal, videoId?: number) {
   const type = file.type || 'video/mp4';
   const init = await api<{ method: string; upload_id?: number; put_url?: string; headers?: Record<string, string>; pathname?: string; client_token?: string }>('/api/uploads/video', {
-    json: { title, filename: file.name, content_type: type, size_bytes: file.size, license_confirmed: true },
+    json: { title, filename: file.name, content_type: type, size_bytes: file.size, license_confirmed: true, video_id: videoId ?? null },
   });
   if (init.method === 'blob' && init.pathname && init.client_token && init.upload_id) {
     const { put } = await import('@vercel/blob/client');
@@ -134,7 +135,7 @@ export async function uploadVideo(file: File, title: string, onProgress: (f: num
   }
   const form = new FormData();
   form.append('title', title); form.append('license_confirmed', 'true'); form.append('video', file);
-  const r = await xhrUpload('/api/videos', 'POST', form, { 'X-CSRF-Token': await csrfToken() }, onProgress, signal);
+  const r = await xhrUpload(videoId ? `/api/videos/${videoId}/versions` : '/api/videos', 'POST', form, { 'X-CSRF-Token': await csrfToken() }, onProgress, signal);
   if (r.status < 200 || r.status >= 300) {
     const e = errorMessage(r.body, 'Upload failed');
     throw new ApiError(r.status, e.message, e.code);

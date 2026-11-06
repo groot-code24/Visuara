@@ -1,0 +1,56 @@
+{
+ "cpus": 1,
+ "video_seconds": 29.6,
+ "resolution": [
+  480,
+  270
+ ],
+ "status": "COMPLETED",
+ "total_seconds": 36.0,
+ "seconds_per_video_second": 1.218,
+ "peak_rss_mb": 552.1,
+ "model": "yolox-tiny@427cc366d34e",
+ "stages": {
+  "VALIDATING": {
+   "status": "DONE",
+   "seconds": 0.002
+  },
+  "EXTRACTING_METADATA": {
+   "status": "DONE",
+   "seconds": 0.511
+  },
+  "SEGMENTING": {
+   "status": "DONE",
+   "seconds": 2.214
+  },
+  "EXTRACTING_FRAMES": {
+   "status": "DONE",
+   "seconds": 3.112
+  },
+  "DETECTING_OBJECTS": {
+   "status": "DONE",
+   "seconds": 20.489
+  },
+  "TRACKING_OBJECTS": {
+   "status": "DONE",
+   "seconds": 0.065
+  },
+  "UNDERSTANDING_SCENES": {
+   "status": "PARTIAL",
+   "seconds": 4.326
+  },
+  "DETECTING_PLACEMENTS": {
+   "status": "DONE",
+   "seconds": 4.921
+  },
+  "SCORING_OPPORTUNITIES": {
+   "status": "DONE",
+   "seconds": 0.071
+  }
+ },
+ "detection": {
+  "frames": 55,
+  "ms_per_frame": 354.6,
+  "detections": 7
+ }
+}

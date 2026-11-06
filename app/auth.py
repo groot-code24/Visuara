@@ -9,6 +9,8 @@ import base64, hashlib, hmac, html, json, os, re, secrets, time, urllib.parse
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from . import jobrunner, main as m, mailer
@@ -91,7 +93,9 @@ def _resolve(c, email, name, provider, subject):
         if user and provider == 'google':
             c.execute('INSERT INTO user_identities(user_id,provider,subject,email) VALUES(?,?,?,?) ON CONFLICT(provider,subject) DO NOTHING', (user['id'], 'google', subject, email))
             m.event(c, dict(user), 'auth.identity_linked', 'user', user['id'], {'provider': 'google'})
-    if user and (user['suspended_at'] or user['removed_at']):
+    # Refused when no membership is active; an account-level suspension (users.suspended_at) covers the default organization.
+    if user and (user['removed_at'] or not c.execute("SELECT 1 FROM memberships WHERE user_id=? AND status='ACTIVE' AND org_id<>?",
+                                                      (user['id'], user['org_id'] if user['suspended_at'] else -1)).fetchone()):
         return 'suspended', None
     if user:
         m.event(c, dict(user), 'auth.signed_in', 'user', user['id'], {'method': provider})
@@ -382,6 +386,9 @@ class SignupIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     organization: str = Field(default='', max_length=120)
     invitation_id: int | None = None
+    # What the new workspace does: 'brand' and 'agency' buy placements, 'publisher' sells scenes, 'direct' places products
+    # in its own videos. Ignored when joining by invitation (the organization already has a kind).
+    kind: Literal['direct', 'brand', 'publisher', 'agency'] = 'direct'
 
 
 @router.post('/api/auth/signup')
@@ -403,16 +410,17 @@ def complete_signup(body: SignupIn, request: Request):
             if not org_name: raise _err(422, 'ORGANIZATION_REQUIRED', 'Name your workspace (your company, brand or studio)')
             if c.execute('SELECT id FROM organizations WHERE lower(name)=lower(?)', (org_name,)).fetchone():
                 raise _err(409, 'ORGANIZATION_EXISTS', 'A workspace with this name exists. Choose another name, or ask a member to invite you.')
-            org_id = c.execute('INSERT INTO organizations(name,plan) VALUES(?,?)', (org_name, m.limits.default_plan())).lastrowid
+            org_id = c.execute('INSERT INTO organizations(name,plan,kind) VALUES(?,?,?)', (org_name, m.limits.default_plan(), body.kind)).lastrowid
             member_role = 'owner'
         # users.role is a legacy column (V6-V10 brand/creator workspaces); every V11 account is 'brand'.
         uid = c.execute('INSERT INTO users(email,password_hash,name,role,org_id,member_role) VALUES(?,?,?,?,?,?)', (email, '', body.name.strip(), 'brand', org_id, member_role)).lastrowid
+        from . import members; members.sync_membership(c, uid)
         if p['provider'] == 'google' and p['subject']:
             c.execute('INSERT INTO user_identities(user_id,provider,subject,email) VALUES(?,?,?,?)', (uid, 'google', p['subject'], email))
         c.execute('DELETE FROM pending_signups WHERE token_hash=?', (p['token_hash'],))
         user = {'id': uid, 'email': email, 'name': body.name.strip(), 'org_id': org_id, 'member_role': member_role,
                 'organization': c.execute('SELECT name FROM organizations WHERE id=?', (org_id,)).fetchone()['name']}
-        m.event(c, user, 'user.signed_up', 'user', uid, {'method': p['provider'], 'via_invitation': bool(body.invitation_id)})
+        m.event(c, user, 'user.signed_up', 'user', uid, {'method': p['provider'], 'via_invitation': bool(body.invitation_id), 'kind': None if body.invitation_id else body.kind})
         token = _start_session(c, uid)
     resp = JSONResponse({'user': user})
     _set(resp, 'cc_session', token, SESSION_TTL); resp.delete_cookie('cc_signup', path='/')

@@ -12,7 +12,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_
     CC_DB_POOL_SIZE=5 CC_DB_POOL_MAX_IDLE=30 CC_MIN_FREE_DISK_GB=0 \
     CC_RENDER_PRESET=superfast CC_DECISION_CANDIDATES_PER_VIDEO=3 \
     CC_MAX_IMAGE_MB=4 CC_MAX_VIDEO_MB=200 CC_MAX_VIDEO_GIGAPIXELS=2.9 CC_CACHE_MAX_MB=256 CC_PLATFORM_STORAGE_MB=700 FORWARDED_ALLOW_IPS=*
+# Debian's security updates for the base image's own packages are applied at build time (the CI image scan, D-QA-06,
+# fails on a CRITICAL or HIGH vulnerability that has a fix).
 RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends ffmpeg tini \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
@@ -20,6 +23,11 @@ COPY requirements.txt .
 RUN pip install --upgrade "pip>=26.2" && pip install -r requirements.txt
 COPY app ./app
 COPY ops ./ops
+# The object-detection model is downloaded at build time and installed only if it matches the SHA-256 pinned in
+# app/detection.py (ops/fetch_models.py). Its Apache-2.0 licence ships with it.
+COPY models/README.md ./models/README.md
+COPY models/licenses ./models/licenses
+RUN python ops/fetch_models.py --dir /app/models
 # Vercel sends traffic to port 80 unless the project sets PORT, and only root can bind port 80.
 EXPOSE 80
 ENTRYPOINT ["tini", "--"]

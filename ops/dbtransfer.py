@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT))
 from app import db as dbm  # noqa: E402
 
 BATCH = 500
-NOT_DATA = {'schema_fingerprint'}   # set up by init_db on each database, so it never travels in a dump
+NOT_DATA = {'schema_fingerprint', 'schema_migrations'}
+SEEDED = ('scoring_configs', 'brand_safety_rules')   # reference data written by migrations   # set up by init_db on each database, so they never travel in a dump
 
 
 def _sha(path):
@@ -90,6 +91,8 @@ def import_(connect, dump):
         for t in ('users', 'organizations', 'videos', 'placements', 'jobs'):
             if c.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]: raise SystemExit(f'Target database is not empty ({t} has rows)')
         target_tables = set(c.tables())
+        for t in SEEDED:                                  # reference rows the migrations seeded on the fresh target; the dump has the source's
+            if t in tables and t in target_tables: c.execute(f'DELETE FROM {t}')
         for t, (cols, rows) in tables.items():
             if t not in target_tables: raise SystemExit(f'Target schema has no table {t}')
             tcols = set(c.columns(t)); keep = [i for i, col in enumerate(cols) if col in tcols]

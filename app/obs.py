@@ -8,14 +8,38 @@ from pathlib import Path
 
 request_id = contextvars.ContextVar('request_id', default=None)
 job_id = contextvars.ContextVar('job_id', default=None)
-_REDACT = [(re.compile(r'/api/media/[^ ?"]+'), '/api/media/[REDACTED]'), (re.compile(r'/auth/email/[^ ?"/]+'), '/auth/email/[REDACTED]'),
+_REDACT = [(re.compile(r'/api/media/[^ ?"]+'), '/api/media/[REDACTED]'), (re.compile(r'/api/delivery-media/[^ ?"]+'), '/api/delivery-media/[REDACTED]'),
+           (re.compile(r'/auth/email/[^ ?"/]+'), '/auth/email/[REDACTED]'),
+           # The password in any connection string (postgresql://user:PASSWORD@host), whatever characters it holds.
+           (re.compile(r'(?i)\b([a-z][a-z0-9+.-]*://[^:/@\s"\']*):[^@\s"\']*@'), r'\1:[REDACTED]@'),
+           (re.compile(r'(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+'), 'Bearer [REDACTED]'),
            (re.compile(r'(?i)(token|code|password|secret|signature|x-amz-[a-z-]+)=[^&\s"]+'), r'\1=[REDACTED]'),
            (re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+'), '[email]')]
+# Configured secrets are also removed by value, wherever they appear (an exception message can quote one). These are
+# the secrets the application reads, plus the S3 key boto3 reads and the token Vercel injects into functions.
+SECRET_SETTINGS = ('CC_SIGNING_KEY', 'GOOGLE_CLIENT_SECRET', 'CC_SMTP_PASSWORD', 'BLOB_READ_WRITE_TOKEN', 'CC_OPS_TOKEN',
+                   'AWS_SECRET_ACCESS_KEY', 'VERCEL_OIDC_TOKEN')
+
+
+def _secret_values():
+    values = [os.getenv(k, '') for k in SECRET_SETTINGS]
+    for k in ('DATABASE_URL', 'CC_DATABASE_URL'):
+        m = re.match(r'^[a-z][a-z0-9+.-]*://[^:/@]*:([^@]+)@', os.getenv(k, ''), re.I)
+        if m: values.append(m.group(1))
+    return sorted({v for v in values if len(v) >= 8}, key=len, reverse=True)
 
 
 def redact(text):
+    for v in _secret_values(): text = text.replace(v, '[REDACTED]')
     for rx, rep in _REDACT: text = rx.sub(rep, text)
     return text
+
+
+def _redact_value(v):
+    if isinstance(v, str): return redact(v)
+    if isinstance(v, dict): return {k: _redact_value(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)): return [_redact_value(x) for x in v]
+    return v
 
 
 class _JsonFormatter(logging.Formatter):
@@ -25,7 +49,7 @@ class _JsonFormatter(logging.Formatter):
         for k in ('request_id', 'job_id'):
             v = getattr(record, k, None) or (request_id if k == 'request_id' else job_id).get()
             if v: out[k] = v
-        for k, v in getattr(record, 'fields', {}).items(): out[k] = v
+        for k, v in getattr(record, 'fields', {}).items(): out[k] = _redact_value(v)
         if record.exc_info: out['error'] = redact(self.formatException(record.exc_info))[-2000:]
         return json.dumps(out, default=str)
 
@@ -138,4 +162,25 @@ def metrics(c):
             'events_24h': {'upload_failures': ev.get('upload.failed', 0), 'email_failures': ev.get('email.failed', 0), 'oauth_failures': ev.get('auth.google_failed', 0),
                            'downloads': ev.get('asset.downloaded', 0), 'download_denials': ev.get('download.denied', 0)},
             'organizations': c.execute('SELECT COUNT(*) FROM organizations').fetchone()[0],
+            'analyses': _analysis_metrics(c, day), 'payments_24h': _payment_metrics(c, day), 'ledger': _ledger_metrics(c),
             'workers': worker_status(), 'disk': disk_status(), 'local_media_cache_mb': round(cache_bytes() / 1048576, 1)}
+
+
+def _analysis_metrics(c, day):
+    rows = {r['status']: r['n'] for r in c.execute('SELECT status, COUNT(*) n FROM analysis_versions GROUP BY status').fetchall()}
+    failed = c.execute("SELECT COUNT(*) FROM analysis_versions WHERE status='FAILED' AND finished_at>=?", (day,)).fetchone()[0]
+    done = c.execute("SELECT COUNT(*) FROM analysis_versions WHERE status IN ('COMPLETED','FAILED') AND finished_at>=?", (day,)).fetchone()[0]
+    return {'queued': rows.get('QUEUED', 0), 'running': rows.get('RUNNING', 0), 'finished_24h': done, 'failed_24h': failed}
+
+
+def _payment_metrics(c, day):
+    """Provider events by result. MISMATCH, ALREADY_PAID and UNKNOWN_CHECKOUT need a person (app/payments.py)."""
+    res = {r['result']: r['n'] for r in c.execute('SELECT result, COUNT(*) n FROM payment_events WHERE received_at>=? GROUP BY result', (day,)).fetchall()}
+    return {'events': res, 'needs_attention': sum(res.get(k, 0) for k in ('MISMATCH', 'ALREADY_PAID', 'UNKNOWN_CHECKOUT')),
+            'checkouts_created': c.execute('SELECT COUNT(*) FROM payment_attempts WHERE created_at>=?', (day,)).fetchone()[0]}
+
+
+def _ledger_metrics(c):
+    unbalanced = c.execute("SELECT COUNT(*) FROM (SELECT txn_id FROM ledger_entries GROUP BY txn_id, currency "
+                           "HAVING SUM(CASE WHEN direction='DEBIT' THEN amount_minor ELSE -amount_minor END)<>0) t").fetchone()[0]
+    return {'unbalanced_transactions': unbalanced, 'balanced': unbalanced == 0}

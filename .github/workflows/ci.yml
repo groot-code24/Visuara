@@ -1,5 +1,6 @@
-# Every push and pull request: lint, tests on SQLite and PostgreSQL 16, dependency and secret scans, the web app
-# (type check, production build, npm audit), and the Vercel image (built and smoke-tested).
+# Every push and pull request: lint, tests on SQLite and PostgreSQL 16 (with the object-detection model fetched and
+# checksum-verified; tests that need it fail rather than skip), dependency, secret and container-image scans, the web app
+# (type check, ESLint, unit tests, production build, npm audit), and the Vercel image (built and smoke-tested).
 name: ci
 on:
   push:
@@ -31,8 +32,11 @@ jobs:
         with: { python-version: '3.12', cache: pip }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pip install -r requirements-dev.txt
+      - uses: actions/cache@v4
+        with: { path: models/*.onnx, key: "models-${{ hashFiles('app/detection.py') }}" }
+      - run: python ops/fetch_models.py
       - run: python -m pytest -q -p no:cacheprovider
-        env: { PYTHONPATH: ".:tests" }
+        env: { PYTHONPATH: ".:tests", CC_REQUIRE_MODELS: "1" }
 
   test-postgres:
     needs: lint
@@ -50,9 +54,13 @@ jobs:
         with: { python-version: '3.12', cache: pip }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pip install -r requirements-dev.txt
+      - uses: actions/cache@v4
+        with: { path: models/*.onnx, key: "models-${{ hashFiles('app/detection.py') }}" }
+      - run: python ops/fetch_models.py
       - run: python -m pytest -q -p no:cacheprovider
         env:
           PYTHONPATH: ".:tests"
+          CC_REQUIRE_MODELS: "1"
           CC_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
   security:
@@ -75,6 +83,8 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=high
       - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
       - run: npm run build
         env: { VERCEL: '1', NEXT_TELEMETRY_DISABLED: '1' }
 
@@ -90,4 +100,14 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/api/health/live && break; sleep 2; done
           curl -fsS http://127.0.0.1:8000/api/health/live
           docker exec api ffprobe -version > /dev/null
+          curl -fsS http://127.0.0.1:8000/api/health | python3 -c "import json,sys; d=json.load(sys.stdin)['object_detection']; assert d['installed'], d; print('detection model', d)"
           docker rm -f api
+      # D-QA-06: the image's OS packages and Python libraries, failing on CRITICAL or HIGH vulnerabilities that have a fix
+      - name: container vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: visuara:ci
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'

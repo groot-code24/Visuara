@@ -1,8 +1,23 @@
 export type MemberRole = 'owner' | 'admin' | 'manager' | 'editor' | 'viewer';
 
+export type OrgKind = 'direct' | 'brand' | 'publisher' | 'agency';
 export type Me = {
   id: number; email: string; name: string; org_id: number; member_role: MemberRole;
   organization: string | null; plan: string; plan_name: string;
+  org_kind: OrgKind; platform_admin: boolean; default_org_id: number;
+};
+export type Org = { id: number; name: string; kind: OrgKind; member_role: MemberRole; status: string; active: boolean; via_agency?: number };
+export type Money = { price_minor: number | null; currency: string | null };
+export type Opportunity = {
+  id: number; scene_id: number; video_id: number; analysis_version_id: number; placement_category: string; candidate_label: string;
+  geometry: { frame_second: number; bbox: number[]; quad?: number[][] }; region: string; start_second: number; end_second: number; visible_seconds: number;
+  feasibility_score: number; score: number | null; product_compatibility: Record<string, number>; brand_safety: string; rendering_complexity: string;
+  confidence: number; explanation: string; validation_status: string;
+};
+export type InventoryItem = Money & {
+  id: number; org_id: number; opportunity_id: number; video_id: number; scene_id: number; status: string; listed_at: string | null; version: number;
+  publisher: string | null; scene: { start_second: number; end_second: number; description: string; scene_index: number } | null;
+  opportunity: Partial<Opportunity>; preview_url: string; video_title?: string; eligibility?: string[];
 };
 
 export type Product = {

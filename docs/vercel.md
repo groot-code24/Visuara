@@ -15,7 +15,7 @@ Your secrets stay in `.env.vercel`, which git ignores. **Never put real values i
 
 | Setting | Where it comes from | Needed for |
 |---|---|---|
-| `DATABASE_URL` | Neon's **pooled** connection string | Everything |
+| `DATABASE_URL` | Neon's **pooled** connection string, exactly as Neon shows it: it ends with `?sslmode=require`, which production insists on | Everything |
 | `BLOB_READ_WRITE_TOKEN` | Set for you in step 3, so delete this line from the file | Video storage |
 | `CC_SIGNING_KEY` | Run `python -c "import secrets; print(secrets.token_urlsafe(48))"` once and keep it. Changing it signs everyone out | Everything |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Step 4 | Google sign-in |
@@ -39,6 +39,8 @@ Magic links and uploads are optional when the API starts: without them, Google s
 
 Optional settings:
 - `NEXT_PUBLIC_LEGAL_NAME` and `NEXT_PUBLIC_LEGAL_JURISDICTION`: your registered business name and governing law, for example `India`. The legal pages use them.
+- `CC_DETECTION_MODEL`: the object-detection model. The image already contains the default, `yolox-tiny`; set `none` to switch detection off. See [docs/engineering/DEPLOYMENT_RUNBOOK.md](engineering/DEPLOYMENT_RUNBOOK.md) §2a.
+- `CC_VISION_MODEL` and `CC_OLLAMA_URL`: a vision model on a server you run separately, for scene descriptions. Without them scenes have no description.
 
 ## 2. Push the code and create the project
 1. Check that `git config user.email` is the email on your GitHub and Vercel accounts. On the free plan, Vercel blocks deployments of a private repository's commits unless their author owns the Vercel account.

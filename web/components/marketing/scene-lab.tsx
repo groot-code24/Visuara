@@ -62,9 +62,8 @@ export function SceneLab() {
   // scan → score → place, each time a product is chosen
   useEffect(() => {
     timers.current.forEach(clearTimeout);
-    if (reduced || run === 0) { setPhase('placed'); return; }
-    setPhase('scan');
-    timers.current = [window.setTimeout(() => setPhase('score'), 900), window.setTimeout(() => setPhase('placed'), 1900)];
+    const steps: [Phase, number][] = reduced || run === 0 ? [['placed', 0]] : [['scan', 0], ['score', 900], ['placed', 1900]];
+    timers.current = steps.map(([p, ms]) => window.setTimeout(() => setPhase(p), ms));
     return () => timers.current.forEach(clearTimeout);
   }, [run, product, reduced]);
 
