@@ -9,29 +9,31 @@ import { ToastProvider } from '@/components/toast';
 import { cx } from '@/components/ui';
 import { IconBox, IconDownload, IconHome, IconLayers, IconLogout, IconMenu, IconSettings, IconSpark, IconTarget, IconX } from '@/components/icons';
 import { api } from '@/lib/api';
+import { prefetchApi } from '@/lib/use-api';
 
 const MeCtx = createContext<Me | null>(null);
 export const useMe = () => useContext(MeCtx)!;
 const RANK = { viewer: 0, editor: 1, manager: 2, admin: 3, owner: 4 } as const;
 export const can = (me: Me, role: keyof typeof RANK) => RANK[me.member_role] >= RANK[role];
 
-type NavItem = { href: string; label: string; icon: typeof IconHome; exact?: boolean; kinds?: string[]; admin?: boolean };
+// `data`: the API paths the page loads first, exactly as its useApi calls spell them, so a hover can warm them.
+type NavItem = { href: string; label: string; icon: typeof IconHome; exact?: boolean; kinds?: string[]; admin?: boolean; data?: string[] };
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Overview', icon: IconHome, exact: true },
-  { href: '/dashboard/decide', label: 'New decision', icon: IconSpark, kinds: ['direct'] },
-  { href: '/dashboard/decisions', label: 'Decisions', icon: IconTarget, kinds: ['direct'] },
-  { href: '/dashboard/library', label: 'Library', icon: IconBox },
-  { href: '/dashboard/analyses', label: 'Analyses', icon: IconSpark, kinds: ['direct', 'publisher'] },
-  { href: '/dashboard/inventory', label: 'Inventory', icon: IconTarget, kinds: ['publisher'] },
-  { href: '/dashboard/marketplace', label: 'Marketplace', icon: IconTarget, kinds: ['brand', 'agency'] },
-  { href: '/dashboard/campaigns', label: 'Campaigns', icon: IconLayers, kinds: ['brand', 'agency'] },
-  { href: '/dashboard/requests', label: 'Placement requests', icon: IconLayers, kinds: ['brand', 'agency', 'publisher'] },
-  { href: '/dashboard/placements', label: 'Placements', icon: IconLayers },
-  { href: '/dashboard/renders', label: 'Renders', icon: IconDownload },
-  { href: '/dashboard/finance', label: 'Finance', icon: IconDownload, kinds: ['brand', 'agency', 'publisher'] },
-  { href: '/dashboard/organizations', label: 'Organizations', icon: IconSettings },
+  { href: '/dashboard', label: 'Overview', icon: IconHome, exact: true, data: ['/api/analytics', '/api/usage', '/api/decisions', '/api/jobs'] },
+  { href: '/dashboard/decide', label: 'New decision', icon: IconSpark, kinds: ['direct'], data: ['/api/products', '/api/videos', '/api/usage'] },
+  { href: '/dashboard/decisions', label: 'Decisions', icon: IconTarget, kinds: ['direct'], data: ['/api/decisions'] },
+  { href: '/dashboard/library', label: 'Library', icon: IconBox, data: ['/api/products', '/api/videos'] },
+  { href: '/dashboard/analyses', label: 'Analyses', icon: IconSpark, kinds: ['direct', 'publisher'], data: ['/api/videos'] },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: IconTarget, kinds: ['publisher'], data: ['/api/inventory', '/api/videos'] },
+  { href: '/dashboard/marketplace', label: 'Marketplace', icon: IconTarget, kinds: ['brand', 'agency'], data: ['/api/marketplace/inventory?min_score=0', '/api/campaigns'] },
+  { href: '/dashboard/campaigns', label: 'Campaigns', icon: IconLayers, kinds: ['brand', 'agency'], data: ['/api/campaigns'] },
+  { href: '/dashboard/requests', label: 'Placement requests', icon: IconLayers, kinds: ['brand', 'agency', 'publisher'], data: ['/api/placement-requests'] },
+  { href: '/dashboard/placements', label: 'Placements', icon: IconLayers, data: ['/api/placements'] },
+  { href: '/dashboard/renders', label: 'Renders', icon: IconDownload, data: ['/api/jobs'] },
+  { href: '/dashboard/finance', label: 'Finance', icon: IconDownload, kinds: ['brand', 'agency', 'publisher'], data: ['/api/invoices', '/api/earnings', '/api/ledger', '/api/payments/config'] },
+  { href: '/dashboard/organizations', label: 'Organizations', icon: IconSettings, data: ['/api/organizations', '/api/invitations/mine'] },
   { href: '/dashboard/admin', label: 'Platform admin', icon: IconSettings, admin: true },
-  { href: '/dashboard/settings', label: 'Settings', icon: IconSettings },
+  { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, data: ['/api/usage', '/api/members', '/api/billing'] },
 ];
 
 async function signOut() {
@@ -59,10 +61,11 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="space-y-0.5">
       <OrgSwitcher />
-      {items.map(({ href, label, icon: Icon, exact }) => {
+      {items.map(({ href, label, icon: Icon, exact, data }) => {
         const active = exact ? path === href : path.startsWith(href);
+        const warm = () => prefetchApi(data || []);
         return (
-          <Link key={href} href={href} onClick={onNavigate}
+          <Link key={href} href={href} prefetch onClick={onNavigate} onMouseEnter={warm} onFocus={warm} onTouchStart={warm}
             className={cx('flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition', active ? 'bg-card font-medium text-ink shadow-card' : 'text-ink-2 hover:bg-card/70')}>
             <Icon size={17} className={active ? 'text-accent' : 'text-muted'} />{label}
           </Link>
@@ -89,7 +92,18 @@ function Account({ me }: { me: Me }) {
   );
 }
 
+function useWarmMenu(me: Me) {
+  useEffect(() => {
+    const paths = NAV.filter((n) => (!n.kinds || n.kinds.includes(me.org_kind)) && !n.admin).flatMap((n) => n.data || []);
+    const run = () => prefetchApi([...new Set(paths)]);
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(run, { timeout: 2500 }) : window.setTimeout(run, 1200);
+    return () => { if (!w.requestIdleCallback) window.clearTimeout(id); };
+  }, [me.org_id, me.org_kind]);
+}
+
 export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
+  useWarmMenu(me);
   // The mobile menu remembers the page it was opened on, so navigating anywhere closes it (no effect needed).
   const path = usePathname();
   const [openOn, setOpenOn] = useState<string | null>(null);

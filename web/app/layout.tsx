@@ -25,13 +25,21 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: '#ffffff' };
 
+// The intro plays once per browser tab session, on the home page only: a tiny script in <head> marks a repeat visit
+// before the first paint, so the page is never covered twice. Storage only, no cookie.
+const INTRO_ONCE = "try{if(sessionStorage.getItem('vs-intro'))document.documentElement.classList.add('vs-seen');else sessionStorage.setItem('vs-intro','1')}catch(e){}";
+
 // Every page renders per request: the Content-Security-Policy nonce (proxy.ts) is new each time, and a page prerendered
 // at build time could not carry it. Reading the request headers is what makes Next.js render dynamically.
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  await headers();
+  const h = await headers();
+  const path = (h.get('x-pathname') || '').split('?')[0];
+  const nonce = /'nonce-([^']+)'/.exec(h.get('content-security-policy') || '')?.[1];
+  const intro = path === '/';
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable} ${dots.variable}`}>
-      <body className="min-h-screen font-sans"><Preloader />{children}</body>
+    <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable} ${dots.variable}`} suppressHydrationWarning>
+      <head>{intro && <script nonce={nonce} dangerouslySetInnerHTML={{ __html: INTRO_ONCE }} />}</head>
+      <body className="min-h-screen font-sans">{intro && <Preloader />}{children}</body>
     </html>
   );
 }

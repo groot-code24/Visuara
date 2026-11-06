@@ -2,20 +2,20 @@
  {
   "step": "production settings accepted; database, Blob and FFmpeg ready",
   "ok": true,
-  "seconds": 2.5,
-  "note": "first start 5.4s"
+  "seconds": 2.6,
+  "note": "first start 6.5s"
  },
  {
   "step": "database and email connections are encrypted",
   "ok": true,
-  "seconds": 0.5,
+  "seconds": 0.9,
   "note": "2 database connections, all over TLS; plain-text SMTP refused"
  },
  {
   "step": "a new instance starts without repeating schema setup",
   "ok": true,
-  "seconds": 5.8,
-  "note": "new instance serving after 3.4s without repeating schema setup"
+  "seconds": 5.9,
+  "note": "new instance serving after 3.2s without repeating schema setup"
  },
  {
   "step": "job runner refuses outsiders; dashboard guarded; security headers",
@@ -25,12 +25,12 @@
  {
   "step": "Google sign-in starts with the right client, callback and PKCE",
   "ok": true,
-  "seconds": 0.0
+  "seconds": 0.1
  },
  {
   "step": "magic link by email, onboarding, dashboard",
   "ok": true,
-  "seconds": 5.0
+  "seconds": 5.2
  },
  {
   "step": "an image over the request limit gets a clear message",
@@ -40,22 +40,22 @@
  {
   "step": "browser uploads the video straight to Blob with the real SDK",
   "ok": true,
-  "seconds": 3.5
+  "seconds": 3.6
  },
  {
   "step": "decision runs on the separate runner; preview through a signed link",
   "ok": true,
-  "seconds": 48.8
+  "seconds": 48.9
  },
  {
   "step": "library thumbnails load through signed links",
   "ok": true,
-  "seconds": 1.7
+  "seconds": 1.1
  },
  {
   "step": "runner killed mid-render: dashboard polling restarts it and the job completes",
   "ok": true,
-  "seconds": 47.5,
+  "seconds": 49.0,
   "note": "claimed,lease_recovered,claimed,succeeded"
  },
  {
@@ -67,7 +67,7 @@
  {
   "step": "a large video uploads in parts",
   "ok": true,
-  "seconds": 7.5,
+  "seconds": 6.3,
   "note": "36 MB in 5 parts"
  },
  {

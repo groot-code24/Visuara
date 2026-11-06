@@ -1,0 +1,87 @@
+{
+  "rtt_ms": 300,
+  "clicks": [
+    {
+      "round": "first visit",
+      "page": "Campaigns",
+      "feedback_ms": 27,
+      "ready_ms": 27
+    },
+    {
+      "round": "first visit",
+      "page": "Placement requests",
+      "feedback_ms": 24,
+      "ready_ms": 24
+    },
+    {
+      "round": "first visit",
+      "page": "Library",
+      "feedback_ms": 27,
+      "ready_ms": 28
+    },
+    {
+      "round": "first visit",
+      "page": "Marketplace",
+      "feedback_ms": 21,
+      "ready_ms": 21
+    },
+    {
+      "round": "first visit",
+      "page": "Settings",
+      "feedback_ms": 26,
+      "ready_ms": 26
+    },
+    {
+      "round": "first visit",
+      "page": "Finance",
+      "feedback_ms": 22,
+      "ready_ms": 22
+    },
+    {
+      "round": "revisit",
+      "page": "Campaigns",
+      "feedback_ms": 15,
+      "ready_ms": 16
+    },
+    {
+      "round": "revisit",
+      "page": "Placement requests",
+      "feedback_ms": 12,
+      "ready_ms": 12
+    },
+    {
+      "round": "revisit",
+      "page": "Library",
+      "feedback_ms": 16,
+      "ready_ms": 16
+    },
+    {
+      "round": "revisit",
+      "page": "Marketplace",
+      "feedback_ms": 17,
+      "ready_ms": 17
+    },
+    {
+      "round": "revisit",
+      "page": "Settings",
+      "feedback_ms": 9,
+      "ready_ms": 9
+    },
+    {
+      "round": "revisit",
+      "page": "Finance",
+      "feedback_ms": 7,
+      "ready_ms": 7
+    }
+  ],
+  "home_first_visit_ms": 1768,
+  "home_second_visit_ms": 733,
+  "first visit median": {
+    "feedback_ms": 25.0,
+    "ready_ms": 25.0
+  },
+  "revisit median": {
+    "feedback_ms": 13.5,
+    "ready_ms": 14.0
+  }
+}

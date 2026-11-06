@@ -59,7 +59,7 @@ export function LoginForm({ next, error, invited, plan }: { next: string; error?
   return (
     <div>
       <h1 className="text-center font-display text-[40px] leading-tight tracking-tight">
-        {invited ? 'Join your team' : 'Welcome'}
+        {invited ? 'Join your team' : 'Sign in to Visuara'}
       </h1>
       <p className="mt-2 text-center text-[15px] text-muted">
         {invited ? 'Sign in with the email address your invitation was sent to.' : plan && plan !== 'free' && plan !== 'enterprise' ? 'Create your account, set up your workspace, then pay securely on the last step.' : 'Sign in or create your account'}

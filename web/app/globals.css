@@ -44,9 +44,10 @@ body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; 
 .mk-wordmark { font-family: var(--font-dots), var(--font-mono); font-weight: 900; font-variation-settings: 'ROND' 100; font-size: clamp(64px, 20.5vw, 268px); line-height: .82; letter-spacing: -.02em; color: var(--color-ink); text-align: center; white-space: nowrap; user-select: none; }
 
 /* The loading screen: scattered dots gather into the mark, then the page is revealed. */
-.vs-loader { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden; background: #fff; color: #0a0a12; pointer-events: none; animation: vs-loader-out .35s ease 1.35s forwards; }
-.vs-loader circle { transform-box: fill-box; transform-origin: center; animation: vs-dot-gather .75s cubic-bezier(.16, 1, .3, 1) var(--delay) both; }
-.vs-loader svg { animation: vs-mark-settle .3s ease-out 1.02s both; }
+.vs-loader { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden; background: #fff; color: #0a0a12; pointer-events: none; animation: vs-loader-out .28s ease .82s forwards; }
+.vs-seen .vs-loader { display: none; }
+.vs-loader circle { transform-box: fill-box; transform-origin: center; animation: vs-dot-gather .5s cubic-bezier(.16, 1, .3, 1) var(--delay) both; }
+.vs-loader svg { animation: vs-mark-settle .24s ease-out .6s both; }
 @keyframes vs-dot-gather { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(.3); } 30% { opacity: 1; } to { opacity: 1; transform: none; } }
 @keyframes vs-mark-settle { 50% { transform: scale(1.07); } }
 @keyframes vs-loader-out { to { opacity: 0; visibility: hidden; } }
@@ -93,8 +94,15 @@ body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; 
 .mk-reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); }
 .mk-reveal.is-in { opacity: 1; transform: none; }
 
+/* Onboarding: each step slides in; the preview's scanner sweeps the scene. */
+@keyframes ob-in { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+.ob-step { animation: ob-in .38s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes ob-scan { from { transform: translateY(-100%) } to { transform: translateY(300%) } }
+.ob-scan { animation: ob-scan 2.6s cubic-bezier(.5,0,.3,1) infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .vs-loader { display: none; }
+  .ob-step, .ob-scan { animation: none !important; }
   .mk-scan, .mk-dash, .mk-pop, .mk-fade, .mk-float, .mk-marquee { animation: none !important; }
   .mk-reveal { opacity: 1; transform: none; transition: none; }
 }

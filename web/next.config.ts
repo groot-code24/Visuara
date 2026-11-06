@@ -22,7 +22,12 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   allowedDevOrigins: ['localhost', '127.0.0.1'],
   output: process.env.CC_STANDALONE === '1' ? 'standalone' : undefined,
-  experimental: { proxyTimeout: 120_000 },
+  experimental: {
+    proxyTimeout: 120_000,
+    // Pages already fetched in this tab are reused for 30 s when navigated to again, instead of a new round trip to the
+    // server (which is far away for most visitors). Their data still refreshes in the background (lib/use-api.ts).
+    staleTimes: { dynamic: 30, static: 300 },
+  },
   async rewrites() {
     if (process.env.VERCEL) return [];
     return [

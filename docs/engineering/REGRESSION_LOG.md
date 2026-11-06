@@ -2,6 +2,38 @@
 
 Every full run during V4.0, newest first. Earlier runs, Phases 1–15, are in [docs/execution/REGRESSION_LOG.md](../execution/REGRESSION_LOG.md). A test that passed at baseline and fails later is a regression and is fixed before work continues. An expectation is changed only when this log says why the old one was wrong.
 
+## Speed and the onboarding redesign (D-PERF-02, D-UX-06): 6 November 2026
+Measured with `qa/perf_probe.py`. Headless Chrome adds 300 ms to every request, about what a visitor in India sees against
+servers in the eastern US. The probe signs in the demo brand and clicks between six dashboard pages, twice.
+The before figures are the previous commit `1079adb`, built and measured the same way.
+
+| | Before | After |
+|---|---|---|
+| Click until the screen changes (median) | 657 ms | **25 ms** |
+| Click until the page shows its data, first visit (median) | 993 ms | **25 ms** |
+| Click until the page shows its data, revisit (median) | 651 ms | **14 ms** |
+| Home page visible, second visit | 2,260 ms | **733 ms** |
+
+Evidence: [before](../qa/evidence/v4/2026-11-06_perf_before.json), [after](../qa/evidence/v4/2026-11-06_perf_after.json).
+
+**What changed:**
+- **Loading outline.** `app/dashboard/loading.tsx` shows a page's outline the moment a link is clicked.
+- **Pages fetched ahead.** The menu fetches its pages in full ahead of time (`prefetch`), and the browser reuses a fetched page for 30 seconds (`staleTimes`).
+- **Data cache.** `lib/use-api.ts` keeps an in-memory cache that refreshes in the background. Identical requests share one fetch, the menu warms each page's data when the browser is idle and on hover, and nothing is cached on the server.
+- **Shorter intro.** The intro animation plays only on the first home-page visit in a tab, and takes 1.1 s instead of 1.7 s.
+
+**Checks:**
+
+| Check | Result |
+|---|---|
+| `qa/browser_qa_web.py` | **12/12** |
+| `qa/browser_qa_marketplace.py` | **12/12** |
+| `qa/browser_qa_billing.py` | **7/7** |
+| `qa/vercel_rehearsal.py` | **15/15**, no CSP violations ([log](../qa/evidence/v4/2026-11-06_perf_vercel_rehearsal.txt)) |
+| Web `tsc`, ESLint (0 errors), unit tests, build | Pass |
+
+**What the probe can't remove:** the first load of a page. A full page load still needs one round trip to the servers, and from India that is about 0.3 to 0.5 s.
+
 ## Plan payments, onboarding and the web folder (D-PAY-01, D-UX-05, D-OPS-03): 6 November 2026
 | Suite | Result |
 |---|---|
