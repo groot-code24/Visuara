@@ -467,6 +467,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_agency_clients_open ON agency_clients(agen
 '''
 
 
+# ---------------------------------------------------------------- 0020: plan subscriptions (Lemon Squeezy)
+SUBSCRIPTIONS_SQL = f'''
+CREATE TABLE IF NOT EXISTS billing_checkouts(id INTEGER PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) {_FK},
+  token TEXT NOT NULL UNIQUE, plan TEXT NOT NULL, billing_interval TEXT NOT NULL CHECK(billing_interval IN ('monthly','annual')),
+  variant_id TEXT NOT NULL, mode TEXT NOT NULL CHECK(mode IN ('test','live')), provider_checkout_id TEXT,
+  created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS subscriptions(id INTEGER PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) {_FK},
+  provider TEXT NOT NULL, provider_ref TEXT NOT NULL, customer_ref TEXT, variant_id TEXT, plan TEXT NOT NULL, billing_interval TEXT,
+  status TEXT NOT NULL, renews_at TEXT, ends_at TEXT, test_mode INTEGER NOT NULL DEFAULT 0, card_brand TEXT, card_last_four TEXT,
+  provider_updated_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(provider, provider_ref));
+CREATE INDEX IF NOT EXISTS idx_subscriptions_org ON subscriptions(org_id);
+'''
+
+
 MIGRATIONS = [
     Migration('0001_organization_kinds', 'Organization kind (direct, brand, publisher, agency) and platform administrator flag',
               sql=ORG_KINDS_SQL, columns=ORG_KIND_COLUMNS),
@@ -497,6 +514,7 @@ CREATE TABLE IF NOT EXISTS integration_checks(id INTEGER PRIMARY KEY, adapter TE
   passed INTEGER NOT NULL, detail TEXT NOT NULL DEFAULT '', checked_at_epoch REAL NOT NULL, checked_by INTEGER, checked_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS idx_integration_checks_adapter ON integration_checks(adapter, id);
 '''),
+    Migration('0020_subscriptions', 'Plan subscriptions through Lemon Squeezy: checkouts created here and subscription state per workspace', sql=SUBSCRIPTIONS_SQL),
 ]
 
 

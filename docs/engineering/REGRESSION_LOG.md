@@ -2,6 +2,33 @@
 
 Every full run during V4.0, newest first. Earlier runs, Phases 1–15, are in [docs/execution/REGRESSION_LOG.md](../execution/REGRESSION_LOG.md). A test that passed at baseline and fails later is a regression and is fixed before work continues. An expectation is changed only when this log says why the old one was wrong.
 
+## Plan payments, onboarding and the web folder (D-PAY-01, D-UX-05, D-OPS-03): 6 November 2026
+| Suite | Result |
+|---|---|
+| Backend, PostgreSQL 16 | **265 passed** (33 min) ([log](../qa/evidence/v4/2026-11-06_billing_postgres.log)) |
+| Backend, SQLite | **263 passed, 2 skipped** (25 min; the skips are PostgreSQL-only) ([log](../qa/evidence/v4/2026-11-06_billing_sqlite.log)) |
+| New: `tests/test_billing.py` | 12 tests: signatures, settings checks, checkout request, plan from the paid variant only, duplicate deliveries, forged, unknown and foreign events, cancel then expire, stale events, unpaid then recovered, live mode ignores test events, roles, plan change and portal |
+| Ruff | Pass |
+| Web: `tsc`, ESLint, `npm test`, `npm audit --audit-level=high`, `next build` | All pass (ESLint 0 errors, 11 warnings: one more deliberate full-page navigation after sign-up) |
+| `qa/browser_qa_web.py` | **12/12**, with the new three-step onboarding |
+| `qa/browser_qa_marketplace.py` | **12/12** |
+| `qa/vercel_rehearsal.py` (production image) | **15/15** ([log](../qa/evidence/v4/2026-11-06_billing_vercel_rehearsal.txt)) |
+| New: `qa/browser_qa_billing.py` | **7/7**: pricing page, then sign-up, then onboarding with Pro preselected, then checkout, then the signed webhook moves the workspace to Pro; switch to Agency; customer portal; no second subscription; mobile |
+
+**Changed expectations:** the browser walks now press Continue through the onboarding steps (name, then workspace, then plan) before "Create workspace". What they assert is unchanged. No assertion was weakened.
+
+**Not verified here:** a real Lemon Squeezy account. None exists in this repository. The walk uses a local stand-in that follows Lemon Squeezy's documented API and webhook signing.
+
+## Production start-up fix (D-OPS-02): 6 November 2026
+After the first production deployment failed to start (the database was unreachable, and the API exited at import).
+
+| Suite | Result |
+|---|---|
+| Backend, PostgreSQL 16 | **253 passed** |
+| Backend, SQLite | **251 passed, 2 skipped**: the PostgreSQL-only `test_blob.py:346`, and the new wrong-password test, which needs PostgreSQL |
+| `tests/test_startup_database.py` on PostgreSQL | 3 passed: an unreachable address; a wrong password named, then recovery without a restart |
+| `qa/vercel_rehearsal.py` | **15/15** |
+
 ## Final run, M15 to M17: 6 November 2026
 On the finished code, with the YOLOX-Tiny model installed. FFmpeg 9.0.2, PostgreSQL 16.15.
 

@@ -56,7 +56,14 @@ async def security_middleware(request: Request, call_next):
     rid_token=obs.request_id.set(rid); started=time.perf_counter()
     try:
         response=None
-        if path in ('/api/auth/email/start','/api/auth/email/verify','/api/auth/email/link') and request.method=='POST':
+        if not _DB_STATE['ready'] and path not in _NO_DB_PATHS:
+            if time.time()-_DB_STATE['tried']>=5:
+                from starlette.concurrency import run_in_threadpool
+                await run_in_threadpool(ensure_db)
+            if not _DB_STATE['ready']:
+                response=JSONResponse({'detail':{'code':'DATABASE_UNAVAILABLE','message':'Visuara cannot reach its database right now. Please try again in a minute.'}},
+                                      status_code=503,headers={'Retry-After':'30'})
+        if response is None and path in ('/api/auth/email/start','/api/auth/email/verify','/api/auth/email/link') and request.method=='POST':
             ip=request.client.host if request.client else 'unknown'
             if not rate_limit('auth:'+ip,int(os.getenv('CC_AUTH_RATE_PER_MINUTE','12')),60): response=JSONResponse({'detail':'Too many authentication attempts. Try again in a minute.'},status_code=429)
         if response is None and request.method in _MUTATING:
@@ -246,7 +253,38 @@ def init_db(connect=None):
         migrations.apply(c)
         if c.kind=='postgres':
             c.execute('CREATE TABLE IF NOT EXISTS schema_fingerprint(value TEXT NOT NULL)'); c.execute('DELETE FROM schema_fingerprint'); c.execute('INSERT INTO schema_fingerprint(value) VALUES(?)',(fingerprint,))
-init_db()
+_DB_STATE={'ready':False,'reason':None,'tried':0.0}
+_DB_INIT_LOCK=threading.Lock()
+_NO_DB_PATHS=('/api/health/live','/api/health/ready','/api/health','/')
+def ensure_db(wait=0.0):
+    """Create or migrate the schema once per process; True when the database is ready.
+
+    With PostgreSQL, an unreachable database no longer stops the process at import (it used to exit with only the pool's
+    "couldn't get a connection after 10 s"). The process starts, the liveness check answers, every other request gets a
+    503 DATABASE_UNAVAILABLE, the log and /api/health/ready say why (a wrong password, an unknown host, a timeout), and
+    setup is retried on later requests, so the deployment recovers by itself once DATABASE_URL is right."""
+    if _DB_STATE['ready']: return True
+    with _DB_INIT_LOCK:
+        if _DB_STATE['ready']: return True
+        deadline=time.time()+wait
+        while True:
+            ok,reason,detail=dbm.diagnose()            # a direct connection first: it reports the driver's real error
+            if ok:
+                try:
+                    init_db(); _DB_STATE.update(ready=True,reason=None,tried=time.time())
+                    obs.info('database ready')
+                    return True
+                except Exception as e:
+                    reason=dbm.explain(e); detail=obs.redact(f'{type(e).__name__}: {str(e)[:300]}')
+            _DB_STATE.update(reason=reason,tried=time.time())
+            obs.error('database unavailable',reason=reason,detail=detail)
+            if time.time()>=deadline: return False
+            time.sleep(2)
+if dbm.database_url():
+    # Neon wakes a suspended compute in a few seconds: wait a little at start-up, then serve with the database marked down.
+    ensure_db(wait=float(os.getenv('CC_DB_STARTUP_WAIT','15')))
+else:
+    init_db(); _DB_STATE.update(ready=True)
 for _warning in setup_warnings(): obs.warn(_warning)
 
 _RATE_BUCKETS = {}
@@ -413,7 +451,10 @@ _READY={'at':0.0,'result':None}
 def _readiness():
     if _READY['result'] and time.time()-_READY['at']<float(os.getenv('CC_READY_CACHE_SECONDS','30')): return _READY['result']
     checks={}
-    checks['database']='ok' if dbm.probe(DB,DB_SCHEMA) else 'unavailable'
+    probe_ok=dbm.probe(DB,DB_SCHEMA)
+    if probe_ok and not _DB_STATE['ready'] and time.time()-_DB_STATE['tried']>=5: ensure_db()   # recovered: finish setup now
+    checks['database']='ok' if probe_ok and _DB_STATE['ready'] else 'unavailable'
+    if checks['database']!='ok': checks['database_problem']=(_DB_STATE['reason'] if not _DB_STATE['ready'] else None) or dbm.diagnose()[1]
     if storage.enabled():
         checks['object_storage']=storage.probe()
     else: checks['object_storage']='not_configured' if jobrunner.enabled() else 'local_disk'
@@ -1217,8 +1258,8 @@ from .orgs import router as orgs_router  # noqa: E402
 app.include_router(orgs_router)
 from .videos import router as videos_router  # noqa: E402
 app.include_router(videos_router)
-from . import intelligence, inventory, profiles, catalogue, campaigns, commercial, delivery, programmatic, payments, agencies  # noqa: E402
-for _module in (intelligence, inventory, profiles, catalogue, campaigns, commercial, delivery, programmatic, payments, agencies): app.include_router(_module.router)
+from . import intelligence, inventory, profiles, catalogue, campaigns, commercial, delivery, programmatic, payments, agencies, billing  # noqa: E402
+for _module in (intelligence, inventory, profiles, catalogue, campaigns, commercial, delivery, programmatic, payments, agencies, billing): app.include_router(_module.router)
 delivery.register_consumers()
 app.include_router(members_router)
 from .uploads import router as uploads_router  # noqa: E402

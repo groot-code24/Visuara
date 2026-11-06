@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api, ApiError } from '@/lib/api';
@@ -9,9 +8,9 @@ import { Alert, Badge, Button, Card, Input, Meter, PageHeader, Select, Skeleton 
 import { useToast } from '@/components/toast';
 import { ROLE_HELP, bytes, when } from '@/lib/format';
 import { useMe, can } from '../shell';
+import { BillingPanel } from './billing';
 
 type Members = { organization: { id: number; name: string }; you: { id: number; member_role: string }; roles: string[]; members: Member[] };
-const CONTACT = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
 
 export default function Settings() {
   const me = useMe();
@@ -59,11 +58,7 @@ export default function Settings() {
               <p className="text-xs text-muted">Videos up to {u.plan_limits.max_video_seconds ? `${u.plan_limits.max_video_seconds} s` : 'the platform limit'} · up to {u.plan_limits.max_videos_per_decision} videos per decision.</p>
             </div>
           ) : <Skeleton className="mt-6 h-40" />}
-          <div className="mt-6 rounded-xl bg-soft p-4 text-sm text-ink-2">
-            Need more? During the pilot, upgrades are set up by our team and billed by invoice.{' '}
-            {CONTACT ? <a className="font-medium text-ink underline" href={`mailto:${CONTACT}?subject=Upgrade%20${encodeURIComponent(me.organization || '')}`}>Contact us</a> : 'Contact your Visuara representative'}
-            {' '}· <Link href="/pricing" className="underline">Compare plans</Link>
-          </div>
+          <BillingPanel organization={me.organization || ''} onChange={usage.reload} />
         </Card>
 
         <Card className="p-6">

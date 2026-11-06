@@ -34,7 +34,8 @@ _RULES = [  # (methods, path pattern, minimum member role); first match wins
     ({'PATCH'}, r'^/api/organizations/current$', 'owner'),
     ({'GET', 'POST', 'PATCH', 'DELETE'}, r'^/api/admin/.*$', 'viewer'),          # platform administrators only, checked in the handler
     ({'POST'}, r'^/api/members/\d+/transfer-ownership$', 'owner'),
-    ({'GET'}, r'^/api/(members|invitations|usage)$', 'viewer'),
+    ({'GET'}, r'^/api/(members|invitations|usage|billing)$', 'viewer'),
+    ({'POST'}, r'^/api/billing/(checkout|change|portal)$', 'admin'),
     ({'POST', 'PATCH', 'DELETE'}, r'^/api/(members|invitations)(/.*)?$', 'admin'),
     ({'GET', 'POST'}, r'^/api/jobs/\d+/download(-link)?$', 'manager'),
     ({'POST'}, r'^/api/(products|videos|uploads)(/.*)?$', 'editor'),

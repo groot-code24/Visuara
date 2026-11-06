@@ -94,7 +94,7 @@ export default function Terms() {
           body: (
             <>
               <p>Plans and their limits are shown on the <Link href="/pricing">pricing page</Link>, and limits are enforced automatically. Hosting capacity may also limit video length, file size or total storage, and the service tells you when a limit applies.</p>
-              <p>During the pilot, paid plans are arranged with us directly and billed by invoice. Fees exclude taxes unless stated. Unless the law requires otherwise, fees already paid are not refundable. We will give at least 30 days&rsquo; notice of a price increase on your plan. If you stop paying, we may move your workspace to the Free plan.</p>
+              <p>Paid plans are billed in advance, monthly or yearly, through Lemon Squeezy, which sells the subscription to you as our merchant of record and adds any sales tax or VAT at checkout. A subscription renews until you cancel it; a cancelled plan stays active until the end of the period you paid for. Enterprise plans are arranged with us directly and billed by invoice; their fees exclude taxes unless stated. Unless the law requires otherwise, fees already paid are not refundable. We will give at least 30 days&rsquo; notice of a price increase on your plan. If you stop paying, we may move your workspace to the Free plan.</p>
             </>
           ),
         },

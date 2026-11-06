@@ -95,6 +95,23 @@ For the owner and whoever runs Visuara in production. Each procedure says who ca
 2. **Find out:** Vercel logs are JSON with `request_id` and `job_id`. A user quotes the request id shown on error pages. Logs never contain passwords, tokens, signed links, sign-in codes, email addresses or configured secrets (`tests/test_platform.py::test_logs_never_contain_credentials`).
 3. **Record:** what happened, when it was noticed, what was exposed, and what changed. Add a regression test for the cause.
 
+## 7a. The site says "We can't reach the sign-in service" (the database is unreachable)
+**Symptoms:**
+- the Google button is greyed out;
+- email sign-in fails;
+- Vercel's logs show `database unavailable` with a `reason`. Before 6 November 2026 they showed `psycopg_pool.PoolTimeout: couldn't get a connection after 10.00 sec` and `Application exited with code 1`.
+
+**Find the reason.** Open `https://www.visuara.si/api/health/ready`. Its `checks.database_problem` says why, or run `python qa/vercel_check.py https://www.visuara.si`:
+
+| Reason | What to do |
+|---|---|
+| the database refused the password | `DATABASE_URL` in Vercel still has the old password, usually after a reset in Neon (§1). Paste the new **pooled** connection string into Vercel → Settings → Environment Variables → `DATABASE_URL` (Production), then **redeploy**: Vercel applies changed settings only to new deployments |
+| the host name does not exist / Neon does not know this endpoint | The string is from another or deleted Neon project, or was mistyped. Copy it again from Neon → Dashboard → Connect (pooled) |
+| Neon refused the endpoint / over its quota | The Neon project or its compute is suspended or out of free hours: check Neon's dashboard |
+| did not answer in time | Neon may be waking up; wait a minute. If it persists, check Neon's status page and that the string isn't wrapped in quotes or prefixed with `psql` |
+
+**When it's fixed,** the API recovers by itself within seconds of the next request; no restart is needed. Check with `python qa/check_env.py`, which tests your local `.env.vercel` string, and `python qa/vercel_check.py https://www.visuara.si`, which tests what Vercel actually has.
+
 ## 8. Payments
 
 ### 8a. Turn on Stripe in test mode first
@@ -135,6 +152,48 @@ Without `CC_PAYMENT_LIVE=1`, a live key is refused at start-up.
 
 ### 8d. Bank transfers (always available)
 A platform administrator marks an invoice paid with the bank reference (Admin → Invoices) and an `Idempotency-Key`. Then check that `GET /api/admin/ledger/trial-balance` reports `balanced: true`. A second attempt with the same key and a different reference is refused, so a payment can't be recorded twice. A bank transfer and a provider payment post the same ledger transaction; whichever arrives second is not applied.
+
+### 8e. Plan subscriptions through Lemon Squeezy (Pro and Agency)
+Workspaces buy Pro or Agency, monthly or yearly, at the prices on the pricing page. Lemon Squeezy is the merchant of
+record: it takes the card, adds sales tax or VAT, and sends Visuara a signed webhook. Only that webhook changes a
+workspace's plan (`app/billing.py`). These invoices are separate from the marketplace invoices in 8a to 8d.
+
+1. **Create the products** in Lemon Squeezy (test mode first: the toggle at the bottom left of the dashboard).
+   - Product **Visuara Pro**, two subscription variants: **$39 every month** and **$348 every year**.
+   - Product **Visuara Agency**, two subscription variants: **$159 every month** and **$1,428 every year**.
+   - Copy each variant's id (Products → the product → the variant's menu → Copy ID).
+2. **Create the API key:** Settings → API → new key. Copy it once; it is shown only once.
+3. **Find the store id:** Settings → Stores; the number next to the store name (without the #).
+4. **Create the webhook:** Settings → Webhooks → +.
+   - Callback URL: `https://www.visuara.si/api/billing/webhooks/lemonsqueezy`.
+   - Signing secret: 16 to 40 random characters you make up, for example from `python -c "import secrets; print(secrets.token_urlsafe(24))"`.
+   - Events: `subscription_created`, `subscription_updated`, `subscription_cancelled`, `subscription_resumed`,
+     `subscription_expired`, `subscription_paused`, `subscription_unpaused`, `subscription_payment_success`,
+     `subscription_payment_failed`.
+5. **Add the settings in Vercel** (Production, API service), then redeploy:
+   `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_WEBHOOK_SECRET`, `LEMONSQUEEZY_VARIANT_PRO_MONTHLY`,
+   `LEMONSQUEEZY_VARIANT_PRO_ANNUAL`, `LEMONSQUEEZY_VARIANT_AGENCY_MONTHLY`, `LEMONSQUEEZY_VARIANT_AGENCY_ANNUAL`.
+   Before importing, `python qa/check_env.py` checks the key, the store and that every variant has the right price
+   and period, without changing anything.
+6. **Check the deployment:** `python qa/vercel_check.py https://www.visuara.si` → "plan payments through Lemon Squeezy"
+   says TEST mode. An owner also sees any setting problem in Settings → Plan.
+7. **Buy a plan in test mode:** sign up, choose Pro on the last onboarding step, pay with the test card
+   `4242 4242 4242 4242` (any future date, any CVC). You land in Settings → Plan, which turns to Pro within seconds.
+   Then try **Switch to Agency** and **Manage billing** (Lemon Squeezy's customer portal: cancel, card, invoices).
+   `GET /api/admin/payments/events` lists each webhook with its result.
+8. **Go live (the owner's decision):** switch Lemon Squeezy to live mode (the store must be activated by Lemon Squeezy),
+   recreate the four variants and the webhook in live mode, create a live API key, put the live values in Vercel and
+   add `CC_PAYMENT_LIVE=1`. Redeploy. From then on test-mode events are ignored, so a test card can never unlock a plan.
+
+**How plans follow the subscription:** `active`, `on_trial` and `past_due` (Lemon Squeezy is retrying the card) keep
+the paid plan. `cancelled` keeps it until the paid period ends; Lemon Squeezy then sends `subscription_expired` and the
+workspace returns to Free. `unpaid`, `paused` and `expired` return it to Free. A plan set by hand (`python -m ops.plans`,
+for example Enterprise) is left alone unless a subscription gave it.
+
+**Events that need a person** (`python -m ops.monitor`, `GET /api/admin/payments/events?result=…`):
+- `UNKNOWN_CHECKOUT`: a subscription that no Visuara checkout created, for example bought from a shared Lemon Squeezy
+  link. Nothing was applied; find the customer in Lemon Squeezy and refund it, or set the plan by hand.
+- `MISMATCH`: a variant that is not one of the four plan variants, or a checkout token used for another workspace.
 
 ## 9. Agencies
 A brand's owner or admin gives an agency access in **Organizations → Agency access**, with the agency's id, which the agency sees on its own Organizations page. The grant's role is viewer, editor or manager. Revoking takes effect on the agency's next request. Every action an agency person takes is recorded under that person, and the `organization.switched` event says which agency they came through.

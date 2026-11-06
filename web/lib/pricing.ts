@@ -76,5 +76,5 @@ export const FAQ = [
   { q: 'Can my clients review placements?', a: 'Yes. Invite them to your workspace as viewers: they can see decisions, previews, placements and renders, but cannot change or approve anything. Viewers use a seat.' },
   { q: 'What kinds of placements work today?', a: 'Products shown on flat, rigid surfaces that stay visible: posters, signs, screens, packaging faces and tabletops. Scenes with something passing in front of the surface, scene cuts, heavy motion blur or strong lighting changes are refused rather than rendered badly.' },
   { q: 'Do you use generative AI on my footage?', a: 'No. Placement is deterministic computer vision and compositing, so the product is never redrawn or altered, and the rest of the frame is untouched.' },
-  { q: 'How do upgrades and billing work?', a: 'During the pilot, plan changes are set up by our team and billed by invoice. Your workspace shows its plan and this month’s usage at all times.' },
+  { q: 'How do upgrades and billing work?', a: 'Choose a plan when you create your workspace, or upgrade later in Settings. Payment is handled by Lemon Squeezy, our merchant of record, so your card never reaches us. Switch plans or cancel any time; a cancelled plan stays active until the end of the period you paid for. Enterprise is invoiced.' },
 ];

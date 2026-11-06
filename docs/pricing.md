@@ -47,7 +47,7 @@ None does self-serve product placement into existing footage.
 The API enforces these allowances (`app/limits.py` `PLANS`; the plan id `team` is shown as "Agency"):
 - **Decisions, renders and video length:** over the allowance, the API answers `402` with a `PLAN_*` code, and the app asks the customer to upgrade.
 - **Storage, seats, file size, daily uploads and active renders:** the plan value applies. The environment quotas are ceilings above every plan (`.env.example`).
-- **Plan changes:** an operator action (`python -m ops.plans set --org … --plan pro`). Billing is by invoice during the pilot, and no card payments are taken in the app.
+- **Plan changes:** self-serve. An owner or admin picks Pro or Agency on the last onboarding step or in Settings → Plan, and pays through Lemon Squeezy, the merchant of record (DEPLOYMENT_RUNBOOK.md §8e). Switching and cancelling are self-serve too. Enterprise stays an operator action (`python -m ops.plans set --org … --plan enterprise`) and is invoiced.
 
 ## Why these numbers (changed on 31 October 2026)
 

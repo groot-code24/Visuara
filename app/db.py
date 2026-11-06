@@ -182,6 +182,43 @@ def probe(sqlite_path, schema=None, url=None, timeout=5):
         return False
 
 
+_REASONS = (   # (match 'any' or 'all' of these substrings of the driver's message, what to tell the operator); no hosts or credentials
+    ('any', ('password authentication failed', 'authentication failed'), 'the database refused the password in DATABASE_URL. After a password reset, put the new connection string in the deployment\'s DATABASE_URL and redeploy'),
+    ('any', ('could not translate host name', 'name or service not known', 'nodename nor servname', 'getaddrinfo failed'), 'the database host name in DATABASE_URL does not exist'),
+    ('all', ('endpoint', 'disabled'), 'Neon refused the endpoint: check that the project and its compute are active and that DATABASE_URL is the current connection string'),
+    ('all', ('endpoint', 'not found'), 'Neon does not know this endpoint: DATABASE_URL is from a deleted or different project'),
+    ('all', ('quota', 'exceeded'), 'the Neon project is over its quota'),
+    ('any', ('does not exist',), 'the database or role named in DATABASE_URL does not exist'),
+    ('any', ('ssl', 'certificate'), 'the encrypted connection failed (check sslmode in DATABASE_URL)'),
+    ('any', ('connection refused',), 'nothing is listening at the database address in DATABASE_URL'),
+    ('any', ('timeout', 'timed out'), 'the database did not answer in time (Neon may be waking up, or the address is unreachable)'),
+    ('any', ('too many connections', 'remaining connection slots'), 'the database has no free connections'),
+)
+
+
+def explain(exc):
+    """A short, actionable reason for a connection failure. Safe to show in health checks: no hosts, users or secrets."""
+    text = f'{type(exc).__name__} {exc}'.lower()
+    for how, needles, reason in _REASONS:
+        if (all if how == 'all' else any)(n in text for n in needles): return reason
+    return f'the database connection failed ({type(exc).__name__})'
+
+
+def diagnose(url=None, timeout=8):
+    """Connect once outside the pool and return (ok, reason, detail). The pool's own timeout hides the driver's error;
+    this gets it. `detail` is the driver's first line with any password removed, for logs only."""
+    url = database_url() if url is None else url
+    if not url: return True, '', ''
+    try:
+        with psycopg.connect(url, connect_timeout=timeout, autocommit=True) as con:
+            con.execute('SELECT 1').fetchone()
+        return True, '', ''
+    except Exception as e:
+        from .obs import redact
+        first = (str(e).strip().splitlines() or [''])[0][:300]
+        return False, explain(e), redact(f'{type(e).__name__}: {first}').replace(url, '[DATABASE_URL]')
+
+
 def describe(url=None):
     url = database_url() if url is None else url
     if not url: return {'engine': 'sqlite'}

@@ -38,7 +38,7 @@ def main(base):
     def api():
         r = http.get(base + '/api/health/live')
         assert r.status_code == 200 and r.headers.get('content-type', '').startswith('application/json'), (
-            f'/api is not reaching the backend (status {r.status_code}). If this is 500, open Vercel > Logs: the API lists any missing setting when it starts. If it says DATABASE_URL is not set, your settings are not in Vercel: import .env.vercel for Production, then deploy again. '
+            f'/api is not reaching the backend (status {r.status_code}). If this is 500, open Vercel > Logs: the API lists any missing or unsafe setting when it starts, and a log line "database unavailable" gives the reason the database refused. If it says DATABASE_URL is not set, your settings are not in Vercel: import .env.vercel for Production, then deploy again. '
             'If the page is HTML, the project framework is not set to Services.')
 
     def ready():
@@ -46,7 +46,8 @@ def main(base):
         assert r.headers.get('content-type', '').startswith('application/json'), f'/api/health/ready returned {r.status_code}: the API is not running'
         checks = r.json().get('checks', {})
         bad = [k for k in FIXES if checks.get(k) not in ('ok',)]
-        assert not bad, '; '.join(f'{k} is {checks.get(k)}. Fix {FIXES[k]}' for k in bad)
+        why = f" The API says: {checks['database_problem']}." if checks.get('database_problem') else ''
+        assert not bad, '; '.join(f'{k} is {checks.get(k)}. Fix {FIXES[k]}' for k in bad) + why
         return 'database, Blob storage and FFmpeg'
 
     def mode():
@@ -71,6 +72,17 @@ def main(base):
         assert uri == base + '/auth/google/callback', f'Google is being told to return to {uri}. Set CC_PUBLIC_URL={base} in Vercel and redeploy'
         return f'add exactly this redirect URI to your Google client: {uri}'
 
+    def billing():
+        r = http.get(base + '/api/billing/plans'); assert r.headers.get('content-type', '').startswith('application/json'), f'/api/billing/plans returned {r.status_code}: the API is not running'
+        b = r.json()
+        assert b.get('ready'), ('paid plans cannot be bought online: set LEMONSQUEEZY_API_KEY, LEMONSQUEEZY_STORE_ID, LEMONSQUEEZY_WEBHOOK_SECRET and the four '
+                                'LEMONSQUEEZY_VARIANT_* settings in Vercel, then redeploy (DEPLOYMENT_RUNBOOK.md §8; Settings > Plan shows the exact problem to an owner)')
+        missing = [f'{p["id"]} {i}' for p in b['plans'] for i, ok in p['available'].items() if not ok]
+        w = http.post(base + '/api/billing/webhooks/lemonsqueezy', content=b'{}', headers={'X-Signature': '0' * 64})
+        assert w.status_code == 400, f'the Lemon Squeezy webhook address answered {w.status_code} to a forged signature (expected 400)'
+        return (f'{b["mode"].upper()} mode' + (': checkouts take test cards only' if b['mode'] == 'test' else ': real cards are charged')
+                + (f'; not for sale yet: {", ".join(missing)}' if missing else '') + f'; webhook URL {base}/api/billing/webhooks/lemonsqueezy')
+
     def guard():
         r = http.get(base + '/dashboard'); assert r.status_code in (302, 307) and '/login' in r.headers.get('location', ''), f'/dashboard returned {r.status_code} when signed out'
 
@@ -83,6 +95,7 @@ def main(base):
     check('production mode, on-demand jobs, Blob storage', mode)
     check('magic link and Google are configured', providers)
     check('Google sign-in starts correctly', google)
+    check('plan payments through Lemon Squeezy', billing)
     check('signed-out dashboard redirects to sign-in', guard)
     check('job runner refuses outsiders', runner)
     print('\nAll automatic checks passed.' if not failures else f'\n{failures} check(s) failed.')

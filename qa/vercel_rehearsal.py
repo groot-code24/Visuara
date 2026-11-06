@@ -303,7 +303,9 @@ def main():
             link = re.search(r'https://\S*/verify#token=[A-Za-z0-9_-]+', text).group(0); assert link.startswith(PUBLIC), link
             pg.go(link); pg.wait_text('Continue as', timeout=60); pg.click_text('Continue')
             pg.wait("location.pathname==='/welcome'", what='onboarding'); pg.wait("!!document.getElementById('name')", what='onboarding form'); pg.type('#name', 'Vercel QA')
+            pg.click_text('Continue'); pg.wait("!!document.getElementById('org')", what='workspace step')
             pg.js("(()=>{const e=document.getElementById('org');e.focus();e.select()})()"); pg.cmd('Input.insertText', text=f'Vercel QA {int(time.time())}')
+            pg.click_text('Continue'); pg.wait_text('Choose your plan')
             pg.click_text('Create workspace'); pg.wait("location.pathname==='/dashboard'", what='dashboard', timeout=60); pg.wait_text('Hello, Vercel', timeout=60)
         step('magic link by email, onboarding, dashboard', sign_up)
 

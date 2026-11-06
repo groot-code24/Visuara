@@ -99,6 +99,7 @@ def production_problems(env=None):
     if any(o.strip().startswith('http://') for o in get('CC_CORS_ORIGINS').split(',') if o.strip()): problems.append('CC_CORS_ORIGINS must list https:// origins only')
     if get('CC_OPS_TOKEN') and len(get('CC_OPS_TOKEN')) < 32: problems.append('CC_OPS_TOKEN must be at least 32 characters')
     if get('CC_INLINE_WORKER', '1') == '1': problems.append('CC_INLINE_WORKER must be 0 in production (run worker.py as its own process)')
+    if get('CC_LEMONSQUEEZY_API_URL'): problems.append('CC_LEMONSQUEEZY_API_URL replaces Lemon Squeezy with another server (test setups only)')
     if get('CC_PROGRAMMATIC_TEST_ADAPTERS') == '1': problems.append('CC_PROGRAMMATIC_TEST_ADAPTERS=1 enables loopback partner adapters (test setups only)')
     from .payment_settings import config_problem
     if get('CC_PAYMENT_PROVIDER').lower() == 'sandbox': problems.append('CC_PAYMENT_PROVIDER=sandbox is a simulator: use stripe (with a test key for test mode) or no provider')

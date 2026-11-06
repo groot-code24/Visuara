@@ -198,9 +198,13 @@ def main():
             pg.type('input[aria-label="Digit 1"]', code)                          # paste fills every box and submits
             pg.wait("location.pathname==='/welcome'", what='onboarding')
             pg.wait_text("Let's set you up")
-            assert pg.js("document.getElementById('org').value") == 'Aurasound'   # suggested from the email domain
             pg.type('#name', 'Maya Chen')
+            pg.click_text('Continue'); pg.wait_text('Your workspace')
+            assert pg.js("document.getElementById('org').value") == 'Aurasound'   # suggested from the email domain
+            pg.wait("(()=>{const l=document.querySelector('.vs-loader');return !l||getComputedStyle(l).visibility==='hidden'})()", what='preloader finished', timeout=10)
             pg.shot(out / '05-welcome.png')
+            pg.click_text('Continue'); pg.wait_text('Choose your plan')
+            pg.shot(out / '05b-welcome-plan.png')
             pg.click_text('Create workspace')
             pg.wait("location.pathname==='/dashboard'", what='dashboard'); pg.wait_text('Hello, Maya')
             pg.wait_text('Place your first product')
@@ -304,7 +308,9 @@ def main():
             pg.click_text('Continue with Google')
             pg.wait("location.pathname==='/welcome'", what='onboarding after Google'); pg.wait_text("Let's set you up")
             assert pg.js("document.getElementById('name').value") == 'Ana Silva'     # the name comes from Google
+            pg.click_text('Continue'); pg.wait_text('Your workspace')
             assert pg.js("document.getElementById('org').value") == 'Northbrew'
+            pg.click_text('Continue'); pg.wait_text('Choose your plan')
             pg.click_text('Create workspace')
             pg.wait("location.pathname==='/dashboard'", what='dashboard after onboarding'); pg.wait_text('Hello, Ana')
             pg.js("document.querySelector('button[aria-label=\"Sign out\"]').click()"); pg.wait("location.pathname==='/login'", what='signed out')

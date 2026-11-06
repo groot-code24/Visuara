@@ -56,7 +56,7 @@ export function PlanCards() {
           );
         })}
       </div>
-      <p className="mt-6 text-center text-xs text-muted">Prices in USD. During the pilot, you start on Free and our team switches you to a paid plan, billed by invoice. No card needed.</p>
+      <p className="mt-6 text-center text-xs text-muted">Prices in USD. Pay securely through Lemon Squeezy, our merchant of record (sales tax and VAT included at checkout). Cancel any time.</p>
     </>
   );
 }

@@ -1,6 +1,6 @@
 """Checks .env.vercel before you import it into Vercel. Never prints a secret, and changes nothing in any service.
 
-    python qa/check_env.py                       # format, Neon, Google, Gmail/SMTP login, Blob
+    python qa/check_env.py                       # format, Neon, Google, Gmail/SMTP login, Blob, Lemon Squeezy
     python qa/check_env.py --mail you@email.com  # also sends one test email, the way magic links are sent
 """
 import argparse, os, re, smtplib, ssl, sys
@@ -105,6 +105,33 @@ def check_google_redirect(v):
         report('Google return address', False, error_name(e))
 
 
+PRICES = {'LEMONSQUEEZY_VARIANT_PRO_MONTHLY': (3900, 'month'), 'LEMONSQUEEZY_VARIANT_PRO_ANNUAL': (34800, 'year'),
+          'LEMONSQUEEZY_VARIANT_AGENCY_MONTHLY': (15900, 'month'), 'LEMONSQUEEZY_VARIANT_AGENCY_ANNUAL': (142800, 'year')}
+
+
+def check_lemonsqueezy(v):
+    """Plan payments: the settings, then (read-only) that the store and each variant exist at the pricing page's price."""
+    from app.payment_settings import billing_problem
+    key = v.get('LEMONSQUEEZY_API_KEY', '')
+    if not key: return report('Plan payments (Lemon Squeezy)', False, 'LEMONSQUEEZY_API_KEY is not set: paid plans cannot be bought online (see DEPLOYMENT_RUNBOOK.md §8)')
+    problem = billing_problem(v)
+    if problem: return report('Lemon Squeezy settings', False, problem)
+    h = {'Accept': 'application/vnd.api+json', 'Authorization': f'Bearer {key}'}
+    try:
+        r = httpx.get(f'https://api.lemonsqueezy.com/v1/stores/{v["LEMONSQUEEZY_STORE_ID"]}', headers=h, timeout=20)
+        report('Lemon Squeezy API key and store', r.status_code == 200, '' if r.status_code == 200 else f'Lemon Squeezy answered {r.status_code}: check the API key and LEMONSQUEEZY_STORE_ID')
+        if r.status_code != 200: return
+        for name, (cents, interval) in PRICES.items():
+            if not v.get(name): report(name, False, 'not set: this plan and period cannot be bought online'); continue
+            a = (httpx.get(f'https://api.lemonsqueezy.com/v1/variants/{v[name]}', headers=h, timeout=20).json().get('data') or {}).get('attributes') or {}
+            ok = a.get('price') == cents and a.get('is_subscription') and a.get('interval') == interval
+            report(name, bool(ok), '' if ok else f'the variant should be a subscription of {cents / 100:.2f} USD per {interval}; Lemon Squeezy has {a.get("price")} cents per {a.get("interval")}')
+    except Exception as e:
+        report('Lemon Squeezy', False, error_name(e, key))
+    live = v.get('CC_PAYMENT_LIVE') == '1'
+    report('Payment mode', True, 'LIVE: real cards are charged' if live else 'TEST: checkouts take test cards only. Set CC_PAYMENT_LIVE=1 with a live-mode API key when you are ready to charge')
+
+
 def smtp_session(v):
     ctx = ssl.create_default_context(); port = int(v.get('CC_SMTP_PORT') or 587)
     s = smtplib.SMTP(v['CC_SMTP_HOST'], port, timeout=20); s.starttls(context=ctx); s.login(v['CC_SMTP_USER'], v['CC_SMTP_PASSWORD'])
@@ -144,7 +171,7 @@ def main():
     a = ap.parse_args(); path = Path(a.file)
     if not path.exists(): sys.exit(f'{path} not found')
     v = read_env(path)
-    check_format(v); check_not_in_history(v); check_neon(v.get('DATABASE_URL', '')); check_google(v); check_google_redirect(v); check_mail(v, a.mail); check_blob(v.get('BLOB_READ_WRITE_TOKEN', ''))
+    check_format(v); check_not_in_history(v); check_neon(v.get('DATABASE_URL', '')); check_google(v); check_google_redirect(v); check_mail(v, a.mail); check_blob(v.get('BLOB_READ_WRITE_TOKEN', '')); check_lemonsqueezy(v)
     print(f'\n{sum(results)}/{len(results)} ready' if not all(results) else f'\nAll {len(results)} checks passed. Vercel does not read this file: import it under Settings > Environment Variables, for Production, then deploy.')
     sys.exit(0 if all(results) else 1)
 

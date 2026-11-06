@@ -74,6 +74,8 @@ The baseline tables have none. Every table added from Phase 1 declares its relat
 | 0013 | `placement_requests` (unique `reservation_id`), `notifications` | Two-party approval, production links |
 | 0014 | `quotes`, `invoices` (unique number, one per quote), `ledger_entries` (positive integer amounts; UPDATE and DELETE refused by a trigger on both engines), `revenue_allocations` (one per invoice and beneficiary), `idempotency_keys` | Commercial records |
 | 0015 | `delivery_records` (one per job), `delivery_evidence`, `analytics_events` (unique `source_event_id`) | Delivery and reporting |
+| 0016 to 0019 | detection outputs and scoring v2; `payment_attempts`, `payment_events` (unique per provider and event id), `agency_clients`; version uploads; `integration_checks` | See `app/migrations.py` |
+| 0020 | `billing_checkouts` (unique one-time `token` per checkout created here); `subscriptions` (unique per `(provider, provider_ref)`; plan, interval, status, renewal and end dates, `provider_updated_at` for ordering) | Plan subscriptions through Lemon Squeezy. Webhook deliveries are recorded in `payment_events` keyed by the body's SHA-256 |
 
 ## Legacy tables still written
 - **`users`** mirrors each person's membership in their default organization. `members.membership_drift()` checks this, and a test asserts it stays empty.

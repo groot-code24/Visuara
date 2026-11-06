@@ -28,6 +28,11 @@ export function LoginForm({ next, error, invited, plan }: { next: string; error?
   const [message, setMessage] = useState<string | null>(error ? ERRORS[error] || 'Sign-in failed. Please try again.' : null);
 
   useEffect(() => {
+    // Remember the plan chosen on the pricing page: onboarding offers it after sign-in (magic links open in a new tab).
+    try { if (plan === 'pro' || plan === 'team') window.localStorage.setItem('visuara.plan', plan); } catch { /* storage blocked */ }
+  }, [plan]);
+
+  useEffect(() => {
     api<Providers>('/api/auth/providers').then(setProviders).catch(() => {
       setProviders({ google: false, email: false, email_backend: null }); setDown(true);
       setMessage(DEV_BUILD
@@ -57,7 +62,7 @@ export function LoginForm({ next, error, invited, plan }: { next: string; error?
         {invited ? 'Join your team' : 'Welcome'}
       </h1>
       <p className="mt-2 text-center text-[15px] text-muted">
-        {invited ? 'Sign in with the email address your invitation was sent to.' : plan && plan !== 'free' ? 'Create your workspace on the Free plan, then ask us to switch it. Paid plans are set up by our team during the pilot.' : 'Sign in or create your account'}
+        {invited ? 'Sign in with the email address your invitation was sent to.' : plan && plan !== 'free' && plan !== 'enterprise' ? 'Create your account, set up your workspace, then pay securely on the last step.' : 'Sign in or create your account'}
       </p>
 
       <div className="mt-8 rounded-2xl border border-line bg-card p-6 shadow-card">

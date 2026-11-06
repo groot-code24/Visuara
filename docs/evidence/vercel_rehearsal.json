@@ -2,72 +2,72 @@
  {
   "step": "production settings accepted; database, Blob and FFmpeg ready",
   "ok": true,
-  "seconds": 2.6,
-  "note": "first start 5.2s"
+  "seconds": 2.5,
+  "note": "first start 5.4s"
  },
  {
   "step": "database and email connections are encrypted",
   "ok": true,
-  "seconds": 1.0,
+  "seconds": 0.5,
   "note": "2 database connections, all over TLS; plain-text SMTP refused"
  },
  {
   "step": "a new instance starts without repeating schema setup",
   "ok": true,
-  "seconds": 5.7,
+  "seconds": 5.8,
   "note": "new instance serving after 3.4s without repeating schema setup"
  },
  {
   "step": "job runner refuses outsiders; dashboard guarded; security headers",
   "ok": true,
-  "seconds": 2.2
+  "seconds": 2.3
  },
  {
   "step": "Google sign-in starts with the right client, callback and PKCE",
   "ok": true,
-  "seconds": 0.1
+  "seconds": 0.0
  },
  {
   "step": "magic link by email, onboarding, dashboard",
   "ok": true,
-  "seconds": 3.4
+  "seconds": 5.0
  },
  {
   "step": "an image over the request limit gets a clear message",
   "ok": true,
-  "seconds": 2.3
+  "seconds": 1.9
  },
  {
   "step": "browser uploads the video straight to Blob with the real SDK",
   "ok": true,
-  "seconds": 4.0
+  "seconds": 3.5
  },
  {
   "step": "decision runs on the separate runner; preview through a signed link",
   "ok": true,
-  "seconds": 52.9
+  "seconds": 48.8
  },
  {
   "step": "library thumbnails load through signed links",
   "ok": true,
-  "seconds": 1.2
+  "seconds": 1.7
  },
  {
   "step": "runner killed mid-render: dashboard polling restarts it and the job completes",
   "ok": true,
-  "seconds": 48.6,
+  "seconds": 47.5,
   "note": "claimed,lease_recovered,claimed,succeeded"
  },
  {
   "step": "finished video downloads through a signed link, with range requests",
   "ok": true,
-  "seconds": 0.1,
+  "seconds": 0.2,
   "note": "outputs/placement_1_v1_job_1.mp4"
  },
  {
   "step": "a large video uploads in parts",
   "ok": true,
-  "seconds": 7.0,
+  "seconds": 7.5,
   "note": "36 MB in 5 parts"
  },
  {

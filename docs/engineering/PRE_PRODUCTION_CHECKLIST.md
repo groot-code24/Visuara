@@ -111,6 +111,8 @@ Choose one:
 
   This is the one piece of payments I couldn't verify myself (B-4).
 
+**Plan subscriptions (Pro and Agency) through Lemon Squeezy, in test mode.** Separate from the marketplace invoices above. Create the four subscription variants, the API key and the webhook, then add the seven `LEMONSQUEEZY_*` settings in Vercel (runbook §8e). `python qa/check_env.py` checks the prices; `python qa/vercel_check.py https://www.visuara.si` checks the deployment. Buy Pro with the test card `4242 4242 4242 4242` and confirm Settings → Plan turns to Pro. Not verified against a real Lemon Squeezy account from here: no account exists in this repository. `qa/browser_qa_billing.py` runs the whole flow against a local stand-in that follows Lemon Squeezy's documented API.
+
 **Controlled beta can start here.** Invite a small number of publishers and brands you know, tell them it's a beta, and watch the monitor and Vercel's logs.
 
 ## Step 7. Legal review (before any real customer money, B-8)
@@ -136,6 +138,7 @@ Only after steps 6 and 7, and with Vercel Pro:
 2. In Vercel set `CC_STRIPE_SECRET_KEY` (`sk_live_…`), `CC_PAYMENT_WEBHOOK_SECRET` (the live webhook's secret) and **`CC_PAYMENT_LIVE=1`**. That last setting is your explicit authorisation; without it, a live key is refused.
 3. Make one small real payment yourself and refund it in Stripe. Check that the ledger and the payment events are right.
 4. Reconcile daily for the first weeks (runbook §8c).
+5. **Plan subscriptions:** switch Lemon Squeezy to live mode, recreate the four variants and the webhook there, put the live API key, variant ids and webhook secret in Vercel (the same `CC_PAYMENT_LIVE=1` covers them). Buy Pro once with your own card and refund it in Lemon Squeezy (runbook §8e, step 8).
 
 ---
 
